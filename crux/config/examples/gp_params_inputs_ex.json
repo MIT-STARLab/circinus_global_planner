@@ -1,0 +1,7 @@
+{
+    "version": "0.1",
+    "targ_ignore_list": [],
+    "gs_ignore_list": [],
+    "min_allowed_dv_xlnk_Mb" : 100,
+    "min_allowed_dv_dlnk_Mb" : 100
+}
