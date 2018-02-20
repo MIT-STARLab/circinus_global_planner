@@ -15,6 +15,8 @@ import sys
 sys.path.append ('..')
 from circinus_tools  import time_tools as tt
 from gp_tools.input_processing import GPInputProcessor
+from gp_tools.gp_scheduling import GPDataPathSelection
+
 
 REPO_BASE = os.path.abspath(os.pardir)  # os.pardir aka '..'
 
@@ -32,13 +34,25 @@ class GlobalPlannerRunner:
         # parse the inputs into activity windows
         obs_winds, obs_window_id =self.inp_proc.import_obs_winds()
         dlink_winds, dlnk_window_id =self.inp_proc.import_dlnk_winds()
-        xlink_winds, xlnk_window_id =self.inp_proc.import_xlnk_winds()
+        xlink_winds, xlink_winds_flat, xlnk_window_id =self.inp_proc.import_xlnk_winds()
 
-        for j in dlink_winds:
-            for i in j:
-                i.print_self ()
+        # for j in dlink_winds:
+        #     for i in j:
+        #         i.print_self ()
 
         # todo:  probably ought to delete the input times and rates matrices to free up space
+
+        print('obs_winds')
+        print(sum([len(p) for p in obs_winds]))
+        print('dlink_win')
+        print(sum([len(p) for p in dlink_winds]))
+        print('xlink_win')
+        print(sum([len(xlink_winds[i][j]) for i in  range( self.params['num_sats']) for j in  range( self.params['num_sats']) ]))
+
+        gp_ps = GPDataPathSelection ( self.params)
+        gp_ps.make_model (obs_winds[0][0],dlink_winds,xlink_winds)
+        gp_ps.solve ()
+        # gp_ps.print_sol ()
 
 
 class PipelineRunner:
@@ -67,6 +81,7 @@ class PipelineRunner:
             gp_params['gs_ignore_list'] = gp_params_inputs['gs_ignore_list']
             gp_params['min_allowed_dv_dlnk'] = gp_params_inputs['min_allowed_dv_dlnk_Mb']
             gp_params['min_allowed_dv_xlnk'] = gp_params_inputs['min_allowed_dv_xlnk_Mb']
+            gp_params['path_selection_num_paths'] = gp_params_inputs['path_selection_num_paths']
 
         if data_rates_output['version'] == "0.1": 
             gp_params['obs_times'] = data_rates_output['accesses_data_rates']['obs_times']
@@ -95,7 +110,7 @@ if __name__ == "__main__":
     # # with open(os.path.join(REPO_BASE,'crux/config/examples/orbit_prop_data_ex.json'),'r') as f:
     #     orbit_prop_data = json.load(f)
 
-    with open(os.path.join(REPO_BASE,'crux/config/examples/gp_params_inputs.json'),'r') as f:
+    with open(os.path.join(REPO_BASE,'crux/config/examples/gp_params_inputs_ex.json'),'r') as f:
         gp_params_inputs = json.load(f)
 
     with open(os.path.join(REPO_BASE,'crux/config/examples/data_rates_output.json'),'r') as f:

@@ -140,9 +140,11 @@ class GPInputProcessor():
         return obs_winds, obs_window_id
 
     def import_xlnk_winds( self, sort= True):
-        xlink_winds = [[] for j in range(self.num_sats)]
+        xlink_winds_flat = [[] for i in range(self.num_sats)]
+        xlink_winds = [[[] for j in range(self.num_sats)] for i in range(self.num_sats)]
         xlnk_window_id = 0
         for sat_indx in range(self.num_sats):
+            # xlnk_times  matrix should be symmetrical, so there's no reason to look at lower left  triangle
             for xsat_indx in range(sat_indx+1,self.num_sats):
                 xlnk_list = self.xlnk_times[sat_indx][xsat_indx]
 
@@ -155,37 +157,48 @@ class GPInputProcessor():
                     else:
                         raise NotImplementedError
 
-                    # create a new window and add it to the lists for the sats on both ends of the crosslink. Note that the same object is stored for both, so any modification of the object by one sat modifies it for the other sat as well
+                    # create a new window 
                     new_wind = XlnkWindow(xlnk_window_id,sat_indx,xsat_indx,xlnk_indx, start, end)
-                    xlink_winds[sat_indx].append(new_wind)
-                    xlink_winds[xsat_indx].append(new_wind)
+
+                    # figure out the data volume for this window
+                    xlnk_rates_mat =  self.xlnk_rates[new_wind.sat_indx][new_wind.xsat_indx][new_wind.sat_xsat_indx]
+                    new_wind.rates_mat = xlnk_rates_mat
+                    new_wind.set_data_vol_and_refresh_times()
+
+                    if new_wind.data_vol >  self.min_allowed_dv_xlnk:
+                        #  add to regular matrix
+                        xlink_winds[sat_indx][xsat_indx].append(new_wind)
+                        # add it to the  flat lists for the sats on both ends of the crosslink. Note that the same object is stored for both, so any modification of the object by one sat modifies it for the other sat as well
+                        xlink_winds_flat[sat_indx].append(new_wind)
+                        xlink_winds_flat[xsat_indx].append(new_wind)
+
                     xlnk_window_id+=1
 
             # sort the xlink windows for convenience
             if sort:
-                xlink_winds[sat_indx].sort(key=lambda x: x.start)
+                xlink_winds_flat[sat_indx].sort(key=lambda x: x.start)
 
-        # calculate data volumes for xlnk windows
-        windows_to_keep = []
-        for window_list in xlink_winds:
-            windows_to_keep_temp = []
-            for wind in window_list:
+        # # calculate data volumes for xlnk windows
+        # windows_to_keep = []
+        # for window_list in xlink_winds_flat:
+        #     windows_to_keep_temp = []
+        #     for wind in window_list:
 
-                # half of these xlnk windows are duplicated due to symmetry, so check to see if data volume hasn't been calced yet before trying
-                if wind.data_vol == const.UNASSIGNED:
-                    xlnk_rates_mat =  self.xlnk_rates[wind.sat_indx][wind.xsat_indx][wind.sat_xsat_indx]
+        #         # half of these xlnk windows are duplicated due to symmetry, so check to see if data volume hasn't been calced yet before trying
+        #         if wind.data_vol == const.UNASSIGNED:
+        #             xlnk_rates_mat =  self.xlnk_rates[wind.sat_indx][wind.xsat_indx][wind.sat_xsat_indx]
 
-                    wind.rates_mat = xlnk_rates_mat
-                    wind.set_data_vol_and_refresh_times()
+        #             wind.rates_mat = xlnk_rates_mat
+        #             wind.set_data_vol_and_refresh_times()
 
-                    if wind.data_vol >  self.min_allowed_dv_xlnk:
-                        windows_to_keep_temp.append(wind)
+        #             if wind.data_vol >  self.min_allowed_dv_xlnk:
+        #                 windows_to_keep_temp.append(wind)
 
-            windows_to_keep.append(windows_to_keep_temp)
+        #     windows_to_keep.append(windows_to_keep_temp)
 
-        xlink_winds = windows_to_keep
+        # xlink_winds_flat = windows_to_keep
 
-        return  xlink_winds, xlnk_window_id
+        return  xlink_winds, xlink_winds_flat, xlnk_window_id
 
     def import_dlnk_winds( self,sort= True):
         # Import sat dlnk windows
