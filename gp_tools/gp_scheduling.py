@@ -350,7 +350,9 @@ class GPDataPathSelection():
         model.c11 =pe.Constraint (  model.paths,  rule =c11_rule )
 
         #  constraint 12
-        model.c12 =pe.Constraint ( expr=  sum ( model.var_path_dv[p] for p in model.paths)  <= model.par_obs_dv)
+        def c12_rule( model,p):
+            return  model.var_path_dv[p]  <= model.par_obs_dv
+        model.c12 =pe.Constraint (   model.paths,  rule = c12_rule )
 
         def c13_rule( model,p,i,j,k):
             return model.var_path_dv[p] <=  model.par_xlnk_dv[i,j,k]  +  self.M_dv_Mb*(1-model.var_xlnk_path_occ[p,i,j,k])
@@ -433,7 +435,7 @@ class GPDataPathSelection():
     # lifted from  Jeff Menezes' code at https://github.mit.edu/jmenezes/Satellite-MILP/blob/master/sat_milp_pyomo.py
     def solve(self):
         solver = po.SolverFactory('gurobi')
-        results =  solver.solve(self.model, tee=True, keepfiles=False, options_string="mip_tolerances_integrality=1e-9 mip_tolerances_mipgap=0")
+        results =  solver.solve(self.model, tee=True, keepfiles=False, options_string=" time_limit=10")
         
         if (results.solver.status == po.SolverStatus.ok) and (results.solver.termination_condition == po.TerminationCondition.optimal):
             print('this is feasible and optimal')
