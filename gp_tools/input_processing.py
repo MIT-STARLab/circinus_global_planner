@@ -29,6 +29,7 @@ class GPInputProcessor():
         self.scenario_end=params['end_utc_dt']
         self.tstep_sec=params['timestep_s']
         self.num_sats=params['num_sats']
+        self.num_gs=params['num_gs']
 
         self.obs_times=params['obs_times']
         self.pl_data_rate=params['pl_data_rate']
@@ -202,7 +203,8 @@ class GPInputProcessor():
 
     def import_dlnk_winds( self,sort= True):
         # Import sat dlnk windows
-        dlink_winds = []
+        dlink_winds_flat = []
+        dlink_winds = [[[] for j in range(self.num_gs)] for i in range(self.num_sats)]
         dlnk_window_id = 0
         for sat_indx, all_sat_dlnk in enumerate( self.dlnk_times):
             sat_dlnk_winds = []
@@ -222,29 +224,36 @@ class GPInputProcessor():
                         raise NotImplementedError
 
                     new_wind = DlnkWindow(dlnk_window_id,sat_indx,gs_indx,dlnk_indx,start, end)
-                    sat_dlnk_winds.append(new_wind)
+
+                    new_wind.rates_mat =  self.dlnk_rates[new_wind.sat_indx][new_wind.gs_ID][new_wind.sat_gs_indx]
+                    new_wind.set_data_vol_and_refresh_times()
+
+                    if new_wind.data_vol >  self.min_allowed_dv_dlnk:
+                        dlink_winds[sat_indx][gs_indx].append (new_wind) 
+                        sat_dlnk_winds.append(new_wind)
+
                     dlnk_window_id+=1
 
             # sort the downlink windows for convenience
             if sort:
                 sat_dlnk_winds.sort(key=lambda x: x.start)
 
-            dlink_winds.append(sat_dlnk_winds)
+            dlink_winds_flat.append(sat_dlnk_winds)
 
-        # calculate data volumes for dlnk windows
-        windows_to_keep = []
-        for window_list in dlink_winds:
-            windows_to_keep_temp = []
-            for wind in window_list:
+        # # calculate data volumes for dlnk windows
+        # windows_to_keep = []
+        # for window_list in dlink_winds_flat:
+        #     windows_to_keep_temp = []
+        #     for wind in window_list:
 
-                wind.rates_mat =  self.dlnk_rates[wind.sat_indx][wind.gs_ID][wind.sat_gs_indx]
-                wind.set_data_vol_and_refresh_times()
+        #         wind.rates_mat =  self.dlnk_rates[wind.sat_indx][wind.gs_ID][wind.sat_gs_indx]
+        #         wind.set_data_vol_and_refresh_times()
 
-                if wind.data_vol >  self.min_allowed_dv_dlnk:
-                    windows_to_keep_temp.append(wind)
+        #         if wind.data_vol >  self.min_allowed_dv_dlnk:
+        #             windows_to_keep_temp.append(wind)
 
-            windows_to_keep.append(windows_to_keep_temp)
+        #     windows_to_keep.append(windows_to_keep_temp)
 
-        dlink_winds = windows_to_keep
+        # dlink_winds_flat = windows_to_keep
 
-        return dlink_winds, dlnk_window_id
+        return dlink_winds,dlink_winds_flat, dlnk_window_id

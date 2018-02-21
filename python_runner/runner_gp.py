@@ -33,7 +33,7 @@ class GlobalPlannerRunner:
 
         # parse the inputs into activity windows
         obs_winds, obs_window_id =self.inp_proc.import_obs_winds()
-        dlink_winds, dlnk_window_id =self.inp_proc.import_dlnk_winds()
+        dlink_winds, dlink_winds_flat, dlnk_window_id =self.inp_proc.import_dlnk_winds()
         xlink_winds, xlink_winds_flat, xlnk_window_id =self.inp_proc.import_xlnk_winds()
 
         # for j in dlink_winds:
@@ -50,9 +50,18 @@ class GlobalPlannerRunner:
         print(sum([len(xlink_winds[i][j]) for i in  range( self.params['num_sats']) for j in  range( self.params['num_sats']) ]))
 
         gp_ps = GPDataPathSelection ( self.params)
-        gp_ps.make_model (obs_winds[0][0],dlink_winds,xlink_winds)
+        gp_ps.make_model (obs_winds[0][0],dlink_winds_flat,xlink_winds)
         gp_ps.solve ()
-        # gp_ps.print_sol ()
+        print ('obs_winds[0][0].sat_indx')
+        print (obs_winds[0][0].sat_indx)
+        print ('obs_winds[0][0].data_vol')
+        print (obs_winds[0][0].data_vol)
+        print ('obs_winds[0][0].duration')
+        print (obs_winds[0][0].duration)
+        print ("(obs_winds[0][0].end-self.params['start_utc_dt']).total_seconds ()")  
+        print ( (obs_winds[0][0].end-self.params['start_utc_dt']).total_seconds ())  
+        gp_ps.print_sol ()
+        # gp_ps.solve ()
 
 
 class PipelineRunner:
@@ -74,6 +83,7 @@ class PipelineRunner:
             gp_params['end_utc_dt'] = tt.iso_string_to_dt ( orbit_prop_inputs['scenario_params']['end_utc'])
             gp_params['timestep_s'] = orbit_prop_inputs['scenario_params']['timestep_s']
             gp_params['num_sats'] = orbit_prop_inputs['sat_params']['num_satellites']
+            gp_params['num_gs'] = orbit_prop_inputs['gs_params']['num_stations']
             gp_params['pl_data_rate'] = orbit_prop_inputs['sat_params']['payload_data_rate_Mbps']
 
         if gp_params_inputs['version'] == "0.1": 
@@ -82,6 +92,7 @@ class PipelineRunner:
             gp_params['min_allowed_dv_dlnk'] = gp_params_inputs['min_allowed_dv_dlnk_Mb']
             gp_params['min_allowed_dv_xlnk'] = gp_params_inputs['min_allowed_dv_xlnk_Mb']
             gp_params['path_selection_num_paths'] = gp_params_inputs['path_selection_num_paths']
+            gp_params['path_selection_min_path_dv'] = gp_params_inputs['path_selection_min_path_dv_Mb']
 
         if data_rates_output['version'] == "0.1": 
             gp_params['obs_times'] = data_rates_output['accesses_data_rates']['obs_times']
