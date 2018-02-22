@@ -326,23 +326,23 @@ class GPDataPathSelection():
         #         model.c9b.add( sum(j_terms) <= 1)
 
 
-        # constraint 10
-        model.c10  = pe.ConstraintList()
-        for p in model.paths: 
-            for j in  model.sats:
-                for k_d in range(len (dlink_winds_flat[j])):
+        # # constraint 10
+        # model.c10  = pe.ConstraintList()
+        # for p in model.paths: 
+        #     for j in  model.sats:
+        #         for k_d in range(len (dlink_winds_flat[j])):
 
-                    k_d_terms = []
-                    for i in model.sats:
-                        if i == j:
-                            continue
+        #             k_d_terms = []
+        #             for i in model.sats:
+        #                 if i == j:
+        #                     continue
                         
-                        k_d_terms += [
-                            model.var_xlnk_path_occ[p,i,j,k_x] 
-                            for k_x in range (len (xlink_winds[i][j]))
-                        ] 
+        #                 k_d_terms += [
+        #                     model.var_xlnk_path_occ[p,i,j,k_x] 
+        #                     for k_x in range (len (xlink_winds[i][j]))
+        #                 ] 
 
-                    model.c10.add(model.var_dlnk_path_occ[p,j,k_d]  <= sum(k_d_terms))
+        #             model.c10.add(model.var_dlnk_path_occ[p,j,k_d]  <= sum(k_d_terms))
 
 
         def c11_rule( model,p):
