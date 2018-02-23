@@ -5,5 +5,6 @@
     "min_allowed_dv_xlnk_Mb" : 100,
     "min_allowed_dv_dlnk_Mb" : 100,
     "path_selection_num_paths" :  5,
-    "path_selection_min_path_dv_Mb" :  100
+    "path_selection_min_path_dv_Mb" :  100,
+    "solver_max_runtime_s" :  100
 }

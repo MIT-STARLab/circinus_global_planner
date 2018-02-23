@@ -50,16 +50,16 @@ class GlobalPlannerRunner:
         print(sum([len(xlink_winds[i][j]) for i in  range( self.params['num_sats']) for j in  range( self.params['num_sats']) ]))
 
         gp_ps = GPDataPathSelection ( self.params)
-        gp_ps.make_model (obs_winds[0][0],dlink_winds_flat,xlink_winds)
+        gp_ps.make_model (obs_winds[5][0],dlink_winds_flat,xlink_winds)
         gp_ps.solve ()
-        print ('obs_winds[0][0].sat_indx')
-        print (obs_winds[0][0].sat_indx)
-        print ('obs_winds[0][0].data_vol')
-        print (obs_winds[0][0].data_vol)
-        print ('obs_winds[0][0].duration')
-        print (obs_winds[0][0].duration)
-        print ("(obs_winds[0][0].end-self.params['start_utc_dt']).total_seconds ()")  
-        print ( (obs_winds[0][0].end-self.params['start_utc_dt']).total_seconds ())  
+        print ('obs_winds[5][0].sat_indx')
+        print (obs_winds[5][0].sat_indx)
+        print ('obs_winds[5][0].data_vol')
+        print (obs_winds[5][0].data_vol)
+        print ('obs_winds[5][0].duration')
+        print (obs_winds[5][0].duration)
+        print ("(obs_winds[5][0].end-self.params['start_utc_dt']).total_seconds ()")  
+        print ( (obs_winds[5][0].end-self.params['start_utc_dt']).total_seconds ())  
         gp_ps.print_sol ()
         # gp_ps.solve ()
 
@@ -93,6 +93,7 @@ class PipelineRunner:
             gp_params['min_allowed_dv_xlnk'] = gp_params_inputs['min_allowed_dv_xlnk_Mb']
             gp_params['path_selection_num_paths'] = gp_params_inputs['path_selection_num_paths']
             gp_params['path_selection_min_path_dv'] = gp_params_inputs['path_selection_min_path_dv_Mb']
+            gp_params['solver_max_runtime'] = gp_params_inputs['solver_max_runtime_s']
 
         if data_rates_output['version'] == "0.1": 
             gp_params['obs_times'] = data_rates_output['accesses_data_rates']['obs_times']

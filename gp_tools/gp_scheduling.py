@@ -18,6 +18,7 @@ class GPDataPathSelection():
         self.M_t_s= 1000000 #  ~11.6 days
         self.M_dv_Mb= 1000000000 #  one petabit
         self.min_path_dv =params['path_selection_min_path_dv']
+        self.solver_max_runtime =params['solver_max_runtime']
 
         total_duration =(self.end_utc_dt- self.start_utc_dt).total_seconds ()
         if  total_duration  >self.M_t_s:
@@ -87,6 +88,11 @@ class GPDataPathSelection():
                 t_end_dict_by_tuple[tup] = (wind.end - start_utc_dt).total_seconds ()
                 dv_dict_by_tuple[tup] = wind.data_vol
 
+        #  calculate score factors
+        score_factors_dict = {}
+        inverse_sum = sum (1/t for t in t_end_dict_by_tuple.values())
+        for key in t_end_dict_by_tuple.keys ():
+            score_factors_dict[key] = 1/t_end_dict_by_tuple[key] / inverse_sum
 
         #  now loop through and include paths as an index
         tuple_list_paths = []
@@ -97,7 +103,7 @@ class GPDataPathSelection():
                     for dlnk_indx in  range (len (dlink_winds_flat[sat_indx])):
                         tuple_list_paths.append ((path_indx,sat_indx,dlnk_indx))
 
-        return tuple_list, tuple_list_paths, t_start_dict_by_tuple, t_end_dict_by_tuple, dv_dict_by_tuple
+        return tuple_list, tuple_list_paths, t_start_dict_by_tuple, t_end_dict_by_tuple, dv_dict_by_tuple, score_factors_dict
 
 
     def make_model ( self,obs_wind,dlink_winds_flat,xlink_winds):
@@ -112,7 +118,8 @@ class GPDataPathSelection():
             dlnk_path_subscripts,
             dlnk_t_start_dict, 
             dlnk_t_end_dict,
-            dlnk_dv_dict)  = self.get_downlink_model_objects(
+            dlnk_dv_dict,
+            dlnk_sfact_dict)  = self.get_downlink_model_objects(
                                         dlink_winds_flat,
                                         self.num_paths,
                                         self.num_sats,
@@ -160,6 +167,7 @@ class GPDataPathSelection():
 
         model.par_t_start_dlnk =pe.Param ( model.dlnk_subscripts,initialize =dlnk_t_start_dict)
         model.par_t_end_dlnk =pe.Param ( model.dlnk_subscripts,initialize =dlnk_t_end_dict)
+        model.par_dlnk_sf =pe.Param ( model.dlnk_subscripts,initialize =dlnk_sfact_dict)
 
         model.par_t_start_xlnk =pe.Param ( model.xlnk_subscripts,initialize =xlnk_t_start_dict)
         model.par_t_end_xlnk =pe.Param ( model.xlnk_subscripts,initialize =xlnk_t_end_dict)
@@ -171,6 +179,7 @@ class GPDataPathSelection():
         model.par_xlnk_dv = pe.Param (model.xlnk_subscripts,initialize =xlnk_dv_dict)
 
         model.par_obs_dv = pe.Param (initialize = obs_wind.data_vol)
+        
 
         #  quick sanity check
         for dv in dlnk_dv_dict.values ():
@@ -445,13 +454,19 @@ class GPDataPathSelection():
 
                 model.c20.add( sum(j_terms_arrive) == sum(j_terms_depart))
 
+
+        def c21_rule( model,p):
+            return sum([model.var_dlnk_path_occ[tuple([p])+dlnk_subsc] for dlnk_subsc in  model.dlnk_subscripts]) <= model.var_path_indic[p]
+        model.c21 =pe.Constraint (  model.paths,  rule =c21_rule )
+
         ##############################
         #  Make objective
         ##############################
 
         def obj_rule(model):
             # return sum( model.var_path_indic[p] for p in model.paths)
-            return sum (model.var_path_dv_dlnk[p,i,k] for i,k in model.dlnk_subscripts for p in model.paths )
+            # return sum (model.var_path_dv_dlnk[p,i,k] for i,k in model.dlnk_subscripts for p in model.paths )
+            return sum (model.var_dlnk_path_occ[p,i,k]*model.par_dlnk_sf[i,k] for i,k in model.dlnk_subscripts for p in model.paths )
             # return sum( model.var_dlnk_path_occ[dlnk_subsc] for dlnk_subsc in  model.dlnk_path_subscripts)
         model.obj = pe.Objective( rule=obj_rule, sense=pe.maximize )
 
@@ -466,7 +481,7 @@ class GPDataPathSelection():
     # lifted from  Jeff Menezes' code at https://github.mit.edu/jmenezes/Satellite-MILP/blob/master/sat_milp_pyomo.py
     def solve(self):
         solver = po.SolverFactory('gurobi')
-        results =  solver.solve(self.model, tee=True, keepfiles=False, options_string=" time_limit=10")
+        results =  solver.solve(self.model, tee=True, keepfiles=False, options_string=" time_limit=%f" % ( self.solver_max_runtime))
         
         if (results.solver.status == po.SolverStatus.ok) and (results.solver.termination_condition == po.TerminationCondition.optimal):
             print('this is feasible and optimal')
@@ -512,8 +527,9 @@ class GPDataPathSelection():
                 for index in varobject:
                     val  = varobject[index].value
                     if val == 1.0:
-                        print (" ",index, val,"  start dlnk %f, dv %f"%( 
+                        print (" ",index, val,"  start,end dlnk %f %f, dv %f"%( 
                             self.model.par_t_start_dlnk[index[1],index[2]],
+                            self.model.par_t_end_dlnk[index[1],index[2]],
                             self.model.par_dlnk_dv[index[1],index[2]])
                         )
 
