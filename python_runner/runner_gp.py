@@ -114,7 +114,7 @@ if __name__ == "__main__":
     pr = PipelineRunner()
 
     # with open(os.path.join(REPO_BASE,'crux/config/examples/orbit_prop_inputs_ex.json'),'r') as f:
-    with open(os.path.join(REPO_BASE,'crux/config/examples/orbit_prop_inputs.json'),'r') as f:
+    with open(os.path.join(REPO_BASE,'crux/config/examples/orbit_prop_inputs_6sat.json'),'r') as f:
         orbit_prop_inputs = json.load(f)
 
     # with open(os.path.join(REPO_BASE,'crux/config/examples/orbit_prop_data_ex_small.json'),'r') as f:
@@ -124,7 +124,7 @@ if __name__ == "__main__":
     with open(os.path.join(REPO_BASE,'crux/config/examples/gp_params_inputs_ex.json'),'r') as f:
         gp_params_inputs = json.load(f)
 
-    with open(os.path.join(REPO_BASE,'crux/config/examples/data_rates_output.json'),'r') as f:
+    with open(os.path.join(REPO_BASE,'crux/config/examples/data_rates_output_6sat.json'),'r') as f:
         data_rates_output = json.load(f)
 
     data = {

@@ -192,7 +192,7 @@ class GPDataPathSelection():
         #  indicator that path p has been selected I_p [4]
         model.var_path_indic  = pe.Var (model.paths, within =pe.Binary)
         #  indicator that path p has been selected I_p_i [7]
-        model.var_path_indic_sat  = pe.Var (model.paths,  model.sats, within =pe.Binary)
+        # model.var_path_indic_sat  = pe.Var (model.paths,  model.sats, within =pe.Binary)
         #  arrival and departure times for each path p through sat i  t_(p,i,a), t_(p,i,d) [5]
         model.var_time_a_d   = pe.Var (model.paths,  model.sats,  model.arrive_depart, within =pe.NonNegativeReals)
 
@@ -387,15 +387,43 @@ class GPDataPathSelection():
             return model.var_path_dv_dlnk[p,i,k]  <=  model.var_dlnk_path_occ[p,i,k]*model.par_dlnk_dv[i,k]
         model.c18 =pe.Constraint ( model.paths, model.dlnk_subscripts,rule=c18_rule)
 
-        #  constraint 19
-        model.c19  = pe.ConstraintList()
+        # #  constraint 19
+        # model.c19  = pe.ConstraintList()
+        # for p in model.paths: 
+        #     for j in model.sats:
+        #         j_terms = []
+
+        #         #  could have been a list comprehension but whatever
+        #         for k_d in range(len (dlink_winds_flat[j])):
+        #             j_terms.append (model.var_dlnk_path_occ[p,j,k_d] )
+
+        #         for i in model.sats:
+        #             if i == j:
+        #                 continue
+
+        #             #  use this to account for the fact that the cross-link Windows matrix is upper triangular
+        #             num_i_j_xlnks = max(len(xlink_winds[i][j]),len(xlink_winds[j][i]))
+
+        #             j_terms += [
+        #                 model.var_xlnk_path_occ[p,i,j,k]  + 
+        #                 model.var_xlnk_path_occ[p,j,i,k] 
+        #                 for k in range (num_i_j_xlnks)
+        #             ]
+
+        #         j_terms.append (model.par_obs_occ[j])
+
+        #         model.c19.add( sum(j_terms) == 2*model.var_path_indic_sat[p,j])
+
+        #  constraint 20
+        model.c20  = pe.ConstraintList()
         for p in model.paths: 
             for j in model.sats:
-                j_terms = []
+                j_terms_arrive = []
+                j_terms_depart = []
 
                 #  could have been a list comprehension but whatever
                 for k_d in range(len (dlink_winds_flat[j])):
-                    j_terms.append (model.var_dlnk_path_occ[p,j,k_d] )
+                    j_terms_depart.append (model.var_dlnk_path_occ[p,j,k_d] )
 
                 for i in model.sats:
                     if i == j:
@@ -404,15 +432,18 @@ class GPDataPathSelection():
                     #  use this to account for the fact that the cross-link Windows matrix is upper triangular
                     num_i_j_xlnks = max(len(xlink_winds[i][j]),len(xlink_winds[j][i]))
 
-                    j_terms += [
-                        model.var_xlnk_path_occ[p,i,j,k]  + 
+                    j_terms_arrive += [
+                        model.var_xlnk_path_occ[p,i,j,k] 
+                        for k in range (num_i_j_xlnks)
+                    ]
+                    j_terms_depart += [
                         model.var_xlnk_path_occ[p,j,i,k] 
                         for k in range (num_i_j_xlnks)
                     ]
 
-                j_terms.append (model.par_obs_occ[j])
+                j_terms_arrive.append (model.par_obs_occ[j])
 
-                model.c19.add( sum(j_terms) == 2*model.var_path_indic_sat[p,j])
+                model.c20.add( sum(j_terms_arrive) == sum(j_terms_depart))
 
         ##############################
         #  Make objective
@@ -468,12 +499,12 @@ class GPDataPathSelection():
     def print_sol(self):
         for v in self.model.component_objects(pe.Var, active=True):
 
-            # if str (v) =='var_time_a_d': 
-            #     print ("Variable",v)
-            #     varobject = getattr(self.model, str(v))
-            #     for index in varobject:
-            #         val  = varobject[index].value
-            #         print (" ",index, val)
+            if str (v) =='var_time_a_d': 
+                print ("Variable",v)
+                varobject = getattr(self.model, str(v))
+                for index in varobject:
+                    val  = varobject[index].value
+                    print (" ",index, val)
 
             if str (v) =='var_dlnk_path_occ': 
                 print ("Variable",v)
