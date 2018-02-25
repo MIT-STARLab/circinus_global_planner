@@ -4,20 +4,23 @@
 # 
 # @author Kit Kennedy
 #
+#  note that a path is the same as a route. 
 
 from pyomo import environ  as pe
 from pyomo import opt  as po
 
-class GPDataPathSelection():
-    """docstring for GPInputProcessor"""
+from .routing_objects import DataRoute
+
+class GPDataRouteSelection():
+    """docstring for GP route selection"""
     def __init__(self,params):
         self.num_sats=params['num_sats']
-        self.num_paths=params['path_selection_num_paths']
+        self.num_paths=params['route_selection_num_paths']
         self.start_utc_dt  =params['start_utc_dt']
         self.end_utc_dt  =params['end_utc_dt']
         self.M_t_s= 1000000 #  ~11.6 days
         self.M_dv_Mb= 1000000000 #  one petabit
-        self.min_path_dv =params['path_selection_min_path_dv']
+        self.min_path_dv =params['route_selection_min_path_dv']
         self.solver_max_runtime =params['solver_max_runtime']
 
         total_duration =(self.end_utc_dt- self.start_utc_dt).total_seconds ()
@@ -108,6 +111,10 @@ class GPDataPathSelection():
 
     def make_model ( self,obs_wind,dlink_winds_flat,xlink_winds):
         model = pe.ConcreteModel()
+
+        self.obs_wind = obs_wind 
+        self.dlink_winds_flat = dlink_winds_flat 
+        self.xlink_winds = xlink_winds 
 
         ##############################
         #  Make indices/ subscripts
@@ -571,4 +578,63 @@ class GPDataPathSelection():
             #     varobject = getattr(self.model, str(v))
             #     for index in varobject:
             #         val  = varobject[index].value
-            #         print (" ",index, val)
+                print (" ",index, val)
+
+    def extract_routes( self,verbose = False):
+        #  note that routes are the same as paths
+
+        selected_routes_by_index = {}
+        senses =  {}
+
+        # get the down links and index them by path
+        for dlnk_subscr in self.model.dlnk_path_subscripts:
+            # These subscript indices are defined above in get_downlink_model_objects
+            p = dlnk_subscr[0]
+            if self.model.var_dlnk_path_occ[dlnk_subscr] == 1.0:
+                if not p in selected_routes_by_index.keys ():
+                    selected_routes_by_index[p] = []
+                sat_indx = dlnk_subscr[1]
+                dlnk_indx = dlnk_subscr[2]
+                dlnk_wind =  self.dlink_winds_flat[sat_indx][dlnk_indx]
+                senses[dlnk_wind] = dlnk_wind.sat_indx
+                selected_routes_by_index[p].append(dlnk_wind)
+
+        #  get the cross-links and index them by path
+        for xlnk_subscr in self.model.xlnk_path_subscripts:
+            # These subscript indices are defined above in get_downlink_model_objects
+            p = xlnk_subscr[0]
+            if self.model.var_xlnk_path_occ[xlnk_subscr] == 1.0:
+                if not p in selected_routes_by_index.keys ():
+                    selected_routes_by_index[p] = []
+                sat_indx = xlnk_subscr[1]
+                other_sat_indx = xlnk_subscr[2]
+                xlnk_indx = xlnk_subscr[3]
+
+                access_sat_indx = sat_indx
+                access_other_sat_indx = other_sat_indx
+                # remember that xlink_winds is upper triangular,  because it  would be symmetric across the diagonal. swap indexing to account for that
+                if sat_indx >other_sat_indx:
+                    access_sat_indx=other_sat_indx
+                    access_other_sat_indx = sat_indx
+
+                xlnk_wind =  self.xlink_winds[access_sat_indx][access_other_sat_indx][xlnk_indx]
+                #store the satellite from which data is being moved on this cross-link
+                senses[xlnk_wind] = sat_indx
+                selected_routes_by_index[p].append(xlnk_wind)
+
+        #  add the observation
+        for route in selected_routes_by_index. values ():
+            senses[self.obs_wind] = self.obs_wind.sat_indx
+            route.append (self.obs_wind)
+
+        #  now make the actual data route objects
+        selected_routes =[]
+        for route in selected_routes_by_index. values ():
+            dr =  DataRoute ( route  = route, window_start_sats=senses)
+            dr.sort_windows ()
+            selected_routes.append(dr)
+
+        if verbose:
+            print ([ dr.print_route ( time_base = self.start_utc_dt) for dr in selected_routes])
+
+
