@@ -59,6 +59,7 @@ class ObsWindow(ActivityWindow):
 class CommWindow(ActivityWindow):
     def __init__(self, start, end):
         self.data_vol = const.UNASSIGNED
+        self.used_data_vol = const.UNASSIGNED
         self.remaining_data_vol = const.UNASSIGNED
         self.data_pkts = []
         # store initial start and end so we have them after start and end themselves get modified

@@ -6,7 +6,9 @@ class DataRoute(object):
     Contains all the relevant information about the path taken by a single data packet traveling through the satellite network
     '''
 
-    def __init__(self, route  =[], window_start_sats={}):
+    def __init__(self, ID, route  =[], window_start_sats={},dv=0):
+
+        self.ID =  ID
 
         # the list storing all objects in the route; a list ObsWindow, XlnkWindow, XlnkWindow...DlnkWindow
         self.route =  route
@@ -14,6 +16,8 @@ class DataRoute(object):
         # this keeps track, for each window along the route, of the satellite that the data was on at the beginning of the window. This is necessary because the window objects themselves are used across paths and do not store information about which sense they are used in
         #  dictionary with keys being the window objects themselves
         self.window_start_sats = window_start_sats
+
+        self.data_vol = dv
 
     def  sort_windows(self):
         self.route.sort(key=lambda x: x.start)
@@ -47,3 +51,15 @@ class DataRoute(object):
                 out_string  +=  " -> d %d; %s,%s" % (sat_indx,start_str,end_str)
         
         print (out_string)
+
+class LinkInfo(object):
+    """docstring fos  LinkInfo"""
+    def __init__(self,data_routes=[],total_data_vol=0,used_data_vol=0):
+        self.data_routes = data_routes
+        self.total_data_vol = total_data_vol
+        self.used_data_vol = used_data_vol
+
+    def __str__( self):
+        return  "routes: "+str(self.data_routes) + " ; dv %.0f/%.0f Mb" % ( self.used_data_vol, self.total_data_vol)
+
+

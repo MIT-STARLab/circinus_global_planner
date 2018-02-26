@@ -10,11 +10,12 @@ import os.path
 import json
 from datetime import datetime
 import sys
+import argparse
 
 #  local repo includes. todo:  make this less hackey
 sys.path.append ('..')
 from circinus_tools  import time_tools as tt
-from gp_tools.input_processing import GPInputProcessor
+from gp_tools.input_processing import GPProcessorIO
 from gp_tools.gp_route_selection import GPDataRouteSelection
 
 
@@ -27,14 +28,14 @@ class GlobalPlannerRunner:
 
     def __init__(self, params):
         self.params = params
-        self.inp_proc =GPInputProcessor ( params)
+        self.io_proc =GPProcessorIO( params)
 
     def run( self):
 
         # parse the inputs into activity windows
-        obs_winds, obs_window_id =self.inp_proc.import_obs_winds()
-        dlink_winds, dlink_winds_flat, dlnk_window_id =self.inp_proc.import_dlnk_winds()
-        xlink_winds, xlink_winds_flat, xlnk_window_id =self.inp_proc.import_xlnk_winds()
+        obs_winds, obs_window_id =self.io_proc.import_obs_winds()
+        dlink_winds, dlink_winds_flat, dlnk_window_id =self.io_proc.import_dlnk_winds()
+        xlink_winds, xlink_winds_flat, xlnk_window_id =self.io_proc.import_xlnk_winds()
 
         # for j in dlink_winds:
         #     for i in j:
@@ -61,8 +62,15 @@ class GlobalPlannerRunner:
         print ("(obs_winds[5][0].end-self.params['start_utc_dt']).total_seconds ()")  
         print ( (obs_winds[5][0].end-self.params['start_utc_dt']).total_seconds ())  
         gp_ps.print_sol ()
-        gp_ps. extract_routes ( verbose  = True)
-        # gp_ps.solve ()
+        routes = gp_ps. extract_routes ( verbose  = True)
+
+
+        sel_obs_winds_flat, sel_xlnk_winds_flat, \
+        sel_dlnk_winds_flat, link_info_by_wind = self.io_proc.extract_flat_windows ( routes)
+
+        outputs= self.io_proc.make_sat_history_outputs (sel_obs_winds_flat, sel_xlnk_winds_flat, sel_dlnk_winds_flat, link_info_by_wind)
+
+        return outputs
 
 
 class PipelineRunner:
@@ -104,30 +112,43 @@ class PipelineRunner:
             gp_params['xlnk_rates'] = data_rates_output['accesses_data_rates']['xlnk_rates']
 
         gp_runner = GlobalPlannerRunner (gp_params)
-        gp_runner.run ()
+        viz_outputs= gp_runner.run ()
 
+        # define orbit prop outputs json
+        output_json = {}
+        output_json['version'] = OUTPUT_JSON_VER
+        output_json['scenario_params'] = orbit_prop_inputs['scenario_params']
+        output_json['viz_data'] = viz_outputs
+        output_json['update_time'] = datetime.utcnow().isoformat()
 
-
-        return []
+        return output_json
 
 
 if __name__ == "__main__":
+    ap = argparse.ArgumentParser(description='orbit propagation')
+    ap.add_argument('--prop_inputs_file',
+                    type=str,
+                    default='orbit_prop_inputs.json',
+                    help='specify orbit propagation inputs file')
+
+    ap.add_argument('--data_rates_file',
+                    type=str,
+                    default='data_rates_output.json',
+                    help='specify data rate outputs file from orbit link repo')
+
+    args = ap.parse_args()
 
     pr = PipelineRunner()
 
     # with open(os.path.join(REPO_BASE,'crux/config/examples/orbit_prop_inputs_ex.json'),'r') as f:
-    with open(os.path.join(REPO_BASE,'crux/config/examples/orbit_prop_inputs_6sat.json'),'r') as f:
+    with open(os.path.join(REPO_BASE, args.prop_inputs_file),'r') as f:
         orbit_prop_inputs = json.load(f)
 
-    # with open(os.path.join(REPO_BASE,'crux/config/examples/orbit_prop_data_ex_small.json'),'r') as f:
-    # # with open(os.path.join(REPO_BASE,'crux/config/examples/orbit_prop_data_ex.json'),'r') as f:
-    #     orbit_prop_data = json.load(f)
+    with open(os.path.join(REPO_BASE,args.data_rates_file),'r') as f:
+        data_rates_output = json.load(f)
 
     with open(os.path.join(REPO_BASE,'crux/config/examples/gp_params_inputs_ex.json'),'r') as f:
         gp_params_inputs = json.load(f)
-
-    with open(os.path.join(REPO_BASE,'crux/config/examples/data_rates_output_6sat.json'),'r') as f:
-        data_rates_output = json.load(f)
 
     data = {
         # "orbit_prop_data": orbit_prop_data,
@@ -140,7 +161,7 @@ if __name__ == "__main__":
     a = time.time()
     output = pr.run(data)
     b = time.time()
-    with open('sat_plans.json','w') as f:
+    with open('gp_outputs.json','w') as f:
         json.dump(output ,f)
 
     print('run time: %f'%(b-a))

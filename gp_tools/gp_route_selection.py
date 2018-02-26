@@ -584,6 +584,7 @@ class GPDataRouteSelection():
         #  note that routes are the same as paths
 
         selected_routes_by_index = {}
+        route_dv_by_index = {}
         senses =  {}
 
         # get the down links and index them by path
@@ -627,14 +628,26 @@ class GPDataRouteSelection():
             senses[self.obs_wind] = self.obs_wind.sat_indx
             route.append (self.obs_wind)
 
+        for p in self.model.paths:
+            #  have to convert from pyomo  numeric type
+            route_dv_by_index[p] =   pe.value(self.model.var_path_dv[p])
+
         #  now make the actual data route objects
         selected_routes =[]
-        for route in selected_routes_by_index. values ():
-            dr =  DataRoute ( route  = route, window_start_sats=senses)
+        dr_id = 0
+        for r in selected_routes_by_index. keys ():
+            dr =  DataRoute (  
+                ID=  dr_id, 
+                route  = selected_routes_by_index[r],
+                window_start_sats=senses,
+                dv=route_dv_by_index[r]
+            )
             dr.sort_windows ()
             selected_routes.append(dr)
+            dr_id += 1
 
         if verbose:
-            print ([ dr.print_route ( time_base = self.start_utc_dt) for dr in selected_routes])
+            for dr in selected_routes:
+                dr.print_route ( time_base = self.start_utc_dt) 
 
-
+        return selected_routes

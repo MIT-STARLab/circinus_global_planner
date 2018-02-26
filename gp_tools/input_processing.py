@@ -12,9 +12,11 @@ from circinus_tools  import time_tools as tt
 from circinus_tools  import  constants as const
 from .custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow
 from .schedule_objects  import Dancecard
+from .routing_objects import LinkInfo
 
-class GPInputProcessor():
+class GPProcessorIO():
     """docstring for GPInputProcessor"""
+
     def __init__(self,params):
         #  assume modified Julian date for now. todo: make this a parameter
         self.input_date_format = const.MODIFIED_JULIAN_DATE
@@ -179,25 +181,6 @@ class GPInputProcessor():
             if sort:
                 xlink_winds_flat[sat_indx].sort(key=lambda x: x.start)
 
-        # # calculate data volumes for xlnk windows
-        # windows_to_keep = []
-        # for window_list in xlink_winds_flat:
-        #     windows_to_keep_temp = []
-        #     for wind in window_list:
-
-        #         # half of these xlnk windows are duplicated due to symmetry, so check to see if data volume hasn't been calced yet before trying
-        #         if wind.data_vol == const.UNASSIGNED:
-        #             xlnk_rates_mat =  self.xlnk_rates[wind.sat_indx][wind.xsat_indx][wind.sat_xsat_indx]
-
-        #             wind.rates_mat = xlnk_rates_mat
-        #             wind.set_data_vol_and_refresh_times()
-
-        #             if wind.data_vol >  self.min_allowed_dv_xlnk:
-        #                 windows_to_keep_temp.append(wind)
-
-        #     windows_to_keep.append(windows_to_keep_temp)
-
-        # xlink_winds_flat = windows_to_keep
 
         return  xlink_winds, xlink_winds_flat, xlnk_window_id
 
@@ -240,20 +223,103 @@ class GPInputProcessor():
 
             dlink_winds_flat.append(sat_dlnk_winds)
 
-        # # calculate data volumes for dlnk windows
-        # windows_to_keep = []
-        # for window_list in dlink_winds_flat:
-        #     windows_to_keep_temp = []
-        #     for wind in window_list:
-
-        #         wind.rates_mat =  self.dlnk_rates[wind.sat_indx][wind.gs_ID][wind.sat_gs_indx]
-        #         wind.set_data_vol_and_refresh_times()
-
-        #         if wind.data_vol >  self.min_allowed_dv_dlnk:
-        #             windows_to_keep_temp.append(wind)
-
-        #     windows_to_keep.append(windows_to_keep_temp)
-
-        # dlink_winds_flat = windows_to_keep
 
         return dlink_winds,dlink_winds_flat, dlnk_window_id
+
+    def extract_flat_windows ( self, routes):
+        all_obs = set ()
+        all_xlnk = set ()
+        all_dlnk = set ()
+
+        #  dictionary of named tuples that contain all of the information used for creating output link info.  keys are the window objects themselves
+        link_info_by_wind = {}
+
+        for dr in routes:
+            for wind in dr.route:
+
+                if type (wind)  == ObsWindow:
+                    all_obs.add (wind)
+                elif type (wind)  == XlnkWindow:
+                    all_xlnk.add (wind)
+                    if not wind in link_info_by_wind.keys (): 
+                        link_info_by_wind[wind]  = LinkInfo ([dr.ID], wind.data_vol, dr.data_vol )
+                    else:
+                        link_info_by_wind[wind].data_routes.append ( dr.ID) 
+                        link_info_by_wind[wind].used_data_vol  +=  dr.data_vol 
+
+                elif type (wind)  == DlnkWindow:
+                    all_dlnk.add (wind)
+                    if not wind in link_info_by_wind.keys (): 
+                        link_info_by_wind[wind]  = LinkInfo ([dr.ID], wind.data_vol, dr.data_vol )
+                    else:
+                        link_info_by_wind[wind].data_routes.append ( dr.ID) 
+                        link_info_by_wind[wind].used_data_vol  +=  dr.data_vol 
+
+        obs_flat = [[] for k in range( self.num_sats)]
+        xlnk_flat = [[] for k in range( self.num_sats)]
+        dlnk_flat = [[] for k in range( self.num_sats)]
+
+        for obs in all_obs: 
+            obs_flat[obs.sat_indx].append(obs)
+        for xlnk in all_xlnk: 
+            xlnk_flat[xlnk.sat_indx].append(xlnk)
+            xlnk_flat[xlnk.xsat_indx].append(xlnk)
+        for dlnk in all_dlnk: 
+            dlnk_flat[dlnk.sat_indx].append(dlnk)
+
+        for sat_indx in range ( self.num_sats): 
+            obs_flat[sat_indx].sort(key=lambda x: x.start)
+            xlnk_flat[sat_indx].sort(key=lambda x: x.start)
+            dlnk_flat[sat_indx].sort(key=lambda x: x.start)
+
+        return obs_flat, xlnk_flat, dlnk_flat, link_info_by_wind
+
+    def make_sat_history_outputs (self, obs_winds_flat, xlnk_winds_flat, dlnk_winds_flat, link_info_by_wind):
+        obs_times_flat = [[] for sat_indx in range ( self.num_sats)]
+        obs_locations = [[] for sat_indx in range ( self.num_sats)]
+        dlnk_times_flat = [[] for sat_indx in range ( self.num_sats)]
+        dlnk_partners = [[] for sat_indx in range ( self.num_sats)]
+        dlnk_link_info_history_flat = [[] for sat_indx in range ( self.num_sats)]
+        xlnk_times_flat = [[] for sat_indx in range ( self.num_sats)]
+        xlnk_partners = [[] for sat_indx in range ( self.num_sats)]
+        xlnk_link_info_history_flat = [[] for sat_indx in range ( self.num_sats)]
+
+        for sat_indx in range ( self.num_sats): 
+            for wind in obs_winds_flat[sat_indx]:
+                #  this  observation window could have multiple targets that it seeing, so we need to separate those out into separate windows
+                for target in wind.target_IDs:
+                    start_mjd = tt.datetime2mjd ( wind.start)
+                    end_mjd = tt.datetime2mjd ( wind.end)
+                    obs_times_flat[sat_indx].append ( [start_mjd, end_mjd]) 
+                    obs_locations[sat_indx].append ( target)  
+
+        for sat_indx in range ( self.num_sats): 
+            for wind in xlnk_winds_flat[sat_indx]:
+                # want to filter this so we're not duplicating windows for display in cesium  (though orbit viz filters this too)
+                # look at both sat_indx and xsat_indx in case those are not in increasing order
+                if wind.sat_indx  > sat_indx or wind.xsat_indx  > sat_indx:
+                    start_mjd = tt.datetime2mjd ( wind.start)
+                    end_mjd = tt.datetime2mjd ( wind.end)
+                    xlnk_times_flat[sat_indx].append ( [start_mjd, end_mjd]) 
+                    xlnk_link_info_history_flat[sat_indx].append ( [start_mjd, end_mjd, str (link_info_by_wind[wind])]) 
+                    xlnk_partners[sat_indx].append ( wind.xsat_indx)
+
+        for sat_indx in range ( self.num_sats): 
+            for wind in dlnk_winds_flat[sat_indx]:
+                start_mjd = tt.datetime2mjd ( wind.start)
+                end_mjd = tt.datetime2mjd ( wind.end)
+                dlnk_times_flat[sat_indx].append ( [start_mjd, end_mjd]) 
+                dlnk_link_info_history_flat[sat_indx].append ( [start_mjd, end_mjd, str (link_info_by_wind[wind])]) 
+                dlnk_partners[sat_indx].append ( wind.gs_ID)
+
+        # ordered dictionary so we can preserve order in the output file
+        outputs = collections.OrderedDict ()
+        outputs['obs_times_flat']  = obs_times_flat 
+        outputs['obs_locations']  = obs_locations 
+        outputs['dlnk_times_flat']  = dlnk_times_flat 
+        outputs['dlnk_partners']  = dlnk_partners
+        outputs['dlnk_link_info_history_flat']  = dlnk_link_info_history_flat 
+        outputs['xlnk_times_flat']  = xlnk_times_flat 
+        outputs['xlnk_partners']  = xlnk_partners 
+        outputs['xlnk_link_info_history_flat']  = xlnk_link_info_history_flat 
+        return outputs
