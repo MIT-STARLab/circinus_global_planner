@@ -312,6 +312,9 @@ class GPProcessorIO():
                 dlnk_link_info_history_flat[sat_indx].append ( [start_mjd, end_mjd, str (link_info_by_wind[wind])]) 
                 dlnk_partners[sat_indx].append ( wind.gs_ID)
 
+
+        # data_history =self.create_data_history( obs_winds_flat,dlnk_winds_flat,xlnk_winds_flat)
+
         # ordered dictionary so we can preserve order in the output file
         outputs = collections.OrderedDict ()
         outputs['obs_times_flat']  = obs_times_flat 
@@ -322,4 +325,113 @@ class GPProcessorIO():
         outputs['xlnk_times_flat']  = xlnk_times_flat 
         outputs['xlnk_partners']  = xlnk_partners 
         outputs['xlnk_link_info_history_flat']  = xlnk_link_info_history_flat 
+        # outputs['data_history']  =  data_history
         return outputs
+
+
+    def create_data_history( self,obs_winds_flat,dlink_winds_flat,xlink_winds_flat):
+
+        #  TODO :   fix this code
+
+        all_wind = [[] for k in range(self.num_sats)]
+        for sat_indx in range(self.num_sats):
+            for obs in obs_winds_flat[sat_indx]:
+                all_wind[sat_indx].append(obs)
+
+            for dlnk in dlink_winds_flat[sat_indx]:
+                all_wind[sat_indx].append(dlnk)
+
+            for xlnk in xlink_winds_flat[sat_indx]:
+                all_wind[sat_indx].append(xlnk)
+                # all_wind[xlnk.xsat_indx].append(xlnk)
+
+            all_wind[sat_indx].sort(key=lambda x: x.start)
+
+
+        sat_dvs = [0 for i in range(self.num_sats)]
+        data_history =  []
+
+        for sat_indx in range(self.num_sats):
+            data_history_sat = []
+
+            data_history_sat.append([0,0])
+
+            latest_time_sec = 0
+
+            sat_pkts_state = []
+            sat_dv_from_pkts = 0
+
+            for dummy, wind in enumerate(all_wind[sat_indx]):
+                old_sat_dv = sat_dvs[sat_indx]
+                new_sat_dv = old_sat_dv
+                start_time_sec = (wind.start -  self.scenario_start).total_seconds()
+                end_time_sec = (wind.end -  self.scenario_start).total_seconds()
+
+                # sanity check
+                # add the tstep_sec/2 to give some sub-timestep wiggle room - sometimes the times calculated for the windows aren't quite on the timestep border
+                print ( start_time_sec)
+                print ( all_wind[sat_indx])
+
+                if start_time_sec < (latest_time_sec - self.tstep_sec/2):
+                    raise Exception ('create_data_history: problem in data history construction, times wrong')
+
+                if wind.data_vol > wind.unmodified_data_vol or wind.remaining_data_vol < 0:
+                    raise Exception ('create_data_history: problem in data history construction, data vol wrong')
+
+                if type(wind) == ObsWindow:
+                    dv_created = wind.collected_data_vol
+                    new_sat_dv +=  dv_created
+
+                    if dv_created != sum(pkt.data_vol for pkt in wind.data_pkts):
+                        raise Exception ('create_data_history: problem 3')
+
+                    for pkt in wind.data_pkts:
+                        sat_pkts_state.append(pkt)
+
+                elif type(wind) == DlnkWindow:
+                    dv_dlnked = wind.routed_data_vol
+                    new_sat_dv -= dv_dlnked
+
+                    if dv_dlnked != sum(pkt.data_vol for pkt in wind.data_pkts):
+                        raise Exception ('create_data_history: problem 4')
+
+                    for pkt in wind.data_pkts:
+                        sat_pkts_state.remove(pkt)
+
+                elif type(wind) == XlnkWindow:
+                    for sat_indx_to in wind.routed_data_vol_to_sat_indx.keys():
+                        dv_xlnked = wind.routed_data_vol_to_sat_indx[sat_indx_to]
+                        pkts_xlnked = wind.routed_pkts_to_sat_indx[sat_indx_to]
+
+                        if dv_xlnked != sum(pkt.data_vol for pkt in pkts_xlnked):
+                            raise Exception ('create_data_history: problem 5')
+
+                        if sat_indx_to == sat_indx:
+                            new_sat_dv +=  dv_xlnked
+                            for pkt in pkts_xlnked:
+                                sat_pkts_state.append(pkt)
+                        else:
+                            new_sat_dv -= dv_xlnked
+                            for pkt in pkts_xlnked:
+                                sat_pkts_state.remove(pkt)
+
+                sat_dv_from_pkts = sum(pkt.data_vol for pkt in sat_pkts_state)
+
+                if new_sat_dv < -0.9:
+                    print('create_data_history: sat data volume < 0')
+                    print('new_sat_dv: '+str(new_sat_dv))
+                    print('sat_dv_from_pkts: '+str(sat_dv_from_pkts))
+                    # 1/0
+
+                data_history_sat.append([start_time_sec, old_sat_dv])
+                data_history_sat.append([end_time_sec, new_sat_dv])
+
+                sat_dvs[sat_indx] = new_sat_dv
+                latest_time_sec = max(end_time_sec,latest_time_sec)  # use this max in case for some reason the end times of the windows are bouncing around.
+
+            data_history.append(data_history_sat)
+
+            if len(sat_pkts_state) > 0:
+                raise Exception ('create_data_history: should not have any packets left in here')
+
+        return data_history

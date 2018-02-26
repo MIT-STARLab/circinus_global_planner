@@ -56,6 +56,12 @@ class ObsWindow(ActivityWindow):
         self.remaining_data_vol = self.data_vol
         self.unmodified_data_vol = self.data_vol
 
+    def __str__(self):
+        return  "(ObsWindow id %d; %d, targs %s; %s,%s)" % ( self.window_ID, self.sat_indx, str(self.target_IDs),self.start.isoformat (),self.end.isoformat())
+
+    def __repr__(self):
+        return  "(ObsWindow id %d; %d, targs %s; %s,%s)" % (self.window_ID,self.sat_indx, str(self.target_IDs),self.start.isoformat (),self.end.isoformat())
+
 class CommWindow(ActivityWindow):
     def __init__(self, start, end):
         self.data_vol = const.UNASSIGNED
@@ -205,6 +211,12 @@ class DlnkWindow(CommWindow):
         print('duration: ' + str(self.duration))
         print('......')
 
+    def __str__(self):
+        return  "(DlnkWindow id %d; %d, gs %d; %s,%s)" % (self.window_ID,self.sat_indx, self.gs_ID,self.start.isoformat (),self.end.isoformat())
+
+    def __repr__(self):
+        return  "(DlnkWindow id %d; %d, gs %d; %s,%s)" % (self.window_ID,self.sat_indx, self.gs_ID,self.start.isoformat (),self.end.isoformat())
+
 class XlnkWindow(CommWindow):
     def __init__(self, window_ID, sat_indx, xsat_indx, sat_xsat_indx, start, end):
         '''
@@ -250,6 +262,12 @@ class XlnkWindow(CommWindow):
         '''
 
         return sum(self.routed_data_vol_to_sat_indx[key] for key in self.routed_data_vol_to_sat_indx.keys())
+
+    def __str__(self):
+        return  "(XlnkWindow id %d; %d,%d; %s,%s)" % (self.window_ID,self.sat_indx, self.xsat_indx,self.start.isoformat (),self.end.isoformat())
+
+    def __repr__(self):
+        return  "(XlnkWindow id %d; %d,%d; %s,%s)" % (self.window_ID,self.sat_indx, self.xsat_indx,self.start.isoformat (),self.end.isoformat())
 
 class UrgentWindow(ActivityWindow):
     def __init__(self, target_ID, start, end):
