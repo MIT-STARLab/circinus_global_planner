@@ -117,6 +117,7 @@ class GPProcessorIO():
 
             for targ_indx, target_obs in enumerate(all_sat_obs):
 
+                # TODO:  this should operate on ID not on index
                 if targ_indx in self.targ_ignore_list:
                     continue
 
@@ -190,10 +191,12 @@ class GPProcessorIO():
         dlink_winds = [[[] for j in range(self.num_gs)] for i in range(self.num_sats)]
         dlnk_window_id = 0
         for sat_indx, all_sat_dlnk in enumerate( self.dlnk_times):
+                        
             sat_dlnk_winds = []
 
             for gs_indx, dlnk_list in enumerate(all_sat_dlnk):
 
+                # TODO:  this should operate on ID not on index
                 if gs_indx in self.gs_ignore_list:
                     continue
 
@@ -212,6 +215,7 @@ class GPProcessorIO():
                     new_wind.set_data_vol_and_refresh_times()
 
                     if new_wind.data_vol >  self.min_allowed_dv_dlnk:
+
                         dlink_winds[sat_indx][gs_indx].append (new_wind) 
                         sat_dlnk_winds.append(new_wind)
 

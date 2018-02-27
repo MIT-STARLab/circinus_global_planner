@@ -6,6 +6,8 @@
 #
 #  note that a path is the same as a route. 
 
+from  datetime import timedelta
+
 from pyomo import environ  as pe
 from pyomo import opt  as po
 
@@ -21,7 +23,8 @@ class GPDataRouteSelection():
         self.M_t_s= 1000000 #  ~11.6 days
         self.M_dv_Mb= 1000000000 #  one petabit
         self.min_path_dv =params['route_selection_min_path_dv']
-        self.solver_max_runtime =params['solver_max_runtime']
+        self.solver_max_runtime =params['route_selection_solver_max_runtime']
+        self.wind_filter_duration =  timedelta (seconds =params['route_selection_wind_filter_duration'])
 
         total_duration =(self.end_utc_dt- self.start_utc_dt).total_seconds ()
         if  total_duration  >self.M_t_s:
@@ -97,6 +100,11 @@ class GPDataRouteSelection():
         for key in t_end_dict_by_tuple.keys ():
             score_factors_dict[key] = 1/t_end_dict_by_tuple[key] / inverse_sum
 
+        largest_factor = max (score_factors_dict.values ())
+        # now normalize by the highest factor found
+        for key in t_end_dict_by_tuple.keys ():
+            score_factors_dict[key] =score_factors_dict[key]/largest_factor
+
         #  now loop through and include paths as an index
         tuple_list_paths = []
 
@@ -108,13 +116,35 @@ class GPDataRouteSelection():
 
         return tuple_list, tuple_list_paths, t_start_dict_by_tuple, t_end_dict_by_tuple, dv_dict_by_tuple, score_factors_dict
 
+    @staticmethod
+    def  filter_windows(obs_wind,dlink_winds_flat,xlink_winds,num_sats,end_utc_dt,wind_filter_duration):
+        first =  obs_wind.end
+        last =  min ( end_utc_dt, first +  wind_filter_duration)
 
-    def make_model ( self,obs_wind,dlink_winds_flat,xlink_winds):
+        dlink_winds_flat_filtered = [[] for sat_indx in  range (num_sats)]
+        xlink_winds_flat_filtered = [[[] for xsat_indx in  range ( num_sats)] for sat_indx in  range (num_sats)]
+
+        for sat_indx in  range (num_sats):
+            for xsat_indx in  range ( num_sats):
+                for wind in xlink_winds[sat_indx][xsat_indx]:
+                    if  wind.start > first  and  wind.end  <last:
+                        xlink_winds_flat_filtered[sat_indx][xsat_indx]. append ( wind)
+
+            for wind in dlink_winds_flat[sat_indx]:
+                if  wind.start > first  and  wind.end  <last:
+                    dlink_winds_flat_filtered[sat_indx]. append ( wind)
+
+        return dlink_winds_flat_filtered, xlink_winds_flat_filtered
+
+    def make_model ( self,obs_wind,dlink_winds_flat,xlink_winds, verbose = True):
         model = pe.ConcreteModel()
 
-        self.obs_wind = obs_wind 
-        self.dlink_winds_flat = dlink_winds_flat 
-        self.xlink_winds = xlink_winds 
+        self.obs_wind = obs_wind
+        self.dlink_winds_flat,self.xlink_winds =  self.filter_windows (obs_wind,dlink_winds_flat,xlink_winds, self.num_sats, self.end_utc_dt, self.wind_filter_duration)
+
+        if verbose:
+            print ( "Considering %d downlink windows" % (sum([len (self.dlink_winds_flat[sat_indx]) for sat_indx in range (self.num_sats)])))
+            print ( "Considering %d crosslink windows" % (sum([len (self.xlink_winds[sat_indx][xsat_indx]) for xsat_indx in range (self.num_sats) for sat_indx in range (self.num_sats)])))
 
         ##############################
         #  Make indices/ subscripts
@@ -127,7 +157,7 @@ class GPDataRouteSelection():
             dlnk_t_end_dict,
             dlnk_dv_dict,
             dlnk_sfact_dict)  = self.get_downlink_model_objects(
-                                        dlink_winds_flat,
+                                        self.dlink_winds_flat,
                                         self.num_paths,
                                         self.num_sats,
                                         self.start_utc_dt)
@@ -138,7 +168,7 @@ class GPDataRouteSelection():
             xlnk_t_start_dict, 
             xlnk_t_end_dict,
             xlnk_dv_dict)  = self.get_crosslink_model_objects(
-                                        xlink_winds,
+                                        self.xlink_winds,
                                         self.num_paths,
                                         self.num_sats,
                                         self.start_utc_dt)
@@ -187,6 +217,10 @@ class GPDataRouteSelection():
 
         model.par_obs_dv = pe.Param (initialize = obs_wind.data_vol)
         
+        # relative weightings for the objective terms
+        model.par_obj_weight1 = pe.Param (initialize = 0.15)
+        model.par_obj_weight2 = pe.Param (initialize = 0.05)
+        model.par_obj_weight3 = pe.Param (initialize = 0.8)
 
         #  quick sanity check
         for dv in dlnk_dv_dict.values ():
@@ -294,7 +328,7 @@ class GPDataRouteSelection():
         #             sum ([
         #                 model.var_xlnk_path_occ[p,i,j,k]  + 
         #                 model.var_xlnk_path_occ[p,j,i,k] 
-        #                 for k in range (len (xlink_winds[i][j]))
+        #                 for k in range (len (self.xlink_winds[i][j]))
         #             ])  
         #             <= 1
         #         )
@@ -310,7 +344,7 @@ class GPDataRouteSelection():
         #             if i == j:
         #                 continue
 
-        #             num_i_j_xlnks = max(len(xlink_winds[i][j]),len(xlink_winds[j][i]))
+        #             num_i_j_xlnks = max(len(self.xlink_winds[i][j]),len(self.xlink_winds[j][i]))
         #             # for k in range (num_i_j_xlnks):
         #             #     print ('oui')
         #             #     j_terms.append (model.var_xlnk_path_occ[p,i,j,k])
@@ -333,7 +367,7 @@ class GPDataRouteSelection():
         #             # print (sum ([
         #             #         model.var_xlnk_path_occ[p,i,j,k]  + 
         #             #         model.var_xlnk_path_occ[p,j,i,k] 
-        #             #         for k in range (len (xlink_winds[i][j]))
+        #             #         for k in range (len (self.xlink_winds[i][j]))
         #             #     ]))
 
         #         # print (j_terms)
@@ -346,7 +380,7 @@ class GPDataRouteSelection():
         # model.c10  = pe.ConstraintList()
         # for p in model.paths: 
         #     for j in  model.sats:
-        #         for k_d in range(len (dlink_winds_flat[j])):
+        #         for k_d in range(len (self.dlink_winds_flat[j])):
 
         #             k_d_terms = []
         #             for i in model.sats:
@@ -355,7 +389,7 @@ class GPDataRouteSelection():
                         
         #                 k_d_terms += [
         #                     model.var_xlnk_path_occ[p,i,j,k_x] 
-        #                     for k_x in range (len (xlink_winds[i][j]))
+        #                     for k_x in range (len (self.xlink_winds[i][j]))
         #                 ] 
 
         #             model.c10.add(model.var_dlnk_path_occ[p,j,k_d]  <= sum(k_d_terms))
@@ -410,7 +444,7 @@ class GPDataRouteSelection():
         #         j_terms = []
 
         #         #  could have been a list comprehension but whatever
-        #         for k_d in range(len (dlink_winds_flat[j])):
+        #         for k_d in range(len (self.dlink_winds_flat[j])):
         #             j_terms.append (model.var_dlnk_path_occ[p,j,k_d] )
 
         #         for i in model.sats:
@@ -418,7 +452,7 @@ class GPDataRouteSelection():
         #                 continue
 
         #             #  use this to account for the fact that the cross-link Windows matrix is upper triangular
-        #             num_i_j_xlnks = max(len(xlink_winds[i][j]),len(xlink_winds[j][i]))
+        #             num_i_j_xlnks = max(len(self.xlink_winds[i][j]),len(self.xlink_winds[j][i]))
 
         #             j_terms += [
         #                 model.var_xlnk_path_occ[p,i,j,k]  + 
@@ -438,7 +472,7 @@ class GPDataRouteSelection():
                 j_terms_depart = []
 
                 #  could have been a list comprehension but whatever
-                for k_d in range(len (dlink_winds_flat[j])):
+                for k_d in range(len (self.dlink_winds_flat[j])):
                     j_terms_depart.append (model.var_dlnk_path_occ[p,j,k_d] )
 
                 for i in model.sats:
@@ -446,7 +480,7 @@ class GPDataRouteSelection():
                         continue
 
                     #  use this to account for the fact that the cross-link Windows matrix is upper triangular
-                    num_i_j_xlnks = max(len(xlink_winds[i][j]),len(xlink_winds[j][i]))
+                    num_i_j_xlnks = max(len(self.xlink_winds[i][j]),len(self.xlink_winds[j][i]))
 
                     j_terms_arrive += [
                         model.var_xlnk_path_occ[p,i,j,k] 
@@ -466,22 +500,18 @@ class GPDataRouteSelection():
             return sum([model.var_dlnk_path_occ[tuple([p])+dlnk_subsc] for dlnk_subsc in  model.dlnk_subscripts]) <= model.var_path_indic[p]
         model.c21 =pe.Constraint (  model.paths,  rule =c21_rule )
 
+
         ##############################
         #  Make objective
         ##############################
 
         def obj_rule(model):
-            # return sum( model.var_path_indic[p] for p in model.paths)
-            # return sum (model.var_path_dv_dlnk[p,i,k] for i,k in model.dlnk_subscripts for p in model.paths )
-            return sum (model.var_dlnk_path_occ[p,i,k]*model.par_dlnk_sf[i,k] for i,k in model.dlnk_subscripts for p in model.paths )
-            # return sum( model.var_dlnk_path_occ[dlnk_subsc] for dlnk_subsc in  model.dlnk_path_subscripts)
+            return (
+                model.par_obj_weight1 * 1/self.num_paths/model.par_obs_dv * sum(model.var_path_dv_dlnk[p,i,k] for i,k in model.dlnk_subscripts for p in model.paths )  +
+                model.par_obj_weight2 * 1/self.num_paths                  * sum(model.var_path_indic[p] for p in model.paths) +
+                model.par_obj_weight3 * 1/self.num_paths                  * sum(model.var_dlnk_path_occ[p,i,k]*model.par_dlnk_sf[i,k] for i,k in model.dlnk_subscripts for p in model.paths )
+            )
         model.obj = pe.Objective( rule=obj_rule, sense=pe.maximize )
-
- 
-        
-        
-        
-        
 
         self.model = model
 
@@ -521,12 +551,12 @@ class GPDataRouteSelection():
     def print_sol(self):
         for v in self.model.component_objects(pe.Var, active=True):
 
-            if str (v) =='var_time_a_d': 
-                print ("Variable",v)
-                varobject = getattr(self.model, str(v))
-                for index in varobject:
-                    val  = varobject[index].value
-                    print (" ",index, val)
+            # if str (v) =='var_time_a_d': 
+            #     print ("Variable",v)
+            #     varobject = getattr(self.model, str(v))
+            #     for index in varobject:
+            #         val  = varobject[index].value
+            #         print (" ",index, val)
 
             if str (v) =='var_dlnk_path_occ': 
                 print ("Variable",v)
@@ -578,7 +608,7 @@ class GPDataRouteSelection():
             #     varobject = getattr(self.model, str(v))
             #     for index in varobject:
             #         val  = varobject[index].value
-                print (" ",index, val)
+            #         print (" ",index, val)
 
     def extract_routes( self,verbose = False):
         #  note that routes are the same as paths

@@ -6,5 +6,7 @@
     "min_allowed_dv_dlnk_Mb" : 100,
     "route_selection_num_paths" :  5,
     "route_selection_min_path_dv_Mb" :  100,
-    "solver_max_runtime_s" :  3
+    "route_selection_solver_max_runtime_s" :  20,
+    "route_selection_wind_filter_duration_s" : 1800 ,
+    "pickle_route_selection_results": true
 }

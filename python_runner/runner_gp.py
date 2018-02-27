@@ -11,6 +11,7 @@ import json
 from datetime import datetime
 import sys
 import argparse
+import pickle
 
 #  local repo includes. todo:  make this less hackey
 sys.path.append ('..')
@@ -50,20 +51,34 @@ class GlobalPlannerRunner:
         print('xlink_win')
         print(sum([len(xlink_winds[i][j]) for i in  range( self.params['num_sats']) for j in  range( self.params['num_sats']) ]))
 
-        gp_ps = GPDataRouteSelection ( self.params)
-        gp_ps.make_model (obs_winds[5][0],dlink_winds_flat,xlink_winds)
-        gp_ps.solve ()
-        print ('obs_winds[5][0].sat_indx')
-        print (obs_winds[5][0].sat_indx)
-        print ('obs_winds[5][0].data_vol')
-        print (obs_winds[5][0].data_vol)
-        print ('obs_winds[5][0].duration')
-        print (obs_winds[5][0].duration)
-        print ("(obs_winds[5][0].end-self.params['start_utc_dt']).total_seconds ()")  
-        print ( (obs_winds[5][0].end-self.params['start_utc_dt']).total_seconds ())  
-        gp_ps.print_sol ()
-        routes = gp_ps. extract_routes ( verbose  = True)
 
+        gp_ps = GPDataRouteSelection ( self.params)
+
+        obs_indx =0
+        #  list of all routes, indexed by obs_indx ( important for pickling)
+        all_routes =[]
+        for sat_indx in [23]: # range( self.params['num_sats']):
+            for obs in obs_winds[sat_indx]:
+                gp_ps.make_model (obs,dlink_winds_flat,xlink_winds, verbose = True)
+                gp_ps.solve ()
+                gp_ps.print_sol ()
+                routes = gp_ps. extract_routes ( verbose  = True)
+
+                all_routes.append ( routes)
+
+                obs_indx +=1
+
+                # TODO: remove this
+                if obs_indx==1:
+                    break
+
+        if self.params['pickle_route_selection_results']:
+            pickle_stuff =  {}
+            pickle_stuff['all_routes'] = all_routes
+            pickle_stuff['gp_params'] =  self.params
+            pickle_name ='%s_obsindx%d_%s' %( self.params['pickle_file_name_pre'],obs_indx,datetime.utcnow().isoformat().replace (':','_'))
+            with open('%s.pkl' % ( pickle_name),'wb') as f:
+                pickle.dump(  pickle_stuff,f)
 
         sel_obs_winds_flat, sel_xlnk_winds_flat, \
         sel_dlnk_winds_flat, link_info_by_wind = self.io_proc.extract_flat_windows ( routes)
@@ -83,8 +98,10 @@ class PipelineRunner:
         orbit_prop_inputs = data['orbit_prop_inputs']
         gp_params_inputs = data['gp_params_inputs']
         data_rates_output = data['data_rates_output']
+        file_params = data.get ('file_params',{})
 
         gp_params = {}
+        gp_params['pickle_file_name_pre']  = 'pickles/'  + file_params.get ('orbit_prop_inputs_file' ,'default.json').split ('.')[0]
 
         if orbit_prop_inputs['version'] == "0.3": 
             
@@ -93,6 +110,7 @@ class PipelineRunner:
             gp_params['timestep_s'] = orbit_prop_inputs['scenario_params']['timestep_s']
             gp_params['num_sats'] = orbit_prop_inputs['sat_params']['num_satellites']
             gp_params['num_gs'] = orbit_prop_inputs['gs_params']['num_stations']
+            gp_params['num_targets'] = orbit_prop_inputs['obs_params']['num_targets']
             gp_params['pl_data_rate'] = orbit_prop_inputs['sat_params']['payload_data_rate_Mbps']
 
         if gp_params_inputs['version'] == "0.1": 
@@ -102,7 +120,9 @@ class PipelineRunner:
             gp_params['min_allowed_dv_xlnk'] = gp_params_inputs['min_allowed_dv_xlnk_Mb']
             gp_params['route_selection_num_paths'] = gp_params_inputs['route_selection_num_paths']
             gp_params['route_selection_min_path_dv'] = gp_params_inputs['route_selection_min_path_dv_Mb']
-            gp_params['solver_max_runtime'] = gp_params_inputs['solver_max_runtime_s']
+            gp_params['route_selection_solver_max_runtime'] = gp_params_inputs['route_selection_solver_max_runtime_s']
+            gp_params['route_selection_wind_filter_duration'] = gp_params_inputs['route_selection_wind_filter_duration_s']
+            gp_params['pickle_route_selection_results'] = gp_params_inputs['pickle_route_selection_results']
 
         if data_rates_output['version'] == "0.1": 
             gp_params['obs_times'] = data_rates_output['accesses_data_rates']['obs_times']
@@ -155,7 +175,8 @@ if __name__ == "__main__":
         "orbit_prop_inputs": orbit_prop_inputs,
         "gp_params_inputs": gp_params_inputs,
         # "viz_params": viz_params,
-        "data_rates_output": data_rates_output
+        "data_rates_output": data_rates_output,
+        "file_params":  {'orbit_prop_inputs_file': args.prop_inputs_file.split('/')[-1]}
     }
 
     a = time.time()
