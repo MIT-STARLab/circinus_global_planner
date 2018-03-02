@@ -1,12 +1,29 @@
 {
     "version": "0.1",
-    "targ_ignore_list": [],
-    "gs_ignore_list": [],
-    "min_allowed_dv_xlnk_Mb" : 100,
-    "min_allowed_dv_dlnk_Mb" : 100,
-    "route_selection_num_paths" :  5,
-    "route_selection_min_path_dv_Mb" :  100,
-    "route_selection_solver_max_runtime_s" :  20,
-    "route_selection_wind_filter_duration_s" : 1800 ,
-    "pickle_route_selection_results": true
+    "other_params": {
+        "targ_ignore_list": [],
+        "gs_ignore_list": [],
+        "min_allowed_dv_xlnk_Mb" : 100,
+        "min_allowed_dv_dlnk_Mb" : 100
+    },
+    "route_selection_params": {
+        "num_paths" :  5,
+        "min_path_dv_Mb" :  100,
+        "solver_max_runtime_s" :  20,
+        "wind_filter_duration_s" : 1800
+    },
+    "pickle_params":  {
+        "pickle_route_selection_results": false,
+        "unpickle_pre_route_selection": true,
+        "route_selection_pickle": "pickles/orbit_prop_inputs_walker30_7gs_obsindx1_2018-03-02T22_20_49.927700.pkl"
+    },
+    "plot_params":  {
+        "plot_fig_extension":  ".pdf",
+        "plot_include_labels":  true,
+        "time_units":  "minutes",
+        "links_plot_dlnks":  true,
+        "links_plot_dlnks_choices":  false,
+        "links_plot_xlnks":  true,
+        "links_plot_xlnks_choices":   false
+    }
 }

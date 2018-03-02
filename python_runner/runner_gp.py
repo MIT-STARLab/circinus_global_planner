@@ -8,7 +8,7 @@
 import time
 import os.path
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import sys
 import argparse
 import pickle
@@ -17,6 +17,7 @@ import pickle
 sys.path.append ('..')
 from circinus_tools  import time_tools as tt
 from gp_tools.input_processing import GPProcessorIO
+from gp_tools.gp_plotting import GPPlotting
 from gp_tools.gp_route_selection import GPDataRouteSelection
 
 
@@ -29,7 +30,33 @@ class GlobalPlannerRunner:
 
     def __init__(self, params):
         self.params = params
-        self.io_proc =GPProcessorIO( params)
+        self.general_params = params['general_params']
+        self.pickle_params = params['pickle_params']
+        self.other_params = params['other_params']
+        self.route_selection_params = params['route_selection_params']
+        self.plot_params = params['plot_params']
+        self.io_proc =GPProcessorIO( dict(list (self.general_params.items()) +  list (self.other_params.items()) ))
+        self.gp_plot =GPPlotting( self.plot_params)
+
+    def pickle_stuff(self,all_routes,all_routes_obs,all_stats,route_times_s,obs_indx):
+
+        pickle_stuff =  {}
+        pickle_stuff['all_routes'] = all_routes
+        pickle_stuff['all_routes_obs'] = all_routes_obs
+        pickle_stuff['all_stats'] = all_stats
+        pickle_stuff['route_times_s'] = route_times_s
+        pickle_stuff['params'] =  self.params
+        pickle_stuff['obs_indx'] = obs_indx
+        pickle_name ='%s_obsindx%d_%s' %( self.general_params['new_pickle_file_name_pre'],obs_indx,datetime.utcnow().isoformat().replace (':','_'))
+        with open('%s.pkl' % ( pickle_name),'wb') as f:
+            pickle.dump(  pickle_stuff,f)
+
+    def unpickle_stuff( self):
+
+        p = pickle.load (open ( self.pickle_params['route_selection_pickle'],'rb'))
+        self.params = p['params']
+
+        return p['all_routes'],p['all_routes_obs'],p['all_stats'],p['route_times_s'],p['obs_indx']
 
     def run( self):
 
@@ -38,10 +65,6 @@ class GlobalPlannerRunner:
         dlink_winds, dlink_winds_flat, dlnk_window_id =self.io_proc.import_dlnk_winds()
         xlink_winds, xlink_winds_flat, xlnk_window_id =self.io_proc.import_xlnk_winds()
 
-        # for j in dlink_winds:
-        #     for i in j:
-        #         i.print_self ()
-
         # todo:  probably ought to delete the input times and rates matrices to free up space
 
         print('obs_winds')
@@ -49,39 +72,73 @@ class GlobalPlannerRunner:
         print('dlink_win')
         print(sum([len(p) for p in dlink_winds]))
         print('xlink_win')
-        print(sum([len(xlink_winds[i][j]) for i in  range( self.params['num_sats']) for j in  range( self.params['num_sats']) ]))
+        print(sum([len(xlink_winds[i][j]) for i in  range( self.general_params['num_sats']) for j in  range( self.general_params['num_sats']) ]))
 
+        #################################
+        #  route selection stage
+        #################################
 
-        gp_ps = GPDataRouteSelection ( self.params)
+        #  if  we are loading from file, do that
+        if self.pickle_params['unpickle_pre_route_selection']:
+            all_routes,all_routes_obs,all_stats,route_times_s,obs_indx = self.unpickle_stuff()
 
-        obs_indx =0
-        #  list of all routes, indexed by obs_indx ( important for pickling)
-        all_routes =[]
-        for sat_indx in [23]: # range( self.params['num_sats']):
-            for obs in obs_winds[sat_indx]:
-                gp_ps.make_model (obs,dlink_winds_flat,xlink_winds, verbose = True)
-                gp_ps.solve ()
-                gp_ps.print_sol ()
-                routes = gp_ps. extract_routes ( verbose  = True)
+        #  otherwise run route selection
+        else:
+            gp_ps = GPDataRouteSelection ( dict(list (self.general_params.items()) + list (self.route_selection_params. items())))
 
-                all_routes.append ( routes)
+            obs_indx =0
+            #  list of all routes, indexed by obs_indx ( important for pickling)
+            all_routes =[]
+            all_routes_obs =[]
+            all_stats =[]
+            route_times_s =[]
+            for sat_indx in range( self.general_params['num_sats']):
+                for  index, obs in  enumerate ( obs_winds[sat_indx]):
+                    print ("sat_indx")
+                    print (sat_indx)
+                    print ("obs")
+                    print ( index)
 
-                obs_indx +=1
+                    gp_ps.make_model (obs,dlink_winds_flat,xlink_winds, verbose = True)
+                    stats =gp_ps.get_stats (verbose = True)
+                    t_a = time.time()
+                    gp_ps.solve ()
+                    t_b = time.time()
+                    gp_ps.print_sol ()
+                    routes = gp_ps. extract_routes ( verbose  = True)
 
-                # TODO: remove this
-                if obs_indx==1:
+                    all_routes.append ( routes)
+                    all_routes_obs.append ( obs)
+                    all_stats.append ( stats)
+                    route_times_s.append (t_b-t_a)
+
+                    obs_indx +=1
+
+                    if obs_indx >= 1:
+                        break
+
+                if obs_indx >= 1:
                     break
 
-        if self.params['pickle_route_selection_results']:
-            pickle_stuff =  {}
-            pickle_stuff['all_routes'] = all_routes
-            pickle_stuff['gp_params'] =  self.params
-            pickle_name ='%s_obsindx%d_%s' %( self.params['pickle_file_name_pre'],obs_indx,datetime.utcnow().isoformat().replace (':','_'))
-            with open('%s.pkl' % ( pickle_name),'wb') as f:
-                pickle.dump(  pickle_stuff,f)
+        if self.pickle_params['pickle_route_selection_results']:
+            self.pickle_stuff(all_routes,all_routes_obs,all_stats,route_times_s,obs_indx)
+        
 
-        sel_obs_winds_flat, sel_xlnk_winds_flat, \
-        sel_dlnk_winds_flat, link_info_by_wind = self.io_proc.extract_flat_windows ( routes)
+        sel_obs_winds_flat, sel_dlnk_winds_flat, \
+        sel_xlnk_winds_flat, link_info_by_wind = self.io_proc.extract_flat_windows (  all_routes[-1])
+
+        #  plot the selected down links and cross-links
+        self.gp_plot.plot_links(
+            self.general_params['num_sats'],
+            dlink_winds_flat,
+            sel_dlnk_winds_flat, 
+            xlink_winds_flat,
+            sel_xlnk_winds_flat,
+            self.general_params['start_utc_dt'],
+            self.general_params['end_utc_dt']-timedelta(minutes=200),
+            show=True,
+            fig_name='plots/xlnk_dlnk_plot.pdf'
+        )
 
         outputs= self.io_proc.make_sat_history_outputs (sel_obs_winds_flat, sel_xlnk_winds_flat, sel_dlnk_winds_flat, link_info_by_wind)
 
@@ -101,36 +158,33 @@ class PipelineRunner:
         file_params = data.get ('file_params',{})
 
         gp_params = {}
-        gp_params['pickle_file_name_pre']  = 'pickles/'  + file_params.get ('orbit_prop_inputs_file' ,'default.json').split ('.')[0]
+        gp_general_params = {}
+        gp_general_params['new_pickle_file_name_pre']  = 'pickles/'  + file_params.get ('orbit_prop_inputs_file' ,'default.json').split ('.')[0]
 
         if orbit_prop_inputs['version'] == "0.3": 
             
-            gp_params['start_utc_dt'] = tt.iso_string_to_dt ( orbit_prop_inputs['scenario_params']['start_utc'])
-            gp_params['end_utc_dt'] = tt.iso_string_to_dt ( orbit_prop_inputs['scenario_params']['end_utc'])
-            gp_params['timestep_s'] = orbit_prop_inputs['scenario_params']['timestep_s']
-            gp_params['num_sats'] = orbit_prop_inputs['sat_params']['num_satellites']
-            gp_params['num_gs'] = orbit_prop_inputs['gs_params']['num_stations']
-            gp_params['num_targets'] = orbit_prop_inputs['obs_params']['num_targets']
-            gp_params['pl_data_rate'] = orbit_prop_inputs['sat_params']['payload_data_rate_Mbps']
+            gp_general_params['start_utc_dt'] = tt.iso_string_to_dt ( orbit_prop_inputs['scenario_params']['start_utc'])
+            gp_general_params['end_utc_dt'] = tt.iso_string_to_dt ( orbit_prop_inputs['scenario_params']['end_utc'])
+            gp_general_params['timestep_s'] = orbit_prop_inputs['scenario_params']['timestep_s']
+            gp_general_params['num_sats'] = orbit_prop_inputs['sat_params']['num_satellites']
+            gp_general_params['num_gs'] = orbit_prop_inputs['gs_params']['num_stations']
+            gp_general_params['num_targets'] = orbit_prop_inputs['obs_params']['num_targets']
+            gp_general_params['pl_data_rate'] = orbit_prop_inputs['sat_params']['payload_data_rate_Mbps']
 
         if gp_params_inputs['version'] == "0.1": 
-            gp_params['targ_ignore_list'] = gp_params_inputs['targ_ignore_list']
-            gp_params['gs_ignore_list'] = gp_params_inputs['gs_ignore_list']
-            gp_params['min_allowed_dv_dlnk'] = gp_params_inputs['min_allowed_dv_dlnk_Mb']
-            gp_params['min_allowed_dv_xlnk'] = gp_params_inputs['min_allowed_dv_xlnk_Mb']
-            gp_params['route_selection_num_paths'] = gp_params_inputs['route_selection_num_paths']
-            gp_params['route_selection_min_path_dv'] = gp_params_inputs['route_selection_min_path_dv_Mb']
-            gp_params['route_selection_solver_max_runtime'] = gp_params_inputs['route_selection_solver_max_runtime_s']
-            gp_params['route_selection_wind_filter_duration'] = gp_params_inputs['route_selection_wind_filter_duration_s']
-            gp_params['pickle_route_selection_results'] = gp_params_inputs['pickle_route_selection_results']
+            gp_params['other_params'] = gp_params_inputs['other_params']
+            gp_params['route_selection_params'] = gp_params_inputs['route_selection_params']
+            gp_params['pickle_params'] = gp_params_inputs['pickle_params']
+            gp_params['plot_params'] = gp_params_inputs['plot_params']
 
         if data_rates_output['version'] == "0.1": 
-            gp_params['obs_times'] = data_rates_output['accesses_data_rates']['obs_times']
-            gp_params['dlnk_times'] = data_rates_output['accesses_data_rates']['dlnk_times']
-            gp_params['dlnk_rates'] = data_rates_output['accesses_data_rates']['dlnk_rates']
-            gp_params['xlnk_times'] = data_rates_output['accesses_data_rates']['xlnk_times']
-            gp_params['xlnk_rates'] = data_rates_output['accesses_data_rates']['xlnk_rates']
+            gp_general_params['obs_times'] = data_rates_output['accesses_data_rates']['obs_times']
+            gp_general_params['dlnk_times'] = data_rates_output['accesses_data_rates']['dlnk_times']
+            gp_general_params['dlnk_rates'] = data_rates_output['accesses_data_rates']['dlnk_rates']
+            gp_general_params['xlnk_times'] = data_rates_output['accesses_data_rates']['xlnk_times']
+            gp_general_params['xlnk_rates'] = data_rates_output['accesses_data_rates']['xlnk_rates']
 
+        gp_params['general_params'] = gp_general_params
         gp_runner = GlobalPlannerRunner (gp_params)
         viz_outputs= gp_runner.run ()
 

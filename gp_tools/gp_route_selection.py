@@ -17,14 +17,14 @@ class GPDataRouteSelection():
     """docstring for GP route selection"""
     def __init__(self,params):
         self.num_sats=params['num_sats']
-        self.num_paths=params['route_selection_num_paths']
+        self.num_paths=params['num_paths']
         self.start_utc_dt  =params['start_utc_dt']
         self.end_utc_dt  =params['end_utc_dt']
         self.M_t_s= 1000000 #  ~11.6 days
         self.M_dv_Mb= 1000000000 #  one petabit
-        self.min_path_dv =params['route_selection_min_path_dv']
-        self.solver_max_runtime =params['route_selection_solver_max_runtime']
-        self.wind_filter_duration =  timedelta (seconds =params['route_selection_wind_filter_duration'])
+        self.min_path_dv =params['min_path_dv_Mb']
+        self.solver_max_runtime =params['solver_max_runtime_s']
+        self.wind_filter_duration =  timedelta (seconds =params['wind_filter_duration_s'])
 
         total_duration =(self.end_utc_dt- self.start_utc_dt).total_seconds ()
         if  total_duration  >self.M_t_s:
@@ -142,10 +142,6 @@ class GPDataRouteSelection():
         self.obs_wind = obs_wind
         self.dlink_winds_flat,self.xlink_winds =  self.filter_windows (obs_wind,dlink_winds_flat,xlink_winds, self.num_sats, self.end_utc_dt, self.wind_filter_duration)
 
-        if verbose:
-            print ( "Considering %d downlink windows" % (sum([len (self.dlink_winds_flat[sat_indx]) for sat_indx in range (self.num_sats)])))
-            print ( "Considering %d crosslink windows" % (sum([len (self.xlink_winds[sat_indx][xsat_indx]) for xsat_indx in range (self.num_sats) for sat_indx in range (self.num_sats)])))
-
         ##############################
         #  Make indices/ subscripts
         ##############################
@@ -218,9 +214,9 @@ class GPDataRouteSelection():
         model.par_obs_dv = pe.Param (initialize = obs_wind.data_vol)
         
         # relative weightings for the objective terms
-        model.par_obj_weight1 = pe.Param (initialize = 0.15)
-        model.par_obj_weight2 = pe.Param (initialize = 0.05)
-        model.par_obj_weight3 = pe.Param (initialize = 0.8)
+        model.par_obj_weight1 = pe.Param (initialize = 0.01)
+        model.par_obj_weight2 = pe.Param (initialize = 0.01)
+        model.par_obj_weight3 = pe.Param (initialize = 0.98)
 
         #  quick sanity check
         for dv in dlnk_dv_dict.values ():
@@ -515,8 +511,33 @@ class GPDataRouteSelection():
 
         self.model = model
 
+    def get_stats(self,verbose=True):
+        stats = {}
+        stats['num_dlnk_windows'] = sum([len (self.dlink_winds_flat[sat_indx]) for sat_indx in range (self.num_sats)])
+        stats['num_xlnk_windows'] = sum([len (self.xlink_winds[sat_indx][xsat_indx]) for xsat_indx in range (self.num_sats) for sat_indx in range (self.num_sats)])
+        stats['num_variables'] = self.model.nvariables ()
+        stats['num_nobjectives'] = self.model.nobjectives ()
+        stats['num_nconstraints'] = self.model.nconstraints ()
+
+        if verbose:
+            print ( "Obs dv: %f" % ( self.obs_wind.data_vol))
+            print ( "Considering %d downlink windows" % (stats['num_dlnk_windows']))
+            print ( "Considering %d crosslink windows" % (stats['num_xlnk_windows']))
+            print ( 'self.model.nvariables ()')
+            print ( self.model.nvariables ())
+            print ( 'self.model.nobjectives ()')
+            print ( self.model.nobjectives ())
+            print ( 'self.model.nconstraints ()')
+            print ( self.model.nconstraints ())
+
+        return stats
+
+
+
+
     # lifted from  Jeff Menezes' code at https://github.mit.edu/jmenezes/Satellite-MILP/blob/master/sat_milp_pyomo.py
     def solve(self):
+
         solver = po.SolverFactory('gurobi')
         results =  solver.solve(self.model, tee=True, keepfiles=False, options_string=" time_limit=%f" % ( self.solver_max_runtime))
         
@@ -529,12 +550,7 @@ class GPDataRouteSelection():
             print (results.solver)
 
 
-        print ( 'self.model.nvariables ()')
-        print ( self.model.nvariables ())
-        print ( 'self.model.nobjectives ()')
-        print ( self.model.nobjectives ())
-        print ( 'self.model.nconstraints ()')
-        print ( self.model.nconstraints ())
+ 
         # elif (results.solver.status != po.SolverStatus.ok):
         #     print('Check solver not ok?')
         # elif (results.solver.termination_condition != po.TerminationCondition.optimal):  

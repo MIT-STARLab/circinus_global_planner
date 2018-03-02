@@ -39,12 +39,12 @@ class GPProcessorIO():
 
         self.dlnk_times=params['dlnk_times']
         self.dlnk_rates=params['dlnk_rates']
-        self.min_allowed_dv_dlnk=params['min_allowed_dv_dlnk']
+        self.min_allowed_dv_dlnk=params['min_allowed_dv_dlnk_Mb']
         self.gs_ignore_list=params['gs_ignore_list']
 
         self.xlnk_times=params['xlnk_times']
         self.xlnk_rates=params['xlnk_rates']
-        self.min_allowed_dv_xlnk=params['min_allowed_dv_xlnk']
+        self.min_allowed_dv_xlnk=params['min_allowed_dv_xlnk_Mb']
 
 
 
@@ -276,7 +276,7 @@ class GPProcessorIO():
             xlnk_flat[sat_indx].sort(key=lambda x: x.start)
             dlnk_flat[sat_indx].sort(key=lambda x: x.start)
 
-        return obs_flat, xlnk_flat, dlnk_flat, link_info_by_wind
+        return obs_flat, dlnk_flat, xlnk_flat, link_info_by_wind
 
     def make_sat_history_outputs (self, obs_winds_flat, xlnk_winds_flat, dlnk_winds_flat, link_info_by_wind):
         obs_times_flat = [[] for sat_indx in range ( self.num_sats)]
