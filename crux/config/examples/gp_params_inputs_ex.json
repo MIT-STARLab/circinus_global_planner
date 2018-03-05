@@ -9,13 +9,15 @@
     "route_selection_params": {
         "num_paths" :  5,
         "min_path_dv_Mb" :  100,
-        "solver_max_runtime_s" :  20,
+        "solver_max_runtime_s" :  60,
+        "solver_name" :  "cplex",
+        "solver_run_remotely" :   true,
         "wind_filter_duration_s" : 1800
     },
     "pickle_params":  {
-        "pickle_route_selection_results": false,
-        "unpickle_pre_route_selection":  false,
-        "route_selection_pickle": "pickles/orbit_prop_inputs_walker30_7gs_obsindx1_2018-03-02T22_20_49.927700.pkl"
+        "pickle_route_selection_results":    false,
+        "unpickle_pre_route_selection":   false,
+        "route_selection_pickle": "pickles/orbit_prop_inputs_walker30_7gs_obsindx1_2018-03-05T16_15_53.230665.pkl"
     },
     "plot_params":  {
         "plot_fig_extension":  "pdf",

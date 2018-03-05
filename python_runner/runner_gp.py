@@ -94,18 +94,13 @@ class GlobalPlannerRunner:
             all_routes_obs =[]
             all_stats =[]
             route_times_s =[]
-            for sat_indx in [15]: #range( self.general_params['num_sats']):
+            for sat_indx in range( self.general_params['num_sats']):
                 for  index, obs in  enumerate ( obs_winds[sat_indx]):
-
 
                     print ("sat_indx")
                     print (sat_indx)
                     print ("obs")
                     print ( index)
-
-                    if index != 5:
-                        continue
-
 
                     gp_ps.make_model (obs,dlink_winds_flat,xlink_winds, verbose = True)
                     stats =gp_ps.get_stats (verbose = True)
@@ -119,6 +114,8 @@ class GlobalPlannerRunner:
                     all_routes_obs.append ( obs)
                     all_stats.append ( stats)
                     route_times_s.append (t_b-t_a)
+                    print ('t_b-t_a')
+                    print (t_b-t_a)
 
                     obs_indx +=1
 
@@ -131,7 +128,7 @@ class GlobalPlannerRunner:
         if self.pickle_params['pickle_route_selection_results']:
             self.pickle_stuff(all_routes,all_routes_obs,all_stats,route_times_s,obs_indx)
         
-
+        # TODO:  this stuff needs to be  changed
         sel_obs_winds_flat, sel_dlnk_winds_flat, \
         sel_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind = self.io_proc.extract_flat_windows (  all_routes[-1])
 
@@ -141,9 +138,12 @@ class GlobalPlannerRunner:
                 if obs:
                     break
 
+        # sats_to_include =  range (self.general_params['num_sats'])
+        sats_to_include = [0,9,21,22,23]
+
         #  plot the selected down links and cross-links
         self.gp_plot.plot_winds(
-            self.general_params['num_sats'],
+            sats_to_include,
             sel_obs_winds_flat,
             dlink_winds_flat,
             sel_dlnk_winds_flat, 
@@ -155,11 +155,14 @@ class GlobalPlannerRunner:
             # self.general_params['start_utc_dt'],
             # self.general_params['start_utc_dt'] + timedelta( seconds= self.route_selection_params['wind_filter_duration_s']),
             # self.general_params['end_utc_dt']-timedelta(minutes=200),
-            show= False,
-            fig_name='plots/temp1.pdf'
+            plot_title = 'Route Plot - 0.98dv , 0.01lat', 
+            plot_size_inches = (12,3),
+            show= True,
+            fig_name='plots/xlnk_dlnk_plot_p98dv_p01lat_60s_satsubset.pdf'
         )
 
-        outputs= self.io_proc.make_sat_history_outputs (sel_obs_winds_flat, sel_xlnk_winds_flat, sel_dlnk_winds_flat, link_info_by_wind)
+        outputs = None
+        # outputs= self.io_proc.make_sat_history_outputs (sel_obs_winds_flat, sel_xlnk_winds_flat, sel_dlnk_winds_flat, link_info_by_wind)
 
         return outputs
 

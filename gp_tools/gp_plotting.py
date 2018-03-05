@@ -42,7 +42,7 @@ class GPPlotting():
 
     def plot_winds(
         self,
-        num_sats,
+        sats_indcs_list,
         obs_winds_flat,
         all_dlnk_winds_flat,
         dlnk_winds_flat, 
@@ -51,6 +51,8 @@ class GPPlotting():
         route_indcs_by_wind,
         plot_start,
         plot_end,
+        plot_title = 'Route Plot', 
+        plot_size_inches = (12,12),
         show=False,
         fig_name='plots/xlnk_dlnk_plot.pdf'):
         '''
@@ -65,25 +67,27 @@ class GPPlotting():
         
         time_to_end = (plot_end-plot_start).total_seconds()/time_divisor
 
+        num_sats = len(sats_indcs_list)
+
         #  create subplots for satellites
         axes = plt.subplot(num_sats,1,1)
         axes.patch.set_facecolor('w')
         fig = plt.gcf()
-        fig.set_size_inches((12,12))
+        fig.set_size_inches( plot_size_inches)
         # print fig.get_size_inches()
 
-        plt.title('Links Plot')
+        plt.title( plot_title)
 
         # have to sort before applying axis labels, otherwise x label shows up in a weird place
         # sats.sort(key=lambda x: x.agent_ID)
 
         # for each agent
-        for sat_indx in range (num_sats):
+        for  plot_indx, sat_indx in enumerate (sats_indcs_list):
 
             # 
-            plt.subplot( num_sats,1,sat_indx+1)
-            if sat_indx == np.floor(num_sats/2):
-                plt.ylabel('Satellite Number\n\n' + str(sat_indx))
+            plt.subplot( num_sats,1,plot_indx+1)
+            if plot_indx == np.floor(num_sats/2):
+                plt.ylabel('Satellite Index\n\n' + str(sat_indx))
             else:
                 plt.ylabel('' + str(sat_indx))
 
@@ -253,7 +257,7 @@ class GPPlotting():
                             xlnk_label_rotator = (xlnk_label_rotator+1)%xlnk_rotation_rollover
 
             #  if were at the last satellite ( at the bottom of all the plots), then add X axis labels
-            if not sat_indx+1 == num_sats:
+            if not plot_indx+1 == num_sats:
                 ax = plt.gca()
                 plt.setp(ax.get_xticklabels(), visible=False)
 

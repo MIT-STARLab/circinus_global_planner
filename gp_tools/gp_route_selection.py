@@ -33,14 +33,19 @@ class GPDataRouteSelection():
         self.num_paths=params['num_paths']
         self.start_utc_dt  =params['start_utc_dt']
         self.end_utc_dt  =params['end_utc_dt']
-        self.M_t_s= 1000000 #  ~11.6 days
-        self.M_dv_Mb= 1000000000 #  one petabit
+
+        # note: M values should be as low as possible to prevent numerical issues (see: https://orinanobworld.blogspot.com/2011/07/perils-of-big-m.html)
+        self.M_t_s= 86400 # 1 day
+        self.M_dv_Mb= 1000000 #  1000 gigabits
         self.min_path_dv =params['min_path_dv_Mb']
         self.solver_max_runtime =params['solver_max_runtime_s']
+        self.solver_name =params['solver_name']
+        self.solver_run_remotely =params['solver_run_remotely']
         self.wind_filter_duration =  timedelta (seconds =params['wind_filter_duration_s'])
 
+        #   quick sanity check on M time value
         total_duration =(self.end_utc_dt- self.start_utc_dt).total_seconds ()
-        if  total_duration  >self.M_t_s:
+        if  total_duration  > self.M_t_s:
             raise Exception ('big M value is too small for %f second scheduling window' % ( total_duration))
 
     @staticmethod
@@ -197,10 +202,10 @@ class GPDataRouteSelection():
         #  subscripts for arrival and departure  times
         model.arrive_depart = pe.Set(initialize= ['a','d'])
 
-        # model.pprint ()'s'
-        print (len(xlnk_path_subscripts))
-        print (len(dlnk_path_subscripts))
-        print (len(dlnk_subscripts))
+        # model.pprint ()
+        # print (len(xlnk_path_subscripts))
+        # print (len(dlnk_path_subscripts))
+        # print (len(dlnk_subscripts))
 
         ##############################
         #  Make parameters
@@ -227,14 +232,18 @@ class GPDataRouteSelection():
         model.par_obs_dv = pe.Param (initialize = obs_wind.data_vol)
         
         # relative weightings for the objective terms
-        model.par_obj_weight1 = pe.Param (initialize = 0.495)
+        model.par_obj_weight1 = pe.Param (initialize = 0.98)
         model.par_obj_weight2 = pe.Param (initialize = 0.01)
-        model.par_obj_weight3 = pe.Param (initialize = 0.495)
+        model.par_obj_weight3 = pe.Param (initialize = 0.01)
 
-        #  quick sanity check
+        #  quick sanity check on M values
+        for dv in xlnk_dv_dict.values ():
+            if dv >self.M_dv_Mb:
+                raise  Exception ('value of self.M_dv_Mb (%f) is too small. Saw %f'%(self.M_dv_Mb,dv))
+        #  also check  down links even though M is not used for them
         for dv in dlnk_dv_dict.values ():
-            if dv >self.M_dv_Mb/1000:
-                raise  Exception (' value of self.M_dv_Mb is too small')
+            if dv >self.M_dv_Mb:
+                raise  Exception ('value of self.M_dv_Mb (%f) is too small. Saw %f'%(self.M_dv_Mb,dv))
 
         ##############################
         #  Make variables
@@ -414,12 +423,17 @@ class GPDataRouteSelection():
     # lifted from  Jeff Menezes' code at https://github.mit.edu/jmenezes/Satellite-MILP/blob/master/sat_milp_pyomo.py
     def solve(self):
 
-        solver = po.SolverFactory('gurobi')
-        results =  solver.solve(self.model, tee=True, keepfiles=False, options_string=" time_limit=%f" % ( self.solver_max_runtime))
-        
-        # opt = po.SolverFactory("gurobi")
-        # solver_manager = po.SolverManagerFactory('neos')
-        # results = solver_manager.solve(self.model, opt=opt, options_string=" time_limit=%f" % ( self.solver_max_runtime))
+        solver = po.SolverFactory(self.solver_name)
+        solver.options['timelimit'] = self.solver_max_runtime
+
+        # if we're running things remotely, then we will use the NEOS server (https://neos-server.org/neos/)
+        if self.solver_run_remotely:
+            solver_manager = po.SolverManagerFactory('neos')
+            results = solver_manager.solve(self.model, opt= solver)
+        else:
+            # tee=True displays solver output in the terminal
+            # keepfiles=True  keeps files passed to and from the solver
+            results =  solver.solve(self.model, tee=True, keepfiles= False)
 
         if (results.solver.status == po.SolverStatus.ok) and (results.solver.termination_condition == po.TerminationCondition.optimal):
             print('this is feasible and optimal')
