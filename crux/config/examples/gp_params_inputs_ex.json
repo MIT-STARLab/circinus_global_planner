@@ -14,16 +14,17 @@
     },
     "pickle_params":  {
         "pickle_route_selection_results": false,
-        "unpickle_pre_route_selection": true,
+        "unpickle_pre_route_selection":  false,
         "route_selection_pickle": "pickles/orbit_prop_inputs_walker30_7gs_obsindx1_2018-03-02T22_20_49.927700.pkl"
     },
     "plot_params":  {
-        "plot_fig_extension":  ".pdf",
+        "plot_fig_extension":  "pdf",
         "plot_include_labels":  true,
         "time_units":  "minutes",
-        "links_plot_dlnks":  true,
-        "links_plot_dlnks_choices":  false,
-        "links_plot_xlnks":  true,
-        "links_plot_xlnks_choices":   false
+        "winds_plot_obs":  true,
+        "winds_plot_dlnks":  true,
+        "winds_plot_dlnks_choices":  false,
+        "winds_plot_xlnks":  true,
+        "winds_plot_xlnks_choices":   false
     }
 }

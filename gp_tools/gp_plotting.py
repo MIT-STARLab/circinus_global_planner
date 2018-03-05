@@ -10,29 +10,45 @@ import numpy as np
 from .routing_objects import DataRoute
 
 class GPPlotting():
+
+    xlnk_colors = [
+        '#FF0000',
+        '#FF3399',
+        '#990000',
+        '#990099',
+        '#FF9900'
+    ]
+    xlnk_color_rollover = len(xlnk_colors)
+
+    # hard coding that we will use the first data route index in the list of data indices to decide the color for a link
+    route_index_to_use = 0
+
     """docstring for GP route selection"""
     def __init__(self,params):
 
         self.plot_fig_extension=params['plot_fig_extension']
         self.plot_include_labels=params['plot_include_labels']
         self.time_units=params['time_units']
-        self.links_plot_dlnks=params['links_plot_dlnks']
-        self.links_plot_dlnks_choices=params['links_plot_dlnks_choices']
-        self.links_plot_xlnks=params['links_plot_xlnks']
-        self.links_plot_xlnks_choices=params['links_plot_xlnks_choices']
+        self.winds_plot_obs=params['winds_plot_obs']
+        self.winds_plot_dlnks=params['winds_plot_dlnks']
+        self.winds_plot_dlnks_choices=params['winds_plot_dlnks_choices']
+        self.winds_plot_xlnks=params['winds_plot_xlnks']
+        self.winds_plot_xlnks_choices=params['winds_plot_xlnks_choices']
         
         # self.num_sats=params['num_sats']
         # self.num_paths=params['route_selection_num_paths']
         # self.start_utc_dt  =params['start_utc_dt']
         # self.end_utc_dt  =params['end_utc_dt']
 
-    def plot_links(
+    def plot_winds(
         self,
         num_sats,
+        obs_winds_flat,
         all_dlnk_winds_flat,
         dlnk_winds_flat, 
         all_xlnk_winds_flat,
         xlnk_winds_flat,
+        route_indcs_by_wind,
         plot_start,
         plot_end,
         show=False,
@@ -53,7 +69,7 @@ class GPPlotting():
         axes = plt.subplot(num_sats,1,1)
         axes.patch.set_facecolor('w')
         fig = plt.gcf()
-        fig.set_size_inches((12,6))
+        fig.set_size_inches((12,12))
         # print fig.get_size_inches()
 
         plt.title('Links Plot')
@@ -67,7 +83,7 @@ class GPPlotting():
             # 
             plt.subplot( num_sats,1,sat_indx+1)
             if sat_indx == np.floor(num_sats/2):
-                plt.ylabel('Satellite Number\n\n' + str(sat_indx) + "                ")
+                plt.ylabel('Satellite Number\n\n' + str(sat_indx))
             else:
                 plt.ylabel('' + str(sat_indx))
 
@@ -86,8 +102,19 @@ class GPPlotting():
 
             current_axis = plt.gca()
 
+            #  this is used to alternate the vertical position of the cross-link rectangle
+            obs_rectangle_rotator = 0
+            obs_rotation_rollover = 2
+            #  this is used to alternate the vertical position of the cross-link rectangle
+            xlnk_rectangle_rotator = 0
+            xlnk_rotation_rollover = 2
             #  this is used to alternate the vertical position of labels
-            label_rotator = 0
+            xlnk_label_rotator = 0
+            
+            #  this is used to alternate the vertical position of the  downlink rectangle
+            dlnk_rectangle_rotator = 0
+            dlnk_rotation_rollover = 2
+            dlnk_label_rotator = 0
 
             #  these hold the very last plot object of a given type added. Used for legend below
             d_w = None
@@ -96,11 +123,30 @@ class GPPlotting():
             x = None
 
             ###################
+            # obs
+            ###################
+
+            # plot the  observations
+            if self.winds_plot_obs:
+                if len(obs_winds_flat) > 0:
+                    for obs_wind in obs_winds_flat[sat_indx]:
+
+                        obs_start = (obs_wind.start-plot_start).total_seconds()/time_divisor
+                        obs_end = (obs_wind.end-plot_start).total_seconds()/time_divisor
+
+                        # plot the task duration
+                        bottom_vert_loc = obs_rectangle_rotator
+                        d = Rectangle((obs_start, bottom_vert_loc), obs_end-obs_start, bottom_vert_loc+1,alpha=1,fill=False,color='#00FF00',hatch='///////')
+                        current_axis.add_patch(d)
+
+                        obs_rectangle_rotator =  (obs_rectangle_rotator+1)%obs_rotation_rollover
+
+            ###################
             # dlnks
             ###################
 
             #  plot the potential down links
-            if self.links_plot_dlnks_choices:
+            if self.winds_plot_dlnks_choices:
                 num_dlnk_wind = 0
 
                 if len(all_dlnk_winds_flat) > 0:
@@ -118,7 +164,7 @@ class GPPlotting():
                         num_dlnk_wind += 1
 
             # plot the executed down links
-            if self.links_plot_dlnks:
+            if self.winds_plot_dlnks:
                 num_dlnk_exe = 0
                 if len(dlnk_winds_flat) > 0:
                     for dlnk_wind in dlnk_winds_flat[sat_indx]:
@@ -126,9 +172,29 @@ class GPPlotting():
                         dlnk_start = (dlnk_wind.start-plot_start).total_seconds()/time_divisor
                         dlnk_end = (dlnk_wind.end-plot_start).total_seconds()/time_divisor
 
+                        dr_indcs = route_indcs_by_wind[dlnk_wind]
+                        gs_indx = dlnk_wind.gs_ID
+
                         # plot the task duration
-                        d = Rectangle((dlnk_start, 0), dlnk_end-dlnk_start, 2,alpha=1,fill=False,color='#0000FF',hatch='///////')
+                        bottom_vert_loc = dlnk_rectangle_rotator
+                        d = Rectangle((dlnk_start, bottom_vert_loc), dlnk_end-dlnk_start, bottom_vert_loc+1,alpha=1,fill=False,color='#0000FF',hatch='///////')
                         current_axis.add_patch(d)
+
+                        dlnk_rectangle_rotator =  (dlnk_rectangle_rotator+1)%dlnk_rotation_rollover
+
+                        if self.plot_include_labels:
+                            #   put label in desired vertical spot
+                            left_horizontal_loc = dlnk_start + 0.15
+                            label_text = ""
+                            for dr_indx in dr_indcs:
+                                label_text += "%d,"%(dr_indx)
+                            label_text = "%s;%d" %(label_text,gs_indx)
+                            if dlnk_label_rotator == 0:
+                                plt.text(left_horizontal_loc, 0.1, label_text , fontsize=10, color = 'k')
+                            elif dlnk_label_rotator == 1:
+                                plt.text( left_horizontal_loc, 1.1, label_text , fontsize=10, color = 'k')
+
+                            dlnk_label_rotator = (dlnk_label_rotator+1)%dlnk_rotation_rollover
 
                         num_dlnk_exe += 1
 
@@ -137,7 +203,7 @@ class GPPlotting():
             ###################
 
             #  plot the potential cross-links
-            if self.links_plot_xlnks_choices:
+            if self.winds_plot_xlnks_choices:
                 num_xlnk_wind = 0
 
                 if len(all_xlnk_winds_flat) > 0:
@@ -154,7 +220,7 @@ class GPPlotting():
                         num_xlnk_wind += 1
 
             #  plot the executed cross-links
-            if self.links_plot_xlnks:
+            if self.winds_plot_xlnks:
                 num_xlnk_exe = 0
                 if len(xlnk_winds_flat) > 0:
                     for xlnk_wind in xlnk_winds_flat[sat_indx]:
@@ -162,24 +228,29 @@ class GPPlotting():
                         xlnk_start = (xlnk_wind.start-plot_start).total_seconds()/time_divisor
                         xlnk_end = (xlnk_wind.end-plot_start).total_seconds()/time_divisor
 
+                        bottom_vert_loc = xlnk_rectangle_rotator
+                        dr_indx = route_indcs_by_wind[xlnk_wind][self.route_index_to_use]
+                        xlnk_color_indx = dr_indx %  self.xlnk_color_rollover
+                        xlnk_color = self.xlnk_colors[xlnk_color_indx]
+                        
                         # plot the task duration
-                        x = Rectangle((xlnk_start, 0), xlnk_end-xlnk_start, 2,alpha=1,fill=False,color='#FF0000',hatch='///////')
+                        x = Rectangle((xlnk_start, bottom_vert_loc), xlnk_end-xlnk_start, bottom_vert_loc +1,alpha=1,fill=False,color=xlnk_color,hatch='///////')
                         current_axis.add_patch(x)
+
+                        xlnk_rectangle_rotator =  (xlnk_rectangle_rotator+1)%xlnk_rotation_rollover
 
                         if self.plot_include_labels:
                             other_sat_indx = xlnk_wind.xsat_indx if xlnk_wind.xsat_indx != sat_indx else xlnk_wind.sat_indx
 
                             #   put label in desired vertical spot
-                            if label_rotator == 0:
-                                plt.text( (xlnk_end+xlnk_start)/2 - 0.15, 0.1, str(other_sat_indx) , fontsize=10, color = 'k')
-                            elif label_rotator == 1:
-                                plt.text( (xlnk_end+xlnk_start)/2 - 0.15, 0.6, str(other_sat_indx) , fontsize=10, color = 'k')
-                            elif label_rotator == 2:
-                                plt.text( (xlnk_end+xlnk_start)/2 - 0.15, 1.1, str(other_sat_indx) , fontsize=10, color = 'k')
-                            else:
-                                plt.text( (xlnk_end+xlnk_start)/2 - 0.15, 1.6, str(other_sat_indx) , fontsize=10, color = 'k')
+                            left_horizontal_loc = xlnk_start + 0.15
+                            label_text = "%d,%d" %(dr_indx,other_sat_indx)
+                            if xlnk_label_rotator == 0:
+                                plt.text(left_horizontal_loc, 0.1, label_text , fontsize=10, color = 'k')
+                            elif xlnk_label_rotator == 1:
+                                plt.text( left_horizontal_loc, 1.1, label_text , fontsize=10, color = 'k')
 
-                            label_rotator = (label_rotator+1)%4
+                            xlnk_label_rotator = (xlnk_label_rotator+1)%xlnk_rotation_rollover
 
             #  if were at the last satellite ( at the bottom of all the plots), then add X axis labels
             if not sat_indx+1 == num_sats:

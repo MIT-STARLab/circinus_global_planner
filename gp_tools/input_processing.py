@@ -238,26 +238,31 @@ class GPProcessorIO():
         #  dictionary of named tuples that contain all of the information used for creating output link info.  keys are the window objects themselves
         link_info_by_wind = {}
 
-        for dr in routes:
+        #  dictionary of route indices, using windows as keys
+        route_indcs_by_wind  = {}
+
+        for dr_indx, dr in enumerate (routes):
             for wind in dr.route:
 
                 if type (wind)  == ObsWindow:
                     all_obs.add (wind)
-                elif type (wind)  == XlnkWindow:
-                    all_xlnk.add (wind)
-                    if not wind in link_info_by_wind.keys (): 
-                        link_info_by_wind[wind]  = LinkInfo ([dr.ID], wind.data_vol, dr.data_vol )
-                    else:
-                        link_info_by_wind[wind].data_routes.append ( dr.ID) 
-                        link_info_by_wind[wind].used_data_vol  +=  dr.data_vol 
 
-                elif type (wind)  == DlnkWindow:
-                    all_dlnk.add (wind)
+                elif type (wind)  == XlnkWindow or type (wind)  == DlnkWindow:
+                    if type (wind)  == XlnkWindow: all_xlnk.add (wind)
+                    if type (wind)  == DlnkWindow: all_dlnk.add (wind)
+
+                    #  create link info for this window
                     if not wind in link_info_by_wind.keys (): 
                         link_info_by_wind[wind]  = LinkInfo ([dr.ID], wind.data_vol, dr.data_vol )
                     else:
                         link_info_by_wind[wind].data_routes.append ( dr.ID) 
                         link_info_by_wind[wind].used_data_vol  +=  dr.data_vol 
+                    
+                    #  add the route index  for this window,  initializing a list for the window if needed
+                    if not wind in route_indcs_by_wind.keys (): 
+                        route_indcs_by_wind[wind] = []
+                    route_indcs_by_wind[wind].append (dr_indx)
+
 
         obs_flat = [[] for k in range( self.num_sats)]
         xlnk_flat = [[] for k in range( self.num_sats)]
@@ -276,7 +281,7 @@ class GPProcessorIO():
             xlnk_flat[sat_indx].sort(key=lambda x: x.start)
             dlnk_flat[sat_indx].sort(key=lambda x: x.start)
 
-        return obs_flat, dlnk_flat, xlnk_flat, link_info_by_wind
+        return obs_flat, dlnk_flat, xlnk_flat, link_info_by_wind, route_indcs_by_wind
 
     def make_sat_history_outputs (self, obs_winds_flat, xlnk_winds_flat, dlnk_winds_flat, link_info_by_wind):
         obs_times_flat = [[] for sat_indx in range ( self.num_sats)]

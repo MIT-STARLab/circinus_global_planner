@@ -11,6 +11,19 @@ from  datetime import timedelta
 from pyomo import environ  as pe
 from pyomo import opt  as po
 
+
+# for Birdseye use
+# from cmdline:
+# $ birdseye
+# http://localhost:7777/
+# in source:
+# from birdseye import eye
+# @eye
+# def yo_mama():
+# ...
+
+
+
 from .routing_objects import DataRoute
 
 class GPDataRouteSelection():
@@ -214,9 +227,9 @@ class GPDataRouteSelection():
         model.par_obs_dv = pe.Param (initialize = obs_wind.data_vol)
         
         # relative weightings for the objective terms
-        model.par_obj_weight1 = pe.Param (initialize = 0.01)
+        model.par_obj_weight1 = pe.Param (initialize = 0.495)
         model.par_obj_weight2 = pe.Param (initialize = 0.01)
-        model.par_obj_weight3 = pe.Param (initialize = 0.98)
+        model.par_obj_weight3 = pe.Param (initialize = 0.495)
 
         #  quick sanity check
         for dv in dlnk_dv_dict.values ():
@@ -237,17 +250,11 @@ class GPDataRouteSelection():
         model.var_path_dv_dlnk  = pe.Var ( model.paths,  model.dlnk_subscripts,  within = pe.NonNegativeReals)
         #  indicator that path p has been selected I_p [4]
         model.var_path_indic  = pe.Var (model.paths, within =pe.Binary)
-        #  indicator that path p has been selected I_p_i [7]
-        # model.var_path_indic_sat  = pe.Var (model.paths,  model.sats, within =pe.Binary)
         #  arrival and departure times for each path p through sat i  t_(p,i,a), t_(p,i,d) [5]
         model.var_time_a_d   = pe.Var (model.paths,  model.sats,  model.arrive_depart, within =pe.NonNegativeReals)
-
-
-        # print (type (model.var_xlnk_path_occ))
-        # print (model.var_xlnk_path_occ[ (1,1,2,1)])
-        # print (model.var_time_a_d[ (0,1,'a')])
-        # print ( type (model.var_xlnk_path_occ[ (1,1,2,1)]))
-
+        #  indicates that no paths could be constructed at all [8]
+        model.var_route_fail  = pe.Var( model.sats, within=pe.Binary)
+ 
         ##############################
         #  Make constraints
         ##############################
@@ -282,114 +289,10 @@ class GPDataRouteSelection():
         def c7_rule( model,p,i,k):
             return  model.var_time_a_d[p,i,'d']  <= model.par_t_start_dlnk[i,k]  +self.M_t_s *(1-model.var_dlnk_path_occ [p,i,k])
         model.c7 =pe.Constraint ( model.dlnk_path_subscripts,  rule=c7_rule)
-
-        #  replaced by  constraint 19
-        # model.c8a = pe.ConstraintList()
-        # for p in model.paths: 
-        #     for xlnk_subsc in model.xlnk_subscripts:
-        #         #  order of elements in subscript tuple is  (see get_crosslink_model_objects()):
-        #         #    i          j          k
-        #         # (sat_indx, xsat_indx,xlnk_indx)
-        #         i = xlnk_subsc[0]
-        #         j = xlnk_subsc[1]
-        #         k = xlnk_subsc[2]
-
-        #         #  the constraint itself  is symmetric in i and j,  so don't want to consider when j is less than i
-        #         if j > i:
-        #             model.c8a.add( model.var_xlnk_path_occ[p,i,j,k] + model.var_xlnk_path_occ[p,j,i,k] <= 1 )
         
         def c8b_rule( model,i,j,k):
             return  sum(model.var_xlnk_path_occ[p,i,j,k] for p in  model.paths) <= 1
         model.c8b =pe.Constraint ( model.xlnk_subscripts,  rule=c8b_rule)
-
-        #  this constraint is taken over by 9b.  also it's wrong as written. j also should be able to be less than i.  forget the nonsymmetric crap
-        # #  for constraint 9 
-        # def  get_sat_pair_tuples_non_sym(num_sats):
-        #     tuple_list =[]
-        #     for i in range( num_sats):
-        #         for j in range(i +1, num_sats):
-        #             tuple_list.append ( (i,j))
-        #     return  tuple_list
-
-        #  same as ^ ^ this constraint is taken over by 9b.  also it's wrong as written. j also should be able to be less than i.  forget the nonsymmetric crap
-        # # constraint 9
-        # sat_non_sym_tuples =  get_sat_pair_tuples_non_sym (self.num_sats)        
-        # model.c9  = pe.ConstraintList()
-        # for p in model.paths: 
-        #     for tup in sat_non_sym_tuples:
-        #         # tup is  (i,j)
-        #         i =  tup[0]
-        #         j =  tup[1]
-        #         model.c9.add( 
-        #             sum ([
-        #                 model.var_xlnk_path_occ[p,i,j,k]  + 
-        #                 model.var_xlnk_path_occ[p,j,i,k] 
-        #                 for k in range (len (self.xlink_winds[i][j]))
-        #             ])  
-        #             <= 1
-        #         )
-
-        #  replaced by 19
-        # model.c9b  = pe.ConstraintList()
-        # for p in range(1):  #model.paths: 
-        #     for j in model.sats:
-        #         j_terms = []
-
-        #         # have to iterate over i in i
-        #         for i in model.sats:
-        #             if i == j:
-        #                 continue
-
-        #             num_i_j_xlnks = max(len(self.xlink_winds[i][j]),len(self.xlink_winds[j][i]))
-        #             # for k in range (num_i_j_xlnks):
-        #             #     print ('oui')
-        #             #     j_terms.append (model.var_xlnk_path_occ[p,i,j,k])
-        #             #     j_terms.append (model.var_xlnk_path_occ[p,j,i,k])
-
-        #             j_terms += [
-        #                     model.var_xlnk_path_occ[p,i,j,k]  + 
-        #                     model.var_xlnk_path_occ[p,j,i,k] 
-        #                     for k in range (num_i_j_xlnks)
-        #                 ]
-
-        #             # print ( model.var_xlnk_path_occ[p,i,j,0])
-        #             # print ( type (model.var_xlnk_path_occ[p,i,j,0]))
-        #             # print (i,j)
-        #             # print ( [model.var_xlnk_path_occ[p,i,j,0]])
-        #             # print ( [model.var_xlnk_path_occ[p,i,j,0],model.var_xlnk_path_occ[p,i,j,0]])
-        #             # print ( [] + [model.var_xlnk_path_occ[p,i,j,0],model.var_xlnk_path_occ[p,i,j,0]])
-        #             # print ( sum ([model.var_xlnk_path_occ[p,i,j,0],model.var_xlnk_path_occ[p,i,j,0]]))
-        #             # print (j_terms)
-        #             # print (sum ([
-        #             #         model.var_xlnk_path_occ[p,i,j,k]  + 
-        #             #         model.var_xlnk_path_occ[p,j,i,k] 
-        #             #         for k in range (len (self.xlink_winds[i][j]))
-        #             #     ]))
-
-        #         # print (j_terms)
-        #         # print (sum (j_terms))
-        #         # input ()
-        #         model.c9b.add( sum(j_terms) <= 1)
-
-
-        # # constraint 10
-        # model.c10  = pe.ConstraintList()
-        # for p in model.paths: 
-        #     for j in  model.sats:
-        #         for k_d in range(len (self.dlink_winds_flat[j])):
-
-        #             k_d_terms = []
-        #             for i in model.sats:
-        #                 if i == j:
-        #                     continue
-                        
-        #                 k_d_terms += [
-        #                     model.var_xlnk_path_occ[p,i,j,k_x] 
-        #                     for k_x in range (len (self.xlink_winds[i][j]))
-        #                 ] 
-
-        #             model.c10.add(model.var_dlnk_path_occ[p,j,k_d]  <= sum(k_d_terms))
-
 
         def c11_rule( model,p):
             return sum([model.var_dlnk_path_occ[tuple([p])+dlnk_subsc] for dlnk_subsc in  model.dlnk_subscripts]) <= 1
@@ -403,19 +306,6 @@ class GPDataRouteSelection():
         def c13_rule( model,p,i,j,k):
             return model.var_path_dv[p] <=  model.par_xlnk_dv[i,j,k]  +  self.M_dv_Mb*(1-model.var_xlnk_path_occ[p,i,j,k])
         model.c13 =pe.Constraint (   model.xlnk_path_subscripts,  rule = c13_rule )
-
-        # this constraint is not useful
-        # def c14_rule( model,p,i,k):
-        #     # return model.var_path_dv[p] <=  model.var_dlnk_path_occ[tuple([p,i,k])]*model.par_dlnk_dv[tuple([i,k])]
-        #     # return model.var_path_dv[p] <=  model.par_dlnk_dv[tuple([i,k])]  +  self.M_dv_Mb*(1-model.var_dlnk_path_occ[tuple([p,i,k])])
-        #     return model.var_path_dv[p] <= 2000*model.var_dlnk_path_occ[tuple([p,i,k])]
-        # model.c14 =pe.Constraint (   model.dlnk_path_subscripts,  rule =c14_rule )
-
-        #  this constraint is also deprecated.  redundant with 15b  (though this may actually be more efficient than 15b)
-        # def c15_rule( model,p):
-        #     return model.var_path_dv[p]  >= model.par_min_path_dv*model.var_path_indic[p]
-        #     # return model.var_path_dv[p]  >= 10*model.var_path_indic[p]
-        # model.c15 =pe.Constraint ( model.paths, rule=c15_rule) 
 
         def c15b_rule( model,p):
             return sum (model.var_path_dv_dlnk[tuple([p])+dlnk_subsc] for dlnk_subsc in  model.dlnk_subscripts) >= model.par_min_path_dv*model.var_path_indic[p]
@@ -433,34 +323,8 @@ class GPDataRouteSelection():
             return model.var_path_dv_dlnk[p,i,k]  <=  model.var_dlnk_path_occ[p,i,k]*model.par_dlnk_dv[i,k]
         model.c18 =pe.Constraint ( model.paths, model.dlnk_subscripts,rule=c18_rule)
 
-        # #  constraint 19
-        # model.c19  = pe.ConstraintList()
-        # for p in model.paths: 
-        #     for j in model.sats:
-        #         j_terms = []
-
-        #         #  could have been a list comprehension but whatever
-        #         for k_d in range(len (self.dlink_winds_flat[j])):
-        #             j_terms.append (model.var_dlnk_path_occ[p,j,k_d] )
-
-        #         for i in model.sats:
-        #             if i == j:
-        #                 continue
-
-        #             #  use this to account for the fact that the cross-link Windows matrix is upper triangular
-        #             num_i_j_xlnks = max(len(self.xlink_winds[i][j]),len(self.xlink_winds[j][i]))
-
-        #             j_terms += [
-        #                 model.var_xlnk_path_occ[p,i,j,k]  + 
-        #                 model.var_xlnk_path_occ[p,j,i,k] 
-        #                 for k in range (num_i_j_xlnks)
-        #             ]
-
-        #         j_terms.append (model.par_obs_occ[j])
-
-        #         model.c19.add( sum(j_terms) == 2*model.var_path_indic_sat[p,j])
-
-        #  constraint 20
+ 
+        #  constraint  20
         model.c20  = pe.ConstraintList()
         for p in model.paths: 
             for j in model.sats:
@@ -489,6 +353,9 @@ class GPDataRouteSelection():
 
                 j_terms_arrive.append (model.par_obs_occ[j])
 
+                # add the term accounting for possible failure to route any paths
+                j_terms_depart.append (model.var_route_fail[j])
+
                 model.c20.add( sum(j_terms_arrive) == sum(j_terms_depart))
 
 
@@ -496,6 +363,15 @@ class GPDataRouteSelection():
             return sum([model.var_dlnk_path_occ[tuple([p])+dlnk_subsc] for dlnk_subsc in  model.dlnk_subscripts]) <= model.var_path_indic[p]
         model.c21 =pe.Constraint (  model.paths,  rule =c21_rule )
 
+        def c22_rule( model,p,i):
+            return  model.var_route_fail[i] <= 1 - model.var_path_indic[p]
+        model.c22 =pe.Constraint (  model.paths,  model.sats, rule =c22_rule )
+
+        # constraint 23
+        model.c23  = pe.ConstraintList()
+        for j in model.sats:
+            if j != self.obs_wind.sat_indx:
+                model.c23.add( model.var_route_fail[i] <= 0)
 
         ##############################
         #  Make objective
@@ -541,6 +417,10 @@ class GPDataRouteSelection():
         solver = po.SolverFactory('gurobi')
         results =  solver.solve(self.model, tee=True, keepfiles=False, options_string=" time_limit=%f" % ( self.solver_max_runtime))
         
+        # opt = po.SolverFactory("gurobi")
+        # solver_manager = po.SolverManagerFactory('neos')
+        # results = solver_manager.solve(self.model, opt=opt, options_string=" time_limit=%f" % ( self.solver_max_runtime))
+
         if (results.solver.status == po.SolverStatus.ok) and (results.solver.termination_condition == po.TerminationCondition.optimal):
             print('this is feasible and optimal')
         elif results.solver.termination_condition == po.TerminationCondition.infeasible:
@@ -548,13 +428,6 @@ class GPDataRouteSelection():
         else:
             # something else is wrong
             print (results.solver)
-
-
- 
-        # elif (results.solver.status != po.SolverStatus.ok):
-        #     print('Check solver not ok?')
-        # elif (results.solver.termination_condition != po.TerminationCondition.optimal):  
-        #     print('Check solver optimality?') 
 
     # lifted from  Jeff Menezes' code at https://github.mit.edu/jmenezes/Satellite-MILP/blob/master/sat_milp_pyomo.py
     def print_sol_all(self):
@@ -619,6 +492,13 @@ class GPDataRouteSelection():
                     val  = varobject[index].value
                     print (" ",index, val)
 
+            # elif str (v) =='var_route_fail': 
+            #     print ("Variable",v)
+            #     varobject = getattr(self.model, str(v))
+            #     for index in varobject:
+            #         val  = varobject[index].value
+            #         print (" ",index, val)
+
             # elif str (v) =='var_path_dv_dlnk': 
             #     print ("Variable",v)
             #     varobject = getattr(self.model, str(v))
@@ -633,50 +513,54 @@ class GPDataRouteSelection():
         route_dv_by_index = {}
         senses =  {}
 
-        # get the down links and index them by path
-        for dlnk_subscr in self.model.dlnk_path_subscripts:
-            # These subscript indices are defined above in get_downlink_model_objects
-            p = dlnk_subscr[0]
-            if self.model.var_dlnk_path_occ[dlnk_subscr] == 1.0:
-                if not p in selected_routes_by_index.keys ():
-                    selected_routes_by_index[p] = []
-                sat_indx = dlnk_subscr[1]
-                dlnk_indx = dlnk_subscr[2]
-                dlnk_wind =  self.dlink_winds_flat[sat_indx][dlnk_indx]
-                senses[dlnk_wind] = dlnk_wind.sat_indx
-                selected_routes_by_index[p].append(dlnk_wind)
+        try:
+            # get the down links and index them by path
+            for dlnk_subscr in self.model.dlnk_path_subscripts:
+                # These subscript indices are defined above in get_downlink_model_objects
+                p = dlnk_subscr[0]
+                if self.model.var_dlnk_path_occ[dlnk_subscr] == 1.0:
+                    if not p in selected_routes_by_index.keys ():
+                        selected_routes_by_index[p] = []
+                    sat_indx = dlnk_subscr[1]
+                    dlnk_indx = dlnk_subscr[2]
+                    dlnk_wind =  self.dlink_winds_flat[sat_indx][dlnk_indx]
+                    senses[dlnk_wind] = dlnk_wind.sat_indx
+                    selected_routes_by_index[p].append(dlnk_wind)
 
-        #  get the cross-links and index them by path
-        for xlnk_subscr in self.model.xlnk_path_subscripts:
-            # These subscript indices are defined above in get_downlink_model_objects
-            p = xlnk_subscr[0]
-            if self.model.var_xlnk_path_occ[xlnk_subscr] == 1.0:
-                if not p in selected_routes_by_index.keys ():
-                    selected_routes_by_index[p] = []
-                sat_indx = xlnk_subscr[1]
-                other_sat_indx = xlnk_subscr[2]
-                xlnk_indx = xlnk_subscr[3]
+            #  get the cross-links and index them by path
+            for xlnk_subscr in self.model.xlnk_path_subscripts:
+                # These subscript indices are defined above in get_downlink_model_objects
+                p = xlnk_subscr[0]
+                if self.model.var_xlnk_path_occ[xlnk_subscr] == 1.0:
+                    if not p in selected_routes_by_index.keys ():
+                        selected_routes_by_index[p] = []
+                    sat_indx = xlnk_subscr[1]
+                    other_sat_indx = xlnk_subscr[2]
+                    xlnk_indx = xlnk_subscr[3]
 
-                access_sat_indx = sat_indx
-                access_other_sat_indx = other_sat_indx
-                # remember that xlink_winds is upper triangular,  because it  would be symmetric across the diagonal. swap indexing to account for that
-                if sat_indx >other_sat_indx:
-                    access_sat_indx=other_sat_indx
-                    access_other_sat_indx = sat_indx
+                    access_sat_indx = sat_indx
+                    access_other_sat_indx = other_sat_indx
+                    # remember that xlink_winds is upper triangular,  because it  would be symmetric across the diagonal. swap indexing to account for that
+                    if sat_indx >other_sat_indx:
+                        access_sat_indx=other_sat_indx
+                        access_other_sat_indx = sat_indx
 
-                xlnk_wind =  self.xlink_winds[access_sat_indx][access_other_sat_indx][xlnk_indx]
-                #store the satellite from which data is being moved on this cross-link
-                senses[xlnk_wind] = sat_indx
-                selected_routes_by_index[p].append(xlnk_wind)
+                    xlnk_wind =  self.xlink_winds[access_sat_indx][access_other_sat_indx][xlnk_indx]
+                    #store the satellite from which data is being moved on this cross-link
+                    senses[xlnk_wind] = sat_indx
+                    selected_routes_by_index[p].append(xlnk_wind)
 
-        #  add the observation
-        for route in selected_routes_by_index. values ():
-            senses[self.obs_wind] = self.obs_wind.sat_indx
-            route.append (self.obs_wind)
+            #  add the observation
+            for route in selected_routes_by_index. values ():
+                senses[self.obs_wind] = self.obs_wind.sat_indx
+                route.append (self.obs_wind)
 
-        for p in self.model.paths:
-            #  have to convert from pyomo  numeric type
-            route_dv_by_index[p] =   pe.value(self.model.var_path_dv[p])
+            for p in self.model.paths:
+                #  have to convert from pyomo  numeric type
+                route_dv_by_index[p] =   pe.value(self.model.var_path_dv[p])
+
+        except ValueError as e:
+            print ("gp_route_selection.py: no routes could be extracted. problem is likely infeasible")
 
         #  now make the actual data route objects
         selected_routes =[]

@@ -13,6 +13,8 @@ import sys
 import argparse
 import pickle
 
+
+
 #  local repo includes. todo:  make this less hackey
 sys.path.append ('..')
 from circinus_tools  import time_tools as tt
@@ -92,12 +94,18 @@ class GlobalPlannerRunner:
             all_routes_obs =[]
             all_stats =[]
             route_times_s =[]
-            for sat_indx in range( self.general_params['num_sats']):
+            for sat_indx in [15]: #range( self.general_params['num_sats']):
                 for  index, obs in  enumerate ( obs_winds[sat_indx]):
+
+
                     print ("sat_indx")
                     print (sat_indx)
                     print ("obs")
                     print ( index)
+
+                    if index != 5:
+                        continue
+
 
                     gp_ps.make_model (obs,dlink_winds_flat,xlink_winds, verbose = True)
                     stats =gp_ps.get_stats (verbose = True)
@@ -125,19 +133,30 @@ class GlobalPlannerRunner:
         
 
         sel_obs_winds_flat, sel_dlnk_winds_flat, \
-        sel_xlnk_winds_flat, link_info_by_wind = self.io_proc.extract_flat_windows (  all_routes[-1])
+        sel_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind = self.io_proc.extract_flat_windows (  all_routes[-1])
+
+        obs = None
+        for sat_indx in  range (self.general_params['num_sats']):
+            for obs in sel_obs_winds_flat[sat_indx]:
+                if obs:
+                    break
 
         #  plot the selected down links and cross-links
-        self.gp_plot.plot_links(
+        self.gp_plot.plot_winds(
             self.general_params['num_sats'],
+            sel_obs_winds_flat,
             dlink_winds_flat,
             sel_dlnk_winds_flat, 
             xlink_winds_flat,
             sel_xlnk_winds_flat,
-            self.general_params['start_utc_dt'],
-            self.general_params['end_utc_dt']-timedelta(minutes=200),
-            show=True,
-            fig_name='plots/xlnk_dlnk_plot.pdf'
+            route_indcs_by_wind,
+            obs.start,
+            obs.start + timedelta( seconds= self.route_selection_params['wind_filter_duration_s']),
+            # self.general_params['start_utc_dt'],
+            # self.general_params['start_utc_dt'] + timedelta( seconds= self.route_selection_params['wind_filter_duration_s']),
+            # self.general_params['end_utc_dt']-timedelta(minutes=200),
+            show= False,
+            fig_name='plots/temp1.pdf'
         )
 
         outputs= self.io_proc.make_sat_history_outputs (sel_obs_winds_flat, sel_xlnk_winds_flat, sel_dlnk_winds_flat, link_info_by_wind)
