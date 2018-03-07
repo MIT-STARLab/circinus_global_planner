@@ -2,7 +2,7 @@
     "version": "0.1",
     "other_params": {
         "targ_ignore_list": [],
-        "gs_ignore_list": [],
+        "gs_ignore_list": [6],
         "min_allowed_dv_xlnk_Mb" : 100,
         "min_allowed_dv_dlnk_Mb" : 100
     },
@@ -10,16 +10,17 @@
         "num_paths" :  5,
         "min_path_dv_Mb" :  100,
         "solver_max_runtime_s" :  60,
-        "solver_name" :  "cplex",
-        "solver_run_remotely" :   true,
+        "solver_name" :  "gurobi",
+        "solver_run_remotely" :   false,
         "wind_filter_duration_s" : 1800
     },
     "pickle_params":  {
-        "pickle_route_selection_results":    false,
-        "unpickle_pre_route_selection":   false,
-        "route_selection_pickle": "pickles/orbit_prop_inputs_walker30_7gs_obsindx1_2018-03-05T16_15_53.230665.pkl"
+        "pickle_route_selection_results":         false,
+        "unpickle_pre_route_selection":          true,
+        "route_selection_pickle": "pickles/obs_winds_20_6.pkl"
     },
     "plot_params":  {
+        "plot_all_routes": false,
         "plot_fig_extension":  "pdf",
         "plot_include_labels":  true,
         "time_units":  "minutes",

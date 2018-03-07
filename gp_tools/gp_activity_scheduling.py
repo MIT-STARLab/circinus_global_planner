@@ -21,7 +21,6 @@ class GPActivityScheduling():
     def make_model ( self,obs_wind,dlink_winds_flat,xlink_winds, verbose = True):
         model = pe.ConcreteModel()
 
-
         if verbose:
             pass
 

@@ -27,7 +27,6 @@ class GPPlotting():
     def __init__(self,params):
 
         self.plot_fig_extension=params['plot_fig_extension']
-        self.plot_include_labels=params['plot_include_labels']
         self.time_units=params['time_units']
         self.winds_plot_obs=params['winds_plot_obs']
         self.winds_plot_dlnks=params['winds_plot_dlnks']
@@ -53,6 +52,7 @@ class GPPlotting():
         plot_end,
         plot_title = 'Route Plot', 
         plot_size_inches = (12,12),
+        plot_include_labels = True,
         show=False,
         fig_name='plots/xlnk_dlnk_plot.pdf'):
         '''
@@ -68,6 +68,9 @@ class GPPlotting():
         time_to_end = (plot_end-plot_start).total_seconds()/time_divisor
 
         num_sats = len(sats_indcs_list)
+
+        #  make a new figure
+        plt.figure()
 
         #  create subplots for satellites
         axes = plt.subplot(num_sats,1,1)
@@ -176,7 +179,6 @@ class GPPlotting():
                         dlnk_start = (dlnk_wind.start-plot_start).total_seconds()/time_divisor
                         dlnk_end = (dlnk_wind.end-plot_start).total_seconds()/time_divisor
 
-                        dr_indcs = route_indcs_by_wind[dlnk_wind]
                         gs_indx = dlnk_wind.gs_ID
 
                         # plot the task duration
@@ -186,13 +188,22 @@ class GPPlotting():
 
                         dlnk_rectangle_rotator =  (dlnk_rectangle_rotator+1)%dlnk_rotation_rollover
 
-                        if self.plot_include_labels:
+                        if plot_include_labels:
+                            label_text = ""
+
+                            # if we have been given route indices, then include them in the label
+                            if (len(route_indcs_by_wind.keys())) > 0:
+                                dr_indcs = route_indcs_by_wind[dlnk_wind]
+                                for dr_indx in dr_indcs:
+                                    label_text += "%d,"%(dr_indx)
+                                label_text += ";"
+                            
+                            #  add the ground station index to the label
+                            label_text += "%d"%(gs_indx)
+
                             #   put label in desired vertical spot
                             left_horizontal_loc = dlnk_start + 0.15
-                            label_text = ""
-                            for dr_indx in dr_indcs:
-                                label_text += "%d,"%(dr_indx)
-                            label_text = "%s;%d" %(label_text,gs_indx)
+                            
                             if dlnk_label_rotator == 0:
                                 plt.text(left_horizontal_loc, 0.1, label_text , fontsize=10, color = 'k')
                             elif dlnk_label_rotator == 1:
@@ -233,8 +244,16 @@ class GPPlotting():
                         xlnk_end = (xlnk_wind.end-plot_start).total_seconds()/time_divisor
 
                         bottom_vert_loc = xlnk_rectangle_rotator
-                        dr_indx = route_indcs_by_wind[xlnk_wind][self.route_index_to_use]
-                        xlnk_color_indx = dr_indx %  self.xlnk_color_rollover
+
+                        # if we have been given route indices, then then use one of them to configure the crosslink box color
+                        dr_indx = None
+                        if (len(route_indcs_by_wind.keys())) > 0:
+                            dr_indx = route_indcs_by_wind[xlnk_wind][self.route_index_to_use]
+                            xlnk_color_indx = dr_indx %  self.xlnk_color_rollover
+                        #  otherwise just go with the first color
+                        else:
+                            xlnk_color_indx = 0
+
                         xlnk_color = self.xlnk_colors[xlnk_color_indx]
                         
                         # plot the task duration
@@ -243,12 +262,18 @@ class GPPlotting():
 
                         xlnk_rectangle_rotator =  (xlnk_rectangle_rotator+1)%xlnk_rotation_rollover
 
-                        if self.plot_include_labels:
+                        if plot_include_labels:
                             other_sat_indx = xlnk_wind.xsat_indx if xlnk_wind.xsat_indx != sat_indx else xlnk_wind.sat_indx
 
                             #   put label in desired vertical spot
                             left_horizontal_loc = xlnk_start + 0.15
-                            label_text = "%d,%d" %(dr_indx,other_sat_indx)
+
+                            #  again, if we know route indices include them in label
+                            if dr_indx:
+                                label_text = "%d,%d" %(dr_indx,other_sat_indx)
+                            else:                                
+                                label_text = "%d" %(other_sat_indx)
+
                             if xlnk_label_rotator == 0:
                                 plt.text(left_horizontal_loc, 0.1, label_text , fontsize=10, color = 'k')
                             elif xlnk_label_rotator == 1:
@@ -284,3 +309,57 @@ class GPPlotting():
             plt.show()
         else:
             savefig(fig_name,format=self.plot_fig_extension)
+
+    @staticmethod
+    def plot_route_latdv_pareto(all_routes,weights_tups,plot_name,show= False):
+
+        # print ('obs.data_vol, total dlnk dv, ratio')
+        # print (obs.data_vol,sum(dr.data_vol for dr in routes),sum(dr.data_vol for dr in routes)/obs.data_vol)
+        # print ('min latency, ave latency, max latency')
+        all_ave_latencies = []
+        all_cum_dv = []
+        for routes in all_routes:
+            latencies = [(rt.route[-1].end - rt.route[0].end).total_seconds()/60 for rt in  routes]
+            all_ave_latencies.append ( np.mean(latencies))
+            all_cum_dv.append ( sum(dr.data_vol for dr in routes))
+        # print (np.min( latencies),np.mean( latencies),np.max( latencies))
+
+        #  make a new figure
+        plt.figure()
+        plt.plot(all_ave_latencies,all_cum_dv,'o')
+
+        labels = ['{0}'.format(i) for i in range(len(all_ave_latencies))]
+        # labels = ['{0} dv{1} la{2}'.format(i,tup[0],tup[2]) for i, tup in   enumerate(weights_tups)]
+        indx = 0
+        for label, x, y in zip(labels, all_ave_latencies, all_cum_dv):
+            
+            if indx%2 ==0: pos = (30, 0)
+            else: pos = (30, -20)
+
+            if indx == 1: pos=(30,0)
+            if indx == 2: pos=(30,0)
+            if indx == 3: pos=(-20,0)
+            if indx == 4: pos=(-20,-20)
+            if indx == 5: pos=(-20,-40)
+            if indx == 6: pos=(-20,-60)
+            if indx == 7: pos=(30,-20)
+            if indx == 8: pos=(-20,-80)
+            if indx == 9: pos=(30,-40)
+
+            plt.annotate(
+                label,
+                xy=(x, y), xytext=pos,
+                textcoords='offset points', ha='right', va='bottom',
+                bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5),
+                arrowprops=dict(arrowstyle = '->', connectionstyle='arc3,rad=0'))
+            indx += 1
+
+        fig = plt.gcf()
+        fig.set_size_inches(12,8)
+        plt.xlabel('Average latency (mins)')
+        plt.ylabel('Total DV (Mb)')
+        plt.title( 'Ave Latency - Total DV (over all paths) Pareto frontier')
+        if show:
+            plt.show()
+        else:
+            savefig(plot_name,format='pdf')

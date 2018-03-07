@@ -28,6 +28,10 @@ from .routing_objects import DataRoute
 
 class GPDataRouteSelection():
     """docstring for GP route selection"""
+
+    # how close a binary variable must be to zero or one to be counted as that
+    binary_epsilon = 0.1
+
     def __init__(self,params):
         self.num_sats=params['num_sats']
         self.num_paths=params['num_paths']
@@ -154,7 +158,7 @@ class GPDataRouteSelection():
 
         return dlink_winds_flat_filtered, xlink_winds_flat_filtered
 
-    def make_model ( self,obs_wind,dlink_winds_flat,xlink_winds, verbose = True):
+    def make_model ( self,obs_wind,dlink_winds_flat,xlink_winds, obj_weights, verbose = True):
         model = pe.ConcreteModel()
 
         self.obs_wind = obs_wind
@@ -232,9 +236,9 @@ class GPDataRouteSelection():
         model.par_obs_dv = pe.Param (initialize = obs_wind.data_vol)
         
         # relative weightings for the objective terms
-        model.par_obj_weight1 = pe.Param (initialize = 0.98)
-        model.par_obj_weight2 = pe.Param (initialize = 0.01)
-        model.par_obj_weight3 = pe.Param (initialize = 0.01)
+        model.par_obj_weight1 = pe.Param (initialize = obj_weights['total_dv'])
+        model.par_obj_weight2 = pe.Param (initialize = obj_weights['num_paths_sel'])
+        model.par_obj_weight3 = pe.Param (initialize = obj_weights['latency_sf'])
 
         #  quick sanity check on M values
         for dv in xlnk_dv_dict.values ():
@@ -466,7 +470,7 @@ class GPDataRouteSelection():
                 varobject = getattr(self.model, str(v))
                 for index in varobject:
                     val  = varobject[index].value
-                    if val == 1.0:
+                    if val >= 1.0 - self.binary_epsilon:
                         print (" ",index, val,"  start,end dlnk %f %f, dv %f"%( 
                             self.model.par_t_start_dlnk[index[1],index[2]],
                             self.model.par_t_end_dlnk[index[1],index[2]],
@@ -478,7 +482,7 @@ class GPDataRouteSelection():
                 varobject = getattr(self.model, str(v))
                 for index in varobject:
                     val  = varobject[index].value
-                    if val == 1.0:
+                    if val >= 1.0 - self.binary_epsilon:
                         print (" ",index, val,"  start,end xlnk %f %f, dv %f" %( 
                             self.model.par_t_start_xlnk[index[1],index[2],index[3]],
                             self.model.par_t_end_xlnk[index[1],index[2],index[3]],
@@ -532,7 +536,7 @@ class GPDataRouteSelection():
             for dlnk_subscr in self.model.dlnk_path_subscripts:
                 # These subscript indices are defined above in get_downlink_model_objects
                 p = dlnk_subscr[0]
-                if self.model.var_dlnk_path_occ[dlnk_subscr] == 1.0:
+                if pe.value(self.model.var_dlnk_path_occ[dlnk_subscr]) >= 1.0 - self.binary_epsilon:
                     if not p in selected_routes_by_index.keys ():
                         selected_routes_by_index[p] = []
                     sat_indx = dlnk_subscr[1]
@@ -545,7 +549,7 @@ class GPDataRouteSelection():
             for xlnk_subscr in self.model.xlnk_path_subscripts:
                 # These subscript indices are defined above in get_downlink_model_objects
                 p = xlnk_subscr[0]
-                if self.model.var_xlnk_path_occ[xlnk_subscr] == 1.0:
+                if pe.value(self.model.var_xlnk_path_occ[xlnk_subscr]) >= 1.0 - self.binary_epsilon:
                     if not p in selected_routes_by_index.keys ():
                         selected_routes_by_index[p] = []
                     sat_indx = xlnk_subscr[1]
@@ -586,12 +590,11 @@ class GPDataRouteSelection():
                 window_start_sats=senses,
                 dv=route_dv_by_index[r]
             )
-            dr.sort_windows ()
             selected_routes.append(dr)
             dr_id += 1
 
         if verbose:
             for dr in selected_routes:
-                dr.print_route ( time_base = self.start_utc_dt) 
+                print(dr.get_route_string ( time_base = self.start_utc_dt) )
 
         return selected_routes
