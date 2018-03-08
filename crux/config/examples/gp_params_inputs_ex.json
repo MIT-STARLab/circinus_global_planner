@@ -14,10 +14,15 @@
         "solver_run_remotely" :   false,
         "wind_filter_duration_s" : 1800
     },
+    "activity_scheduling_params": {
+        "solver_max_runtime_s" :  60,
+        "solver_name" :  "gurobi",
+        "solver_run_remotely" :   false
+    },
     "pickle_params":  {
         "pickle_route_selection_results":         false,
         "unpickle_pre_route_selection":          true,
-        "route_selection_pickle": "pickles/obs_winds_20_6.pkl"
+        "route_selection_pickle": "pickles/walker30_all_obs.pkl"
     },
     "plot_params":  {
         "plot_all_routes": false,

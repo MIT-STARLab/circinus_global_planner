@@ -424,7 +424,7 @@ class GPDataRouteSelection():
 
 
 
-    # lifted from  Jeff Menezes' code at https://github.mit.edu/jmenezes/Satellite-MILP/blob/master/sat_milp_pyomo.py
+    # taken in part from Jeff Menezes' code at https://github.mit.edu/jmenezes/Satellite-MILP/blob/master/sat_milp_pyomo.py
     def solve(self):
 
         solver = po.SolverFactory(self.solver_name)
@@ -447,7 +447,6 @@ class GPDataRouteSelection():
             # something else is wrong
             print (results.solver)
 
-    # lifted from  Jeff Menezes' code at https://github.mit.edu/jmenezes/Satellite-MILP/blob/master/sat_milp_pyomo.py
     def print_sol_all(self):
         for v in self.model.component_objects(pe.Var, active=True):
             print ("Variable",v)

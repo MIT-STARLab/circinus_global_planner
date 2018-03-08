@@ -21,6 +21,7 @@ from circinus_tools  import time_tools as tt
 from gp_tools.input_processing import GPProcessorIO
 from gp_tools.gp_plotting import GPPlotting
 from gp_tools.gp_route_selection import GPDataRouteSelection
+from gp_tools.gp_activity_scheduling import GPActivityScheduling
 
 
 REPO_BASE = os.path.abspath(os.pardir)  # os.pardir aka '..'
@@ -36,6 +37,7 @@ class GlobalPlannerRunner:
         self.pickle_params = params['pickle_params']
         self.other_params = params['other_params']
         self.route_selection_params = params['route_selection_params']
+        self.activity_scheduling_params = params['activity_scheduling_params']
         self.plot_params = params['plot_params']
         self.io_proc =GPProcessorIO( dict(list (self.general_params.items()) +  list (self.other_params.items()) ))
         self.gp_plot =GPPlotting( self.plot_params)
@@ -59,6 +61,25 @@ class GlobalPlannerRunner:
         self.params = p['params']
 
         return p['all_routes'],p['all_routes_obs'],p['all_stats'],p['route_times_s'],p['obs_indx']
+
+    
+
+    def run_nominal_activity_scheduling( self, all_routes):
+        
+        gp_as = GPActivityScheduling ( dict(list (self.general_params.items()) + list (self.activity_scheduling_params. items())))
+
+        # flatten the list of all routes, which currently has nested lists for each observation
+        routes_flat = [item for sublist in all_routes for item in sublist]
+
+        gp_as.make_model (routes_flat, verbose = True)
+        stats =gp_as.get_stats (verbose = True)
+        t_a = time.time()
+        gp_as.solve ()
+        t_b = time.time()
+        gp_as.print_sol ()
+        # routes = gp_as. extract_routes ( verbose  = True)
+
+        time_elapsed = t_b-t_a
 
     def  run_route_selection( self,gp_ps,obs,dlnk_winds_flat,xlnk_winds,obj_weights):
 
@@ -207,7 +228,14 @@ class GlobalPlannerRunner:
 
         return all_routes,all_routes_obs,all_stats,route_times_s,obs_indx,weights_tups
 
-    
+    def pareto_plot(all_routes):
+        total_dv_weights = [0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9] 
+        num_paths_sel_weights = [0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1] 
+        latency_sf_weights = [0.9,0.8,0.7,0.6,0.5,0.4,0.3,0.2,0.1,0] 
+        weights_tups = zip(total_dv_weights,num_paths_sel_weights,latency_sf_weights)
+        self.gp_plot.plot_route_latdv_pareto(all_routes,weights_tups,'plots/obs_winds_20_6_pareto.pdf')
+
+
     def run( self):
 
         # parse the inputs into activity windows
@@ -234,21 +262,29 @@ class GlobalPlannerRunner:
 
         #  otherwise run route selection
         else:
-            # all_routes,all_routes_obs,all_stats,route_times_s  =  self.run_nominal_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
-            all_routes,all_routes_obs,all_stats,route_times_s, obs_indx, weights_tups  =  self.run_test_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
+            all_routes,all_routes_obs,all_stats,route_times_s  =  self.run_nominal_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
+            # all_routes,all_routes_obs,all_stats,route_times_s, obs_indx, weights_tups  =  self.run_test_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
 
         if self.pickle_params['pickle_route_selection_results']:
             self.pickle_stuff(all_routes,all_routes_obs,all_stats,route_times_s,obs_indx)
         
         #################################
-        #   output stage
+        #  activity scheduling stage
         #################################
 
-        total_dv_weights = [0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9] 
-        num_paths_sel_weights = [0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1] 
-        latency_sf_weights = [0.9,0.8,0.7,0.6,0.5,0.4,0.3,0.2,0.1,0] 
-        weights_tups = zip(total_dv_weights,num_paths_sel_weights,latency_sf_weights)
-        self.gp_plot.plot_route_latdv_pareto(all_routes,weights_tups,'plots/obs_winds_20_6_pareto.pdf')
+        #  explicitly validate routes 
+        # for routes in all_routes:
+        #     for dr in routes:
+        #         dr.validate_route()
+
+
+        self.run_nominal_activity_scheduling(all_routes)
+
+        #################################
+        #   output stage
+        #################################
+        
+
 
         if self.plot_params['plot_all_routes']:
             for rts_indx, routes in enumerate (all_routes):
@@ -322,6 +358,7 @@ class PipelineRunner:
         if gp_params_inputs['version'] == "0.1": 
             gp_params['other_params'] = gp_params_inputs['other_params']
             gp_params['route_selection_params'] = gp_params_inputs['route_selection_params']
+            gp_params['activity_scheduling_params'] = gp_params_inputs['activity_scheduling_params']
             gp_params['pickle_params'] = gp_params_inputs['pickle_params']
             gp_params['plot_params'] = gp_params_inputs['plot_params']
 

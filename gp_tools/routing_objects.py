@@ -57,6 +57,9 @@ class DataRoute(object):
         
         return out_string
 
+    def __repr__(self):
+        return  '('+self.get_route_string()+')'
+
     def validate_route (self):
 
         obs = self.route[0]
