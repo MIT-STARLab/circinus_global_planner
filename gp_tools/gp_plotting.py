@@ -29,19 +29,16 @@ class GPPlotting():
         self.plot_fig_extension=params['plot_fig_extension']
         self.time_units=params['time_units']
         self.winds_plot_obs=params['winds_plot_obs']
+        self.winds_plot_obs_choices=params['winds_plot_obs_choices']
         self.winds_plot_dlnks=params['winds_plot_dlnks']
         self.winds_plot_dlnks_choices=params['winds_plot_dlnks_choices']
         self.winds_plot_xlnks=params['winds_plot_xlnks']
         self.winds_plot_xlnks_choices=params['winds_plot_xlnks_choices']
-        
-        # self.num_sats=params['num_sats']
-        # self.num_paths=params['route_selection_num_paths']
-        # self.start_utc_dt  =params['start_utc_dt']
-        # self.end_utc_dt  =params['end_utc_dt']
 
     def plot_winds(
         self,
         sats_indcs_list,
+        all_obs_winds_flat,
         obs_winds_flat,
         all_dlnk_winds_flat,
         dlnk_winds_flat, 
@@ -111,15 +108,18 @@ class GPPlotting():
 
             #  this is used to alternate the vertical position of the cross-link rectangle
             obs_rectangle_rotator = 0
+            obs_choices_rectangle_rotator = 0
             obs_rotation_rollover = 2
             #  this is used to alternate the vertical position of the cross-link rectangle
             xlnk_rectangle_rotator = 0
+            xlnk_choices_rectangle_rotator = 0
             xlnk_rotation_rollover = 2
             #  this is used to alternate the vertical position of labels
             xlnk_label_rotator = 0
             
             #  this is used to alternate the vertical position of the  downlink rectangle
             dlnk_rectangle_rotator = 0
+            dlnk_choices_rectangle_rotator = 0
             dlnk_rotation_rollover = 2
             dlnk_label_rotator = 0
 
@@ -134,6 +134,20 @@ class GPPlotting():
             ###################
 
             # plot the  observations
+            if self.winds_plot_obs_choices:
+                if len(all_obs_winds_flat) > 0:
+                    for obs_wind in all_obs_winds_flat[sat_indx]:
+
+                        obs_start = (obs_wind.start-plot_start).total_seconds()/time_divisor
+                        obs_end = (obs_wind.end-plot_start).total_seconds()/time_divisor
+
+                        # plot the task duration
+                        bottom_vert_loc = obs_choices_rectangle_rotator
+                        d = Rectangle((obs_start, bottom_vert_loc), obs_end-obs_start, bottom_vert_loc+1,alpha=1,fill=True,color='#BFFFBF')
+                        current_axis.add_patch(d)
+
+                        obs_choices_rectangle_rotator =  (obs_choices_rectangle_rotator+1)%obs_rotation_rollover
+
             if self.winds_plot_obs:
                 if len(obs_winds_flat) > 0:
                     for obs_wind in obs_winds_flat[sat_indx]:
@@ -163,10 +177,13 @@ class GPPlotting():
                         dlnk_wind_end = (dlnk_wind.end-plot_start).total_seconds()/time_divisor
 
                         # plot the task duration
-                        d_w = Rectangle((dlnk_wind_start, 0), dlnk_wind_end-dlnk_wind_start, 2,alpha=1,fill=True,color='#BFBFFF')
+                        bottom_vert_loc = dlnk_choices_rectangle_rotator
+                        d_w = Rectangle((dlnk_wind_start, bottom_vert_loc), dlnk_wind_end-dlnk_wind_start, bottom_vert_loc+1,alpha=1,fill=True,color='#BFBFFF')
 
                         current_axis.add_patch(d_w)
-                        plt.text( (dlnk_wind_end+dlnk_wind_start)/2 - 0.15, 0.1, dlnk_wind.gs_ID , fontsize=10, color = 'k')
+                        # plt.text( (dlnk_wind_end+dlnk_wind_start)/2 - 0.15, 0.1, dlnk_wind.gs_ID , fontsize=10, color = 'k')
+
+                        dlnk_choices_rectangle_rotator =  (dlnk_choices_rectangle_rotator+1)%dlnk_rotation_rollover
 
                         num_dlnk_wind += 1
 
@@ -228,10 +245,12 @@ class GPPlotting():
                         xlnk_wind_end = (xlnk_wind.end-plot_start).total_seconds()/time_divisor
 
                         # plot the task duration
-                        x_w = Rectangle((xlnk_wind_start, 0), xlnk_wind_end-xlnk_wind_start, 2,alpha=1,fill=True,color='#FFBCBC')
+                        bottom_vert_loc = xlnk_choices_rectangle_rotator
+                        x_w = Rectangle((xlnk_wind_start, bottom_vert_loc), xlnk_wind_end-xlnk_wind_start, bottom_vert_loc+1,alpha=1,fill=True,color='#FFBCBC')
 
                         current_axis.add_patch(x_w)
 
+                        xlnk_choices_rectangle_rotator =  (xlnk_choices_rectangle_rotator+1)%xlnk_rotation_rollover
                         num_xlnk_wind += 1
 
             #  plot the executed cross-links

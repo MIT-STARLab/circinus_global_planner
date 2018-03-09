@@ -9,30 +9,37 @@
     "route_selection_params": {
         "num_paths" :  5,
         "min_path_dv_Mb" :  100,
+        "solver_max_runtime_s" :  30,
+        "solver_name" :  "gurobi",
+        "solver_run_remotely" :   false,
+        "wind_filter_duration_s" : 1800,
+        "plot_include_labels":  true,
+        "plot_route_selection_results": false
+    },
+    "activity_scheduling_params": {
+        "min_path_dv_Mb" :  100,
         "solver_max_runtime_s" :  60,
         "solver_name" :  "gurobi",
         "solver_run_remotely" :   false,
-        "wind_filter_duration_s" : 1800
-    },
-    "activity_scheduling_params": {
-        "solver_max_runtime_s" :  60,
-        "solver_name" :  "gurobi",
-        "solver_run_remotely" :   false
+        "transition_time_s": {
+            "simple": 0
+        },
+        "plot_include_labels":  false,
+        "plot_activity_scheduling_results":  true
     },
     "pickle_params":  {
-        "pickle_route_selection_results":         false,
-        "unpickle_pre_route_selection":          true,
+        "pickle_route_selection_results":          false,
+        "unpickle_pre_route_selection":           true,
         "route_selection_pickle": "pickles/walker30_all_obs.pkl"
     },
     "plot_params":  {
-        "plot_all_routes": false,
         "plot_fig_extension":  "pdf",
-        "plot_include_labels":  true,
         "time_units":  "minutes",
         "winds_plot_obs":  true,
+        "winds_plot_obs_choices":  true,
         "winds_plot_dlnks":  true,
-        "winds_plot_dlnks_choices":  false,
+        "winds_plot_dlnks_choices":   true,
         "winds_plot_xlnks":  true,
-        "winds_plot_xlnks_choices":   false
+        "winds_plot_xlnks_choices":    true
     }
 }

@@ -19,6 +19,9 @@ class DataRoute(object):
 
         self.data_vol = dv
 
+        #  the amount of capacity on the path that actually ends up scheduled for usage
+        self.scheduled_dv = None
+
         self.sort_windows()   
 
         #  check the timing and satellite indices along the route.  throws an exception if a problem is seen
@@ -58,7 +61,10 @@ class DataRoute(object):
         return out_string
 
     def __repr__(self):
-        return  '('+self.get_route_string()+')'
+        if not self.scheduled_dv:
+            return  '('+self.get_route_string()+')'
+        else:
+            return  '('+self.get_route_string()+'; sched dv: %.0f/%.0f Mb'%( self.scheduled_dv, self.data_vol)+')'
 
     def validate_route (self):
 

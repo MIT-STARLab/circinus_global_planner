@@ -16,10 +16,17 @@ from .routing_objects import DataRoute
 
 class GPActivityScheduling():
     """docstring for GP activity scheduling"""
+    
+    # how close a binary variable must be to zero or one to be counted as that
+    binary_epsilon = 0.1
+
     def __init__(self,params):
         self.solver_max_runtime =params['solver_max_runtime_s']
         self.solver_name =params['solver_name']
         self.solver_run_remotely =params['solver_run_remotely']
+        self.min_path_dv =params['min_path_dv_Mb']
+        self.num_sats=params['num_sats']
+        self.transition_time_s=params['transition_time_s']
 
     def get_stats(self,verbose=True):
         stats = {}
@@ -56,8 +63,12 @@ class GPActivityScheduling():
         obs_act_indcs = []
         path_indcs_by_link_act = {}
         path_indcs_by_obs_act = {}
+        path_indcs_by_act = {}
         dv_by_link_act = {}
         dv_by_obs_act = {}
+        dv_by_act = {}
+
+        sat_acts = [[] for sat_indx in range (self.num_sats)]
 
         new_act_indx = 0
         for dr_indx, dr in enumerate (routes_flat):
@@ -69,25 +80,39 @@ class GPActivityScheduling():
                     all_acts_indcs.append(act_indx)
                     all_acts_by_indx[act_indx] = act
                     all_acts_by_obj[act] = act_indx
+                    path_indcs_by_act[act_indx] = []
+                    path_indcs_by_act[act_indx].append (dr_indx)
+                    dv_by_act[act_indx] = act.data_vol
                     new_act_indx += 1
 
                     # also need to add it to the list and dictionary for observations
                     if type(act) == ObsWindow:
+                        sat_acts[act.sat_indx].append(act)
                         obs_act_indcs.append(act_indx)
                         path_indcs_by_obs_act[act_indx] = []
                         path_indcs_by_obs_act[act_indx].append (dr_indx)
                         dv_by_obs_act[act_indx] = act.data_vol
 
                     # also need to add it to the list and dictionary for links
-                    if type(act) == DlnkWindow or type(act) == XlnkWindow:
+                    if type(act) == DlnkWindow:
                         link_act_indcs.append(act_indx)
                         path_indcs_by_link_act[act_indx] = []
                         path_indcs_by_link_act[act_indx].append (dr_indx)
                         dv_by_link_act[act_indx] = act.data_vol
+                        sat_acts[act.sat_indx].append(act)
+
+                    if type(act) == XlnkWindow:
+                        link_act_indcs.append(act_indx)
+                        path_indcs_by_link_act[act_indx] = []
+                        path_indcs_by_link_act[act_indx].append (dr_indx)
+                        dv_by_link_act[act_indx] = act.data_vol
+                        sat_acts[act.sat_indx].append(act)
+                        sat_acts[act.xsat_indx].append(act)
 
                 #  if we have already seen the activity,  then just need to update the appropriate structures
                 else:
                     act_indx = all_acts_by_obj[act]
+                    path_indcs_by_act[act_indx].append (dr_indx)
 
                     # add the data route index
                     if type(act) == ObsWindow:
@@ -98,7 +123,11 @@ class GPActivityScheduling():
         # print (path_indcs_by_link_act)
         # print (path_indcs_by_obs_act)
 
-        return all_acts_indcs,obs_act_indcs,path_indcs_by_obs_act,dv_by_obs_act,link_act_indcs,path_indcs_by_link_act,dv_by_link_act
+        #  sort the activities, because we'll need that for constructing constraints
+        for sat_indx in range (self.num_sats):
+            sat_acts[sat_indx].sort(key=lambda x: x.start)
+
+        return sat_acts,all_acts_indcs,path_indcs_by_act,dv_by_act,all_acts_by_obj,obs_act_indcs,path_indcs_by_obs_act,dv_by_obs_act,link_act_indcs,path_indcs_by_link_act,dv_by_link_act
                     
 
 
@@ -120,13 +149,24 @@ class GPActivityScheduling():
 
         # note: a path is the same as a route
 
-        (all_acts_indcs,
+        (sat_acts,
+            all_acts_indcs,
+            path_indcs_by_act,
+            dv_by_act,
+            all_acts_by_obj,
             obs_act_indcs,
             path_indcs_by_obs_act,
             dv_by_obs_act,
             link_act_indcs,
             path_indcs_by_link_act,
             dv_by_link_act) =  self.get_activity_structs(routes_flat)
+
+        #  calculate center times and average data rates for activities in advance
+        for sat_indx in range (self.num_sats):
+            for act in sat_acts[sat_indx]:
+                act.center_time = ( act.end - act.start) / 2
+
+                act.ave_data_rate =  act.data_vol / ( act.end - act.start).total_seconds ()
 
         self.all_acts_indcs = all_acts_indcs
         self.obs_act_indcs = obs_act_indcs
@@ -144,13 +184,16 @@ class GPActivityScheduling():
         #  Make parameters
         ##############################
 
+        model.par_min_path_dv = pe.Param (initialize=self.min_path_dv)
         model.par_obs_dv = pe.Param(model.obs_acts,initialize =dv_by_obs_act)
         model.par_link_dv = pe.Param(model.link_acts,initialize =dv_by_link_act)
+        model.par_act_dv = pe.Param(model.acts,initialize =dv_by_act)
         model.par_path_dv = pe.Param(model.paths,initialize ={ i: dr.data_vol for i,dr in enumerate (routes_flat)})
         # each of these is essentially a dictionary indexed by link or obs act indx, with  the value being a list of path indices that are included within that act
         # these are valid indices into model.paths
         model.par_path_subscrs_by_link_act = pe.Param(model.link_acts,initialize =path_indcs_by_link_act)
         model.par_path_subscrs_by_obs_act = pe.Param(model.obs_acts,initialize =path_indcs_by_obs_act)
+        model.par_path_subscrs_by_act = pe.Param(model.acts,initialize =path_indcs_by_act)
 
         ##############################
         #  Make variables
@@ -161,6 +204,9 @@ class GPActivityScheduling():
         model.var_activity_utilization  = pe.Var (model.acts, bounds =(0,1))
         # path utilization variable indicating how much of a path's capacity is used [2]
         model.var_path_utilization  = pe.Var (model.paths, bounds =(0,1))
+        #  indicator variables for whether or not paths [3] and activities [4] have been chosen
+        model.var_path_indic  = pe.Var (model.paths, within = pe.Binary)
+        model.var_act_indic  = pe.Var (model.acts, within = pe.Binary)
         
 
         ##############################
@@ -169,18 +215,63 @@ class GPActivityScheduling():
 
         # TODO: renumber  these with the final numbering
 
-        def c1_rule( model,a):
-            return (model.par_link_dv[a]*model.var_activity_utilization[a] -
-                        sum(model.par_path_dv[p]*model.var_path_utilization[p] 
-                            for p in model.par_path_subscrs_by_link_act[a]) 
-                    >= 0)
-        model.c1 =pe.Constraint ( model.link_acts,  rule=c1_rule)
+        # def c1_rule( model,a):
+        #     return (model.par_link_dv[a]*model.var_activity_utilization[a] -
+        #                 sum(model.par_path_dv[p]*model.var_path_utilization[p] 
+        #                     for p in model.par_path_subscrs_by_link_act[a]) 
+        #             >= 0)
+        # model.c1 =pe.Constraint ( model.link_acts,  rule=c1_rule)
 
-        def c3b_rule( model,o):
-            return (sum(model.par_path_dv[p]*model.var_path_utilization[p] 
-                        for p in model.par_path_subscrs_by_obs_act[o]) 
-                   <= model.par_obs_dv[o])
-        model.c3b =pe.Constraint ( model.obs_acts,  rule=c3b_rule)
+        def c1_rule( model,a):
+            return (model.par_act_dv[a]*model.var_activity_utilization[a] -
+                        sum(model.par_path_dv[p]*model.var_path_utilization[p] 
+                            for p in model.par_path_subscrs_by_act[a]) 
+                    >= 0)
+        model.c1 =pe.Constraint ( model.acts,  rule=c1_rule)
+
+        def c2_rule( model,p):
+            return model.par_path_dv[p]*model.var_path_utilization[p] >= model.par_min_path_dv*model.var_path_indic[p]
+        model.c2 =pe.Constraint ( model.paths,  rule=c2_rule)
+
+        def c3_rule( model,a):
+            return model.var_act_indic[a] >=  model.var_activity_utilization[a]
+        model.c3 =pe.Constraint ( model.acts,  rule=c3_rule)        
+
+        model.c4  = pe.ConstraintList()
+        model.c5  = pe.ConstraintList()
+        for sat_indx in range (self.num_sats):
+            num_sat_acts = len(sat_acts[sat_indx])
+            for  first_act_indx in  range (num_sat_acts):
+                for  second_act_indx in  range (first_act_indx+1,num_sat_acts):
+                    act1 = sat_acts[sat_indx][first_act_indx]
+                    act2 = sat_acts[sat_indx][ second_act_indx]
+                    # get the unique indices into model.acts
+                    act1_uindx = all_acts_by_obj[act1]
+                    act2_uindx = all_acts_by_obj[act2]
+
+                    # if there is enough transition time between the two activities, no constraint needs to be added
+                    if (act2.start - act1.end).total_seconds() >= self.transition_time_s['simple']:
+                        #  don't need to do anything,  continue on to next activity pair
+                        continue
+
+                    #  if the activities overlap in center time, then it's not possible to have sufficient transition time between them
+                    #  add constraint to rule out the possibility of scheduling both of them
+                    elif (act2.center_time - act1.center_time).total_seconds() <= self.transition_time_s['simple']:
+                        model.c4.add( model.var_act_indic[act1_uindx]+ model.var_act_indic[act2_uindx] <= 1)
+
+                    # If they don't overlap in center time, but they do overlap to some amount, then we need to constrain their end and start times to be consistent with one another
+                    else:
+                        center_time_diff = (act2.center_time - act1.center_time).total_seconds()
+                        # this is the adjustment added to the center time to get to the start or end of the activity
+                        time_adjust_1 = model.par_act_dv[act1_uindx]*model.var_activity_utilization[act1_uindx]/2/act1.ave_data_rate
+                        time_adjust_2 = model.par_act_dv[act2_uindx]*model.var_activity_utilization[act2_uindx]/2/act2.ave_data_rate
+                        model.c5.add( center_time_diff - time_adjust_1 - time_adjust_2 >= self.transition_time_s['simple'])
+
+        # def c3b_rule( model,o):
+        #     return (sum(model.par_path_dv[p]*model.var_path_utilization[p] 
+        #                 for p in model.par_path_subscrs_by_obs_act[o]) 
+        #            <= model.par_obs_dv[o])
+        # model.c3b =pe.Constraint ( model.obs_acts,  rule=c3b_rule)
 
         
 
@@ -193,7 +284,8 @@ class GPActivityScheduling():
                 # model.par_obj_weight1 * 1/self.num_paths/model.par_obs_dv * sum(model.var_path_dv_dlnk[p,i,k] for i,k in model.dlnk_subscripts for p in model.paths )  +
                 # model.par_obj_weight2 * 1/self.num_paths                  * sum(model.var_path_indic[p] for p in model.paths) +
                 # model.par_obj_weight3 * 1/self.num_paths                  * sum(model.var_dlnk_path_occ[p,i,k]*model.par_dlnk_sf[i,k] for i,k in model.dlnk_subscripts for p in model.paths )
-                sum(model.par_path_dv[p]*model.var_path_utilization[p] for p in model.paths)
+                sum(model.par_path_dv[p]*model.var_path_utilization[p] for p in model.paths) +
+                sum(model.var_path_indic[p] for p in model.paths)
             )
         model.obj = pe.Objective( rule=obj_rule, sense=pe.maximize )
 
@@ -245,3 +337,32 @@ class GPActivityScheduling():
                     val  = varobject[index].value
                     print (" ",index, val)
             
+            elif str (v) =='var_path_indic': 
+                print ("Variable",v)
+                varobject = getattr(self.model, str(v))
+                for index in varobject:
+                    val  = varobject[index].value
+                    print (" ",index, val)
+
+    def extract_utilized_routes( self,verbose = False):
+        #  note that routes are the same as paths
+
+        # scheduled_dv
+        scheduled_routes_flat = []
+
+        if verbose:
+            print ('utilized routes:')
+
+        # figure out which paths were used, and add the scheduled data volume to each
+        for p in self.model.paths:
+            if pe.value(self.model.var_path_indic[p]) >= 1.0 - self.binary_epsilon:
+                scheduled_route =  self.routes_flat[p]
+                scheduled_route.scheduled_dv = pe.value(self.model.var_path_utilization[p])* self.model.par_path_dv[p]
+                scheduled_routes_flat. append (scheduled_route)
+
+                if verbose:
+                    print(scheduled_route)
+
+        return scheduled_routes_flat
+
+

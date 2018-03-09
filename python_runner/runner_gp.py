@@ -76,10 +76,15 @@ class GlobalPlannerRunner:
         t_a = time.time()
         gp_as.solve ()
         t_b = time.time()
-        gp_as.print_sol ()
-        # routes = gp_as. extract_routes ( verbose  = True)
+        # gp_as.print_sol ()
+        routes = gp_as. extract_utilized_routes ( verbose  = False)
+
+        print('len(routes)')
+        print(len(routes))
 
         time_elapsed = t_b-t_a
+
+        return  routes
 
     def  run_route_selection( self,gp_ps,obs,dlnk_winds_flat,xlnk_winds,obj_weights):
 
@@ -122,6 +127,17 @@ class GlobalPlannerRunner:
 
                 routes,obs,stats,time_elapsed = self.run_route_selection(gp_ps,obs,dlnk_winds_flat,xlnk_winds,obj_weights)
 
+                print ('obs.data_vol, total dlnk dv, ratio')
+                print (obs.data_vol,sum(dr.data_vol for dr in routes),sum(dr.data_vol for dr in routes)/obs.data_vol)
+                print ('min latency, ave latency, max latency')
+                latencies = [(rt.route[-1].end - rt.route[0].end).total_seconds()/60 for rt in  routes]
+                if len(latencies) > 0: 
+                    print (np.min( latencies),np.mean( latencies),np.max( latencies))
+                else:
+                    print('no routes found')
+                print ('time_elapsed')
+                print (time_elapsed)
+
                 all_routes.append ( routes)
                 all_routes_obs.append ( obs)
                 all_stats.append ( stats)
@@ -129,11 +145,11 @@ class GlobalPlannerRunner:
 
                 obs_indx +=1
 
-                if obs_indx >= 1:
-                    break
+            #     if obs_indx >= 2:
+            #         break
 
-            if obs_indx >= 1:
-                break
+            # if obs_indx >= 2:
+            #     break
 
         return all_routes,all_routes_obs,all_stats,route_times_s,obs_indx
 
@@ -235,6 +251,97 @@ class GlobalPlannerRunner:
         weights_tups = zip(total_dv_weights,num_paths_sel_weights,latency_sf_weights)
         self.gp_plot.plot_route_latdv_pareto(all_routes,weights_tups,'plots/obs_winds_20_6_pareto.pdf')
 
+    def plot_route_selection_results ( self,obs_routes,dlnk_winds_flat,xlnk_winds_flat):
+
+        for rts_indx, routes in enumerate (obs_routes):
+
+            # TODO:  this stuff needs to be  changed
+            sel_obs_winds_flat, sel_dlnk_winds_flat, \
+            sel_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind = self.io_proc.extract_flat_windows (routes)
+
+            obs = None
+            for sat_indx in  range (self.general_params['num_sats']):
+                for obs in sel_obs_winds_flat[sat_indx]:
+                    if obs:
+                        break
+
+            sats_to_include =  range (self.general_params['num_sats'])
+            # sats_to_include = [0,9,21,22,23]
+
+            #  plot the selected down links and cross-links
+            self.gp_plot.plot_winds(
+                sats_to_include,
+                sel_obs_winds_flat,
+                dlnk_winds_flat,
+                sel_dlnk_winds_flat, 
+                xlnk_winds_flat,
+                sel_xlnk_winds_flat,
+                route_indcs_by_wind,
+                obs.start,
+                obs.start + timedelta( seconds= self.route_selection_params['wind_filter_duration_s']),
+                # self.general_params['start_utc_dt'],
+                # self.general_params['start_utc_dt'] + timedelta( seconds= self.route_selection_params['wind_filter_duration_s']),
+                # self.general_params['end_utc_dt']-timedelta(minutes=200),
+                plot_title = 'Route Plot', 
+                plot_size_inches = (18,12),
+                plot_include_labels = self.route_selection_params['plot_include_labels'],
+                show= False,
+                fig_name='plots/obs_winds_20_6_rts{0}.pdf'.format (rts_indx)
+            )
+
+
+    def  plot_activity_scheduling_results ( self,obs_routes,routes):
+
+        # do a bunch of stuff to extract the windows from all of the routes as indexed by observation
+        #  start
+        sel_obs_winds_flat = [set() for  sat_indx  in range  (self.general_params['num_sats'])]
+        sel_dlnk_winds_flat = [set() for sat_indx  in range (self.general_params['num_sats'])]
+        sel_xlnk_winds_flat = [set() for sat_indx  in range (self.general_params['num_sats'])]        
+
+        for rts_indx, rts in enumerate (obs_routes):
+            obs_winds_rt, dlnk_winds_rt, \
+            xlnk_winds_rt, _, _ = self.io_proc.extract_flat_windows (rts)
+
+            for sat_indx in range  (self.general_params['num_sats']):
+                [sel_obs_winds_flat[sat_indx] .add( wind)  for wind in obs_winds_rt[sat_indx]]
+                [sel_dlnk_winds_flat[sat_indx] .add(wind ) for wind in dlnk_winds_rt[sat_indx]]
+                [sel_xlnk_winds_flat[sat_indx] .add(wind ) for wind in xlnk_winds_rt[sat_indx]]
+
+        for sat_indx in range  (self.general_params['num_sats']):
+            sel_obs_winds_flat[sat_indx] = list(sel_obs_winds_flat[sat_indx])
+            sel_dlnk_winds_flat[sat_indx] = list(sel_dlnk_winds_flat[sat_indx])
+            sel_xlnk_winds_flat[sat_indx] = list(sel_xlnk_winds_flat[sat_indx])
+            sel_obs_winds_flat[sat_indx].sort(key=lambda x: x.start)
+            sel_dlnk_winds_flat[sat_indx].sort(key=lambda x: x.start)
+            sel_xlnk_winds_flat[sat_indx].sort(key=lambda x: x.start)
+        # end
+
+        sched_obs_winds_flat, sched_dlnk_winds_flat, \
+        sched_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind = self.io_proc.extract_flat_windows (routes)
+
+        sats_to_include =  range (self.general_params['num_sats'])
+        # sats_to_include = [0,9,21,22,23]
+
+
+        #  plot the selected down links and cross-links
+        self.gp_plot.plot_winds(
+            sats_to_include,
+            sel_obs_winds_flat,
+            sched_obs_winds_flat,
+            sel_dlnk_winds_flat,
+            sched_dlnk_winds_flat, 
+            sel_xlnk_winds_flat,
+            sched_xlnk_winds_flat,
+            route_indcs_by_wind,
+            self.general_params['start_utc_dt'],
+            # self.general_params['start_utc_dt'] + timedelta( seconds= self.route_selection_params['wind_filter_duration_s']),
+            self.general_params['end_utc_dt'],
+            plot_title = 'Scheduled Activities',
+            plot_size_inches = (18,12),
+            plot_include_labels = self.activity_scheduling_params['plot_include_labels'],
+            show=  False,
+            fig_name='plots/scheduled_3.pdf'
+        )
 
     def run( self):
 
@@ -258,70 +365,39 @@ class GlobalPlannerRunner:
 
         #  if  we are loading from file, do that
         if self.pickle_params['unpickle_pre_route_selection']:
-            all_routes,all_routes_obs,all_stats,route_times_s,obs_indx = self.unpickle_stuff()
+            obs_routes,all_routes_obs,all_stats,route_times_s,obs_indx = self.unpickle_stuff()
 
         #  otherwise run route selection
         else:
-            all_routes,all_routes_obs,all_stats,route_times_s  =  self.run_nominal_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
-            # all_routes,all_routes_obs,all_stats,route_times_s, obs_indx, weights_tups  =  self.run_test_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
+            obs_routes,all_routes_obs,all_stats,route_times_s, obs_indx  =  self.run_nominal_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
+            # obs_routes,all_routes_obs,all_stats,route_times_s, obs_indx, weights_tups  =  self.run_test_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
 
         if self.pickle_params['pickle_route_selection_results']:
-            self.pickle_stuff(all_routes,all_routes_obs,all_stats,route_times_s,obs_indx)
+            self.pickle_stuff(obs_routes,all_routes_obs,all_stats,route_times_s,obs_indx)
         
         #################################
         #  activity scheduling stage
         #################################
 
         #  explicitly validate routes 
-        # for routes in all_routes:
+        # for routes in obs_routes:
         #     for dr in routes:
         #         dr.validate_route()
 
 
-        self.run_nominal_activity_scheduling(all_routes)
+        scheduled_routes = self.run_nominal_activity_scheduling(obs_routes)
 
         #################################
         #   output stage
         #################################
         
 
+        if self.route_selection_params['plot_route_selection_results']:
+            self.plot_route_selection_results (obs_routes,dlnk_winds_flat,xlnk_winds_flat)
 
-        if self.plot_params['plot_all_routes']:
-            for rts_indx, routes in enumerate (all_routes):
-
-                # TODO:  this stuff needs to be  changed
-                sel_obs_winds_flat, sel_dlnk_winds_flat, \
-                sel_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind = self.io_proc.extract_flat_windows (routes)
-
-                obs = None
-                for sat_indx in  range (self.general_params['num_sats']):
-                    for obs in sel_obs_winds_flat[sat_indx]:
-                        if obs:
-                            break
-
-                sats_to_include =  range (self.general_params['num_sats'])
-                # sats_to_include = [0,9,21,22,23]
-
-                #  plot the selected down links and cross-links
-                self.gp_plot.plot_winds(
-                    sats_to_include,
-                    sel_obs_winds_flat,
-                    dlnk_winds_flat,
-                    sel_dlnk_winds_flat, 
-                    xlnk_winds_flat,
-                    sel_xlnk_winds_flat,
-                    route_indcs_by_wind,
-                    obs.start,
-                    obs.start + timedelta( seconds= self.route_selection_params['wind_filter_duration_s']),
-                    # self.general_params['start_utc_dt'],
-                    # self.general_params['start_utc_dt'] + timedelta( seconds= self.route_selection_params['wind_filter_duration_s']),
-                    # self.general_params['end_utc_dt']-timedelta(minutes=200),
-                    plot_title = 'Route Plot', 
-                    plot_size_inches = (18,12),
-                    plot_include_labels = self.plot_params['plot_include_labels'],
-                    show= False,
-                    fig_name='plots/obs_winds_20_6_rts{0}.pdf'.format (rts_indx)
-                )
+        if self.activity_scheduling_params['plot_activity_scheduling_results']:
+            self.plot_activity_scheduling_results(obs_routes,scheduled_routes)
+          
 
         outputs = None
         # outputs= self.io_proc.make_sat_history_outputs (sel_obs_winds_flat, sel_xlnk_winds_flat, sel_dlnk_winds_flat, link_info_by_wind)

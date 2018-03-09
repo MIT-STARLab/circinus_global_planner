@@ -230,7 +230,7 @@ class GPProcessorIO():
 
         return dlink_winds,dlink_winds_flat, dlnk_window_id
 
-    def extract_flat_windows ( self, routes):
+    def extract_flat_windows ( self, routes_flat):
         all_obs = set ()
         all_xlnk = set ()
         all_dlnk = set ()
@@ -241,7 +241,7 @@ class GPProcessorIO():
         #  dictionary of route indices, using windows as keys
         route_indcs_by_wind  = {}
 
-        for dr_indx, dr in enumerate (routes):
+        for dr_indx, dr in enumerate (routes_flat):
             for wind in dr.route:
 
                 if type (wind)  == ObsWindow:
