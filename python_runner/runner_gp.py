@@ -18,11 +18,14 @@ import numpy as np
 #  local repo includes. todo:  make this less hackey
 sys.path.append ('..')
 from circinus_tools  import time_tools as tt
+from circinus_tools  import io_tools
 from gp_tools.input_processing import GPProcessorIO
 from gp_tools.gp_plotting import GPPlotting
 from gp_tools.gp_route_selection import GPDataRouteSelection
 from gp_tools.gp_activity_scheduling import GPActivityScheduling
 
+# TODO: remove this line if not needed
+from gp_tools.custom_activity_window import ObsWindow
 
 REPO_BASE = os.path.abspath(os.pardir)  # os.pardir aka '..'
 
@@ -71,12 +74,15 @@ class GlobalPlannerRunner:
         # flatten the list of all routes, which currently has nested lists for each observation
         routes_flat = [item for sublist in all_routes for item in sublist]
 
+        print('make activity scheduling model')
         gp_as.make_model (routes_flat, verbose = True)
         stats =gp_as.get_stats (verbose = True)
+        print('solve activity scheduling')
         t_a = time.time()
         gp_as.solve ()
         t_b = time.time()
         # gp_as.print_sol ()
+        print('extract_routes')
         routes = gp_as. extract_utilized_routes ( verbose  = False)
 
         print('len(routes)')
@@ -86,7 +92,25 @@ class GlobalPlannerRunner:
 
         return  routes
 
-    def  run_route_selection( self,gp_ps,obs,dlnk_winds_flat,xlnk_winds,obj_weights):
+    def run_route_selection(self,gp_ps,obs,dlnk_winds_flat,xlnk_winds,obj_weights,dr_uid):
+        """[summary]
+        
+        [description]
+        :param gp_ps: [description]
+        :type gp_ps: [type]
+        :param obs: [description]
+        :type obs: [type]
+        :param dlnk_winds_flat: [description]
+        :type dlnk_winds_flat: [type]
+        :param xlnk_winds: [description]
+        :type xlnk_winds: [type]
+        :param obj_weights: [description]
+        :type obj_weights: [type]
+        :param dr_uid: globally unique data route ID across all data routes for all observations
+        :type dr_uid: int
+        :returns: [description]
+        :rtype: {[type]}
+        """
 
         gp_ps.make_model (obs,dlnk_winds_flat,xlnk_winds, obj_weights, verbose = True)
         stats =gp_ps.get_stats (verbose = True)
@@ -94,11 +118,11 @@ class GlobalPlannerRunner:
         gp_ps.solve ()
         t_b = time.time()
         gp_ps.print_sol ()
-        routes = gp_ps. extract_routes ( verbose  = True)
+        routes,dr_uid = gp_ps. extract_routes ( dr_uid,verbose  = True)
 
         time_elapsed = t_b-t_a
 
-        return routes,obs,stats,time_elapsed
+        return routes,obs,stats,time_elapsed,dr_uid
 
     def run_nominal_route_selection( self,obs_winds,dlnk_winds_flat,xlnk_winds):
         gp_ps = GPDataRouteSelection ( dict(list (self.general_params.items()) + list (self.route_selection_params. items())))
@@ -117,6 +141,10 @@ class GlobalPlannerRunner:
         all_routes_obs =[]
         all_stats =[]
         route_times_s =[]
+
+        # this should be unique across all data routes
+        dr_uid = 0
+
         for sat_indx in range( self.general_params['num_sats']):
             for  index, obs in  enumerate ( obs_winds[sat_indx]):
 
@@ -125,7 +153,7 @@ class GlobalPlannerRunner:
                 print ("obs")
                 print ( index)
 
-                routes,obs,stats,time_elapsed = self.run_route_selection(gp_ps,obs,dlnk_winds_flat,xlnk_winds,obj_weights)
+                routes,obs,stats,time_elapsed,dr_uid = self.run_route_selection(gp_ps,obs,dlnk_winds_flat,xlnk_winds,obj_weights,dr_uid)
 
                 print ('obs.data_vol, total dlnk dv, ratio')
                 print (obs.data_vol,sum(dr.data_vol for dr in routes),sum(dr.data_vol for dr in routes)/obs.data_vol)
@@ -293,6 +321,7 @@ class GlobalPlannerRunner:
     def  plot_activity_scheduling_results ( self,obs_routes,routes):
 
         # do a bunch of stuff to extract the windows from all of the routes as indexed by observation
+        # note that this stuff is not thewindows from the scheduled routes, but rather the windows from all the route selected in route selection
         #  start
         sel_obs_winds_flat = [set() for  sat_indx  in range  (self.general_params['num_sats'])]
         sel_dlnk_winds_flat = [set() for sat_indx  in range (self.general_params['num_sats'])]
@@ -317,7 +346,18 @@ class GlobalPlannerRunner:
         # end
 
         sched_obs_winds_flat, sched_dlnk_winds_flat, \
-        sched_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind = self.io_proc.extract_flat_windows (routes)
+        sched_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind = self.io_proc.extract_flat_windows (routes,copy_windows=True)
+
+        #  update the window beginning and end times based upon their amount of scheduled data volume
+        for sat_indx in range(self.general_params['num_sats']):
+            for wind in sched_obs_winds_flat[sat_indx] + sched_dlnk_winds_flat[sat_indx] + sched_xlnk_winds_flat[sat_indx]:
+                print(wind)
+                print(wind.data_vol)
+                print(wind.scheduled_data_vol)
+                if not  type (wind) == ObsWindow:
+                    print(link_info_by_wind[wind])
+                    print(route_indcs_by_wind[wind])
+                wind.update_duration_from_scheduled_dv ()
 
         sats_to_include =  range (self.general_params['num_sats'])
         # sats_to_include = [0,9,21,22,23]
@@ -340,24 +380,55 @@ class GlobalPlannerRunner:
             plot_size_inches = (18,12),
             plot_include_labels = self.activity_scheduling_params['plot_include_labels'],
             show=  False,
-            fig_name='plots/scheduled_3.pdf'
+            fig_name='plots/test.pdf'
         )
+
+    def validate_unique_windows( self,obs_winds,dlnk_winds_flat,xlnk_winds):
+        all_wind_ids = []
+
+        for indx in range(len(obs_winds)):
+            for wind in obs_winds[indx]:
+                if wind.window_ID in all_wind_ids:
+                    raise Exception('Found a duplicate unique window ID where it should not have been possible')
+                all_wind_ids.append(wind.window_ID)
+
+        for indx in range(len(dlnk_winds_flat)):
+            for wind in dlnk_winds_flat[indx]:
+                if wind.window_ID in all_wind_ids:
+                    raise Exception('Found a duplicate unique window ID where it should not have been possible')
+                all_wind_ids.append(wind.window_ID)
+
+        for indx in range(len(xlnk_winds)):
+            for indx_2 in range(len(xlnk_winds[indx])):
+                for wind in xlnk_winds[indx][indx_2]:
+                    if wind.window_ID in all_wind_ids:
+                        raise Exception('Found a duplicate unique window ID where it should not have been possible')
+                    all_wind_ids.append(wind.window_ID)
 
     def run( self):
 
-        # parse the inputs into activity windows
-        obs_winds, obs_window_id =self.io_proc.import_obs_winds()
-        dlnk_winds, dlnk_winds_flat, dlnk_window_id =self.io_proc.import_dlnk_winds()
-        xlnk_winds, xlnk_winds_flat, xlnk_window_id =self.io_proc.import_xlnk_winds()
+        #################################
+        #  parse inputs, if desired
+        #################################
 
-        # todo:  probably ought to delete the input times and rates matrices to free up space
+        if not self.pickle_params['unpickle_pre_route_selection']:
+            # parse the inputs into activity windows
+            window_uid = 0
+            obs_winds, window_uid =self.io_proc.import_obs_winds(window_uid)
+            dlnk_winds, dlnk_winds_flat, window_uid =self.io_proc.import_dlnk_winds(window_uid)
+            xlnk_winds, xlnk_winds_flat, window_uid =self.io_proc.import_xlnk_winds(window_uid)
 
-        print('obs_winds')
-        print(sum([len(p) for p in obs_winds]))
-        print('dlnk_win')
-        print(sum([len(p) for p in dlnk_winds]))
-        print('xlnk_win')
-        print(sum([len(xlnk_winds[i][j]) for i in  range( self.general_params['num_sats']) for j in  range( self.general_params['num_sats']) ]))
+            # important to check this because window unique IDs are used as hashes in dictionaries in the scheduling code
+            self.validate_unique_windows(obs_winds,dlnk_winds_flat,xlnk_winds)
+
+            # todo:  probably ought to delete the input times and rates matrices to free up space
+
+            print('obs_winds')
+            print(sum([len(p) for p in obs_winds]))
+            print('dlnk_win')
+            print(sum([len(p) for p in dlnk_winds]))
+            print('xlnk_win')
+            print(sum([len(xlnk_winds[i][j]) for i in  range( self.general_params['num_sats']) for j in  range( self.general_params['num_sats']) ]))
 
         #################################
         #  route selection stage
@@ -391,6 +462,7 @@ class GlobalPlannerRunner:
         #   output stage
         #################################
         
+        print('output stage')
 
         if self.route_selection_params['plot_route_selection_results']:
             self.plot_route_selection_results (obs_routes,dlnk_winds_flat,xlnk_winds_flat)
@@ -430,6 +502,17 @@ class PipelineRunner:
             gp_general_params['num_gs'] = orbit_prop_inputs['gs_params']['num_stations']
             gp_general_params['num_targets'] = orbit_prop_inputs['obs_params']['num_targets']
             gp_general_params['pl_data_rate'] = orbit_prop_inputs['sat_params']['payload_data_rate_Mbps']
+            gp_general_params['power_params'], all_sat_ids1 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['power_params'])
+            gp_general_params['initial_state'], all_sat_ids2 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['initial_state'])
+            #  check if  we saw the same list of satellite IDs from each unpacking. if not that's a red flag that the inputs could be wrongly specified
+            if all_sat_ids1 != all_sat_ids2:
+                raise Exception('Saw differing sat ID orders')
+
+            #  grab the list for satellite ID order.  if it's "default", we will create it and save it for future use here
+            sat_id_order=orbit_prop_inputs['sat_params']['sat_id_order']
+            sat_id_order = io_tools.make_and_validate_sat_id_order(sat_id_order,gp_general_params['num_sats'],all_sat_ids1)
+            gp_general_params['sat_id_order'] = sat_id_order
+
 
         if gp_params_inputs['version'] == "0.1": 
             gp_params['other_params'] = gp_params_inputs['other_params']

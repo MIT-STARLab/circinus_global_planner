@@ -25,12 +25,13 @@
             "simple": 0
         },
         "plot_include_labels":  false,
-        "plot_activity_scheduling_results":  true
+        "plot_activity_scheduling_results":  true,
+        "resource_delta_t_s": 10
     },
     "pickle_params":  {
-        "pickle_route_selection_results":          false,
-        "unpickle_pre_route_selection":           true,
-        "route_selection_pickle": "pickles/walker30_all_obs.pkl"
+        "pickle_route_selection_results":              false,
+        "unpickle_pre_route_selection":               true,
+        "route_selection_pickle": "pickles/walker30_all_obs_30smax_better.pkl"
     },
     "plot_params":  {
         "plot_fig_extension":  "pdf",

@@ -13,6 +13,8 @@ from pyomo import opt  as po
 
 from .custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow
 from .routing_objects import DataRoute
+from .schedule_objects import Dancecard
+from circinus_tools  import io_tools
 
 class GPActivityScheduling():
     """docstring for GP activity scheduling"""
@@ -27,6 +29,35 @@ class GPActivityScheduling():
         self.min_path_dv =params['min_path_dv_Mb']
         self.num_sats=params['num_sats']
         self.transition_time_s=params['transition_time_s']
+        self.start_utc_dt  =params['start_utc_dt']
+        self.end_utc_dt  =params['end_utc_dt']
+        self.resource_delta_t_s  =params['resource_delta_t_s']
+        sat_id_order= params['sat_id_order']
+
+        #  sort these now in case they weren't before
+        self.power_params = io_tools.sort_input_params_by_sat_indcs(params['power_params'],sat_id_order)
+        self.initial_state = io_tools.sort_input_params_by_sat_indcs(params['initial_state'],sat_id_order)
+
+        # these lists are in order of satellite index because we've sorted 
+        self.sats_init_estate_Wh = [sat_state['batt_e_Wh'] for sat_state in self.initial_state]
+        self.sats_emin_Wh = [p_params['battery_storage_Wh']['e_min'][p_params['battery_option']] for p_params in self.power_params]
+        self.sats_emax_Wh = [p_params['battery_storage_Wh']['e_max'][p_params['battery_option']] for p_params in self.power_params]
+
+        self.sats_edot_by_act_W = []
+        for p_params in self.power_params:
+            sat_edot_by_act = {}
+            sat_edot_by_act['base'] = p_params['power_consumption_W']['base'][p_params['base_option']]
+            sat_edot_by_act['obs'] = p_params['power_consumption_W']['obs'][p_params['obs_option']]
+            sat_edot_by_act['dlnk'] = p_params['power_consumption_W']['dlnk'][p_params['dlnk_option']]
+            sat_edot_by_act['xlnk'] = p_params['power_consumption_W']['xlnk'][p_params['xlnk_option']]
+            sat_edot_by_act['charging'] = p_params['power_consumption_W']['orbit_insunlight_average_charging'][p_params['charging_option']]
+            self.sats_edot_by_act_W.append (sat_edot_by_act)
+
+        self.act_type_map = {
+            ObsWindow: 'obs',
+            DlnkWindow: 'dlnk',
+            XlnkWindow: 'xlnk'
+        }
 
     def get_stats(self,verbose=True):
         stats = {}
@@ -168,6 +199,13 @@ class GPActivityScheduling():
 
                 act.ave_data_rate =  act.data_vol / ( act.end - act.start).total_seconds ()
 
+        # construct a set of dance cards for every satellite, 
+        # each of which keeps track of all of the activities of satellite 
+        # can possibly execute at any given time slice delta T. 
+        activity_dancecards = [Dancecard(self.start_utc_dt,self.end_utc_dt,self.resource_delta_t_s) for sat_indx in range (self.num_sats)]
+        for sat_indx in range (self.num_sats): 
+            activity_dancecards[sat_indx].add_winds_to_dancecard(sat_acts[sat_indx])
+
         self.all_acts_indcs = all_acts_indcs
         self.obs_act_indcs = obs_act_indcs
         self.link_act_indcs = link_act_indcs
@@ -176,6 +214,12 @@ class GPActivityScheduling():
         model.paths = pe.Set(initialize= range(len(routes_flat)))
         #  subscript for each activity a
         model.acts = pe.Set(initialize= all_acts_indcs)
+        #  subscript for each satellite
+        model.sats = pe.Set(initialize=  range ( self.num_sats))
+        
+        #  NOTE: we assume the same time system for every satellite
+        model.timesteps = pe.Set(initialize=  activity_dancecards[0].get_timestep_indices ())
+
         #  unique indices for observation and link acts
         model.obs_acts = pe.Set(initialize= obs_act_indcs)
         model.link_acts = pe.Set(initialize= link_act_indcs)
@@ -195,6 +239,13 @@ class GPActivityScheduling():
         model.par_path_subscrs_by_obs_act = pe.Param(model.obs_acts,initialize =path_indcs_by_obs_act)
         model.par_path_subscrs_by_act = pe.Param(model.acts,initialize =path_indcs_by_act)
 
+        model.par_resource_delta_t = pe.Param (initialize= self.resource_delta_t_s) 
+        model.par_sats_estore_initial = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_init_estate_Wh)})
+        model.par_sats_estore_min = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_emin_Wh)})
+        model.par_sats_estore_max = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_emax_Wh)})
+        model.par_sats_edot_by_act = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_edot_by_act_W)})
+
+
         ##############################
         #  Make variables
         ##############################
@@ -208,19 +259,15 @@ class GPActivityScheduling():
         model.var_path_indic  = pe.Var (model.paths, within = pe.Binary)
         model.var_act_indic  = pe.Var (model.acts, within = pe.Binary)
         
+        # satellite energy storage
+        model.var_sats_estore  = pe.Var (model.sats,  model.timesteps,  within = pe.NonNegativeReals)
+        
 
         ##############################
         #  Make constraints
         ##############################
 
         # TODO: renumber  these with the final numbering
-
-        # def c1_rule( model,a):
-        #     return (model.par_link_dv[a]*model.var_activity_utilization[a] -
-        #                 sum(model.par_path_dv[p]*model.var_path_utilization[p] 
-        #                     for p in model.par_path_subscrs_by_link_act[a]) 
-        #             >= 0)
-        # model.c1 =pe.Constraint ( model.link_acts,  rule=c1_rule)
 
         def c1_rule( model,a):
             return (model.par_act_dv[a]*model.var_activity_utilization[a] -
@@ -237,6 +284,7 @@ class GPActivityScheduling():
             return model.var_act_indic[a] >=  model.var_activity_utilization[a]
         model.c3 =pe.Constraint ( model.acts,  rule=c3_rule)        
 
+        #  activity overlap constraints [4],[5]
         model.c4  = pe.ConstraintList()
         model.c5  = pe.ConstraintList()
         for sat_indx in range (self.num_sats):
@@ -267,13 +315,59 @@ class GPActivityScheduling():
                         time_adjust_2 = model.par_act_dv[act2_uindx]*model.var_activity_utilization[act2_uindx]/2/act2.ave_data_rate
                         model.c5.add( center_time_diff - time_adjust_1 - time_adjust_2 >= self.transition_time_s['simple'])
 
-        # def c3b_rule( model,o):
-        #     return (sum(model.par_path_dv[p]*model.var_path_utilization[p] 
-        #                 for p in model.par_path_subscrs_by_obs_act[o]) 
-        #            <= model.par_obs_dv[o])
-        # model.c3b =pe.Constraint ( model.obs_acts,  rule=c3b_rule)
+        #  energy constraints [6]
+        model.c6  = pe.ConstraintList()
+        for sat_indx in range (self.num_sats): 
 
-        
+            # timestep serves as an index into the satellite activity dance cards
+            for ts_indx, timestep in enumerate(model.timesteps):
+                #  constraining first time step to initial energy storage
+                #  continue for loop afterwards because no geq/leq constraints needed for this index
+                if ts_indx == 0:
+                    model.c6.add( model.var_sats_estore[sat_indx,timestep] ==  model.par_sats_estore_initial[sat_indx])
+                    continue 
+
+                #  minimum and maximum storage constraints
+                model.c6.add( model.var_sats_estore[sat_indx,timestep] >= model.par_sats_estore_min[sat_indx])
+                model.c6.add( model.var_sats_estore[sat_indx,timestep] <= model.par_sats_estore_max[sat_indx])
+
+                # determine activity energy consumption
+                activity_delta_e = 0 
+                #  have to subtract 1 here because we're looking at the time slice between the last time step and the current timestep
+                activities = activity_dancecards[sat_indx].get_objects_at_index(timestep-1)
+                for act in activities:
+                    act_uindx = all_acts_by_obj[act]
+                    activity_delta_e += (
+                        model.par_sats_edot_by_act[sat_indx][self.act_type_map[type(act)]] 
+                        * model.var_activity_utilization[act_uindx]
+                        * model.par_resource_delta_t
+                    )
+
+                # determine whether or not the satellite is in sunlight and thus charging
+                charging = True
+                charging_delta_e = model.par_sats_edot_by_act[sat_indx]['charging']*model.par_resource_delta_t if charging else 0
+
+                #  base-level satellite energy usage (not including additional activities)
+                base_delta_e = model.par_sats_edot_by_act[sat_indx]['base']*model.par_resource_delta_t
+
+                # maximum bound of energy at current time step based on last time step
+                model.c6.add( model.var_sats_estore[sat_indx,timestep] <= 
+                    model.var_sats_estore[sat_indx,timestep-1]
+                    + activity_delta_e
+                    + charging_delta_e
+                    + base_delta_e
+                )
+
+                # maximum bound of energy at current time step based on last time step
+                model.c6.add( model.var_sats_estore[sat_indx,timestep] >= 
+                    model.var_sats_estore[sat_indx,timestep-1]
+                    + activity_delta_e
+                    + base_delta_e
+                )
+
+
+
+
 
         ##############################
         #  Make objective

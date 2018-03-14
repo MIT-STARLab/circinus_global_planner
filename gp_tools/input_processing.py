@@ -6,7 +6,7 @@
 #
 
 import collections 
-from copy import copy
+from copy import copy, deepcopy
 
 from circinus_tools  import time_tools as tt
 from circinus_tools  import  constants as const
@@ -48,12 +48,12 @@ class GPProcessorIO():
 
 
 
-    def merge_sat_obs_windows(self,obs_window_list,window_id):
+    def merge_sat_obs_windows(self,obs_window_list,next_window_uid):
         '''
         Use obs_window_list to create a new list of non-overlapping obs windows, in which each obs activity includes a list of ALL targets being observed at all times.
 
         :param obs_window_list: the old list of possibly-overlapping obs windows
-        :param window_id: latest window ID for obs windows, merely for convenience of IDing the windows
+        :param next_window_uid: unique window ID for unique identification of the windows
         :return: new obs list with non-overlapping obs events that replaces input obs_window_list
         '''
 
@@ -91,17 +91,17 @@ class GPProcessorIO():
 
                 if len(curr_id_list) > 0:  # if it's not empty
                     # create a new observation based on the previous set of targets
-                    new_obs_window_list.append(ObsWindow(window_id,sat_indx,curr_id_list,sat_target_indx=sat_target_indx,is_urgent=False,start=obs_start,end=obs_end))
-                    window_id += 1
+                    new_obs_window_list.append(ObsWindow(next_window_uid,sat_indx,curr_id_list,sat_target_indx=sat_target_indx,is_urgent=False,start=obs_start,end=obs_end))
+                    next_window_uid += 1
                     sat_target_indx += 1
 
                 # refresh target list
                 curr_id_list = target_ID_list
                 obs_start = copy(obs_end)
 
-        return new_obs_window_list
+        return new_obs_window_list,next_window_uid
 
-    def import_obs_winds( self):
+    def import_obs_winds( self,next_window_uid=0):
         """  Turn observation times into observation windows
 
         Parse input data structure to create observation windows. Uses
@@ -111,7 +111,6 @@ class GPProcessorIO():
         :rtype: {[type]}
         """
         obs_winds = []
-        obs_window_id = 0
         for sat_indx, all_sat_obs in enumerate(self.obs_times):
             sat_obs_winds = []
 
@@ -130,23 +129,22 @@ class GPProcessorIO():
                     else:
                         raise NotImplementedError
 
-                    sat_obs_winds.append(ObsWindow(obs_window_id,sat_indx,[targ_indx],sat_target_indx=obs_indx,is_urgent=False,start= start,end= end))
-                    obs_window_id+=1
+                    sat_obs_winds.append(ObsWindow(next_window_uid,sat_indx,[targ_indx],sat_target_indx=obs_indx,is_urgent=False,start= start,end= end))
+                    next_window_uid+=1
 
             obs_winds.append(sat_obs_winds)
 
         for sat_indx in range(self.num_sats):
-             new_windows = self.merge_sat_obs_windows(obs_winds[sat_indx],obs_window_id)
+             new_windows,next_window_uid = self.merge_sat_obs_windows(obs_winds[sat_indx],next_window_uid)
              for wind in new_windows:
                  wind.calc_data_vol(self.pl_data_rate)
              obs_winds[sat_indx] = new_windows
 
-        return obs_winds, obs_window_id
+        return obs_winds, next_window_uid
 
-    def import_xlnk_winds( self, sort= True):
+    def import_xlnk_winds( self, next_window_uid=0, sort= True):
         xlink_winds_flat = [[] for i in range(self.num_sats)]
         xlink_winds = [[[] for j in range(self.num_sats)] for i in range(self.num_sats)]
-        xlnk_window_id = 0
         for sat_indx in range(self.num_sats):
             # xlnk_times  matrix should be symmetrical, so there's no reason to look at lower left  triangle
             for xsat_indx in range(sat_indx+1,self.num_sats):
@@ -162,7 +160,7 @@ class GPProcessorIO():
                         raise NotImplementedError
 
                     # create a new window 
-                    new_wind = XlnkWindow(xlnk_window_id,sat_indx,xsat_indx,xlnk_indx, start, end)
+                    new_wind = XlnkWindow(next_window_uid,sat_indx,xsat_indx,xlnk_indx, start, end)
 
                     # figure out the data volume for this window
                     xlnk_rates_mat =  self.xlnk_rates[new_wind.sat_indx][new_wind.xsat_indx][new_wind.sat_xsat_indx]
@@ -176,20 +174,19 @@ class GPProcessorIO():
                         xlink_winds_flat[sat_indx].append(new_wind)
                         xlink_winds_flat[xsat_indx].append(new_wind)
 
-                    xlnk_window_id+=1
+                    next_window_uid+=1
 
             # sort the xlink windows for convenience
             if sort:
                 xlink_winds_flat[sat_indx].sort(key=lambda x: x.start)
 
 
-        return  xlink_winds, xlink_winds_flat, xlnk_window_id
+        return  xlink_winds, xlink_winds_flat, next_window_uid
 
-    def import_dlnk_winds( self,sort= True):
+    def import_dlnk_winds( self,next_window_uid=0,sort= True):
         # Import sat dlnk windows
         dlink_winds_flat = []
         dlink_winds = [[[] for j in range(self.num_gs)] for i in range(self.num_sats)]
-        dlnk_window_id = 0
         for sat_indx, all_sat_dlnk in enumerate( self.dlnk_times):
                         
             sat_dlnk_winds = []
@@ -209,7 +206,7 @@ class GPProcessorIO():
                     else:
                         raise NotImplementedError
 
-                    new_wind = DlnkWindow(dlnk_window_id,sat_indx,gs_indx,dlnk_indx,start, end)
+                    new_wind = DlnkWindow(next_window_uid,sat_indx,gs_indx,dlnk_indx,start, end)
 
                     new_wind.rates_mat =  self.dlnk_rates[new_wind.sat_indx][new_wind.gs_ID][new_wind.sat_gs_indx]
                     new_wind.set_data_vol_and_refresh_times()
@@ -219,7 +216,7 @@ class GPProcessorIO():
                         dlink_winds[sat_indx][gs_indx].append (new_wind) 
                         sat_dlnk_winds.append(new_wind)
 
-                    dlnk_window_id+=1
+                    next_window_uid+=1
 
             # sort the downlink windows for convenience
             if sort:
@@ -228,12 +225,23 @@ class GPProcessorIO():
             dlink_winds_flat.append(sat_dlnk_winds)
 
 
-        return dlink_winds,dlink_winds_flat, dlnk_window_id
+        return dlink_winds,dlink_winds_flat, next_window_uid
 
-    def extract_flat_windows ( self, routes_flat):
-        all_obs = set ()
-        all_xlnk = set ()
-        all_dlnk = set ()
+    def extract_flat_windows( self, routes_flat,  copy_windows= False):
+        """ extracts all the activity windows used from a set of routes
+        
+        Note that if not using copy_windows, the input zwindows objects will be modified
+        :param routes_flat:  a flat list of all the routes scheduled
+        :type routes_flat: [list(routing_objects.DataRoute)]
+        :param copy_windows:  make a copy of the windows within the routes before modifying them, defaults to False
+        :type copy_windows: bool, optional
+        :returns: three lists, one for observations, one for downlinks and one for cross-links ( each one is a singly nested list with the nesting indexed by sat index),  a dictionary containing link info objects for each dlnk/xlnk window with keys being the dlnk and xlnk windows,  and a similar dictionary containing a list of data route indices for each dlnk/xlnk (specifies which data routes went through which window)
+        :rtype: {list(list() by sat_indx),list(list() by sat_indx),list(list() by sat_indx),dict(CommWindow: LinkInfo),dict(CommWindow: list()}
+        """
+
+        all_obs = []
+        all_xlnk = []
+        all_dlnk = []
 
         #  dictionary of named tuples that contain all of the information used for creating output link info.  keys are the window objects themselves
         link_info_by_wind = {}
@@ -241,32 +249,71 @@ class GPProcessorIO():
         #  dictionary of route indices, using windows as keys
         route_indcs_by_wind  = {}
 
+        def copy_choice(wind):
+            if copy_windows:
+                return deepcopy(wind)
+            else:
+                return wind
+
         for dr_indx, dr in enumerate (routes_flat):
             for wind in dr.route:
+                # copy the window before we make any changes to it, if so desired
+                wind = copy_choice(wind)
 
                 if type (wind)  == ObsWindow:
-                    all_obs.add (wind)
+                    if wind in all_obs:
+                        #  get the matching object ( see note above for all_xlnk)
+                        indx = all_obs.index(wind)
+                        original_wind = all_obs[indx]
+                        #  now we can update the schedule data volume on that original object
+                        original_wind.scheduled_data_vol += dr.scheduled_dv
+                    else:
+                        wind.scheduled_data_vol = dr.scheduled_dv
+                        all_obs. append (wind)
 
                 elif type (wind)  == XlnkWindow or type (wind)  == DlnkWindow:
-                    if type (wind)  == XlnkWindow: all_xlnk.add (wind)
-                    if type (wind)  == DlnkWindow: all_dlnk.add (wind)
+
+                    if type (wind)  == XlnkWindow:
+
+                        if wind in all_xlnk:
+                            #  if we reach here then we know that the hash of wind is in the list, but it's not going to be the same object if we have copied it. do some gymnastics to get the matching object that was already added to the list
+                            indx = all_xlnk.index(wind)
+                            original_wind = all_xlnk[indx]
+                            #  now we can update the schedule data volume on that original object
+                            original_wind.scheduled_data_vol += dr.scheduled_dv
+                        else:
+                            wind.scheduled_data_vol = dr.scheduled_dv
+                            all_xlnk. append (wind)
+
+                    if type (wind)  == DlnkWindow:
+                        if wind in all_dlnk:
+                            #  get the matching object ( see note above for all_xlnk)
+                            indx = all_dlnk.index(wind)
+                            original_wind = all_dlnk[indx]
+                            #  now we can update the schedule data volume on that original object
+                            original_wind.scheduled_data_vol += dr.scheduled_dv
+                        else:
+                            wind.scheduled_data_vol = dr.scheduled_dv
+                            all_dlnk. append (wind)
 
                     #  create link info for this window
                     if not wind in link_info_by_wind.keys (): 
-                        link_info_by_wind[wind]  = LinkInfo ([dr.ID], wind.data_vol, dr.data_vol )
+                        link_info_by_wind[wind]  = LinkInfo ([dr.ID], wind.data_vol, dr.scheduled_dv )
                     else:
+                        # note: don't have to grab the original window here because we're only using it as an index
                         link_info_by_wind[wind].data_routes.append ( dr.ID) 
-                        link_info_by_wind[wind].used_data_vol  +=  dr.data_vol 
+                        link_info_by_wind[wind].used_data_vol  +=  dr.scheduled_dv 
                     
                     #  add the route index  for this window,  initializing a list for the window if needed
                     if not wind in route_indcs_by_wind.keys (): 
                         route_indcs_by_wind[wind] = []
-                    route_indcs_by_wind[wind].append (dr_indx)
+                    route_indcs_by_wind[wind].append (dr.ID)
 
 
         obs_flat = [[] for k in range( self.num_sats)]
         xlnk_flat = [[] for k in range( self.num_sats)]
         dlnk_flat = [[] for k in range( self.num_sats)]
+
 
         for obs in all_obs: 
             obs_flat[obs.sat_indx].append(obs)

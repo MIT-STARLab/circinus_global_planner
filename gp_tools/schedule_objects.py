@@ -21,7 +21,7 @@ class Dancecard(object):
         # each index in dancecard represents a chunk of time, e.g. [1] is from start_time+tstep_sec*1 to start_time+tstep_sec*2
         num_timesteps = int(total_duration / tstep_sec)
 
-        # this "dancecard" stores the objects for the activities that are being executed at each timepoint (each index). Only one activity is possible at a given time
+        # this "dancecard" stores the objects for a given index
         self.dancecard = [[] for i in range(num_timesteps)]
 
         self.dancecard_start = dancecard_start
@@ -29,6 +29,25 @@ class Dancecard(object):
         self.tstep_sec = tstep_sec
         self.tstep_td = timedelta(seconds=tstep_sec)
         self.num_timesteps = num_timesteps
+
+    def get_timestep_indices ( self):
+        """ return the list of indices used for this dance card
+        
+        returns a list of indices that are valid for every given time step within this dance card. this is useful for doing other operations that need to refer to the same indices as this dance card
+        """
+        return  range (self.num_timesteps)
+
+    def get_objects_at_index(self,indxoi):
+        """ get objects stored in the dance card at an index
+        
+        gets the objects stored in the dance card during the time slice immediately following indxoi. To get the objects that were relevant for the period between the time represented by indxoi and the time represented by indxoi+1, use indxoi
+        :param indxoi:  index for the time slice of interest
+        :type indxoi: int
+        :returns: objects at index
+        :rtype: {list}
+        """
+
+        return self.dancecard[indxoi]
 
     @staticmethod
     def get_post_index_dancecard(toi, base_time, tstep_sec):

@@ -523,7 +523,7 @@ class GPDataRouteSelection():
             #         val  = varobject[index].value
             #         print (" ",index, val)
 
-    def extract_routes( self,verbose = False):
+    def extract_routes( self,dr_uid,verbose = False):
         #  note that routes are the same as paths
 
         selected_routes_by_index = {}
@@ -581,19 +581,18 @@ class GPDataRouteSelection():
 
         #  now make the actual data route objects
         selected_routes =[]
-        dr_id = 0
         for r in selected_routes_by_index. keys ():
             dr =  DataRoute (  
-                ID=  dr_id, 
+                ID=  dr_uid, 
                 route  = selected_routes_by_index[r],
                 window_start_sats=senses,
                 dv=route_dv_by_index[r]
             )
             selected_routes.append(dr)
-            dr_id += 1
+            dr_uid += 1
 
         if verbose:
             for dr in selected_routes:
                 print(dr.get_route_string ( time_base = self.start_utc_dt) )
 
-        return selected_routes
+        return selected_routes, dr_uid

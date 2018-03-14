@@ -20,7 +20,7 @@ class DataRoute(object):
         self.data_vol = dv
 
         #  the amount of capacity on the path that actually ends up scheduled for usage
-        self.scheduled_dv = None
+        self.scheduled_dv = const.UNASSIGNED
 
         self.sort_windows()   
 

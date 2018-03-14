@@ -14,7 +14,7 @@ class ObsWindow(ActivityWindow):
         '''
         An observation window. Can represent a window during which an activity can happen, or the actual activity itself
 
-        :param int window_ID: a unique ID for this obs window, for ease of tracking
+        :param int window_ID: a unique ID for this obs window, for hashing and comparing windows
         :param int sat_indx: index of the satellite
         :param list target_IDs: the set of target IDs that this observation is looking at
         :param int sat_target_indx: the index of this observation in the list of sat-target observations from gp_input_obs.mat
@@ -24,16 +24,13 @@ class ObsWindow(ActivityWindow):
         '''
 
         self.sat_indx = sat_indx
-        self.window_ID = window_ID
         self.target_IDs = target_IDs
         self.sat_target_indx = sat_target_indx
         self.data_pkts = []
         self.is_urgent = is_urgent
-        self.data_vol = const.UNASSIGNED
-        self.remaining_data_vol = const.UNASSIGNED
         self.unmodified_data_vol = const.UNASSIGNED
         self.collected_data_vol = 0
-        super(ObsWindow, self).__init__(start, end)
+        super(ObsWindow, self).__init__(start, end, window_ID)
 
     def print_self(self):
         print('ObsWindow')
@@ -62,17 +59,18 @@ class ObsWindow(ActivityWindow):
     def __repr__(self):
         return  "(ObsWindow id %d; %d, targs %s; %s,%s)" % (self.window_ID,self.sat_indx, str(self.target_IDs),self.start.isoformat (),self.end.isoformat())
 
+
 class CommWindow(ActivityWindow):
-    def __init__(self, start, end):
-        self.data_vol = const.UNASSIGNED
-        self.used_data_vol = const.UNASSIGNED
-        self.remaining_data_vol = const.UNASSIGNED
+    def __init__(self, start, end,window_ID):
+        
+        
         self.data_pkts = []
         # store initial start and end so we have them after start and end themselves get modified
         self.unmodified_start = start
         self.unmodified_end = end
         self.unmodified_data_vol = const.UNASSIGNED
-        super(CommWindow, self).__init__(start, end)
+        self.rates_mat = None
+        super(CommWindow, self).__init__(start, end,window_ID)
 
     def set_data_vol_and_refresh_times(self):
         """
@@ -183,7 +181,7 @@ class DlnkWindow(CommWindow):
         '''
         A downlink window. Can represent a window during which an activity can happen, or the actual activity itself
 
-        :param int window_ID: a unique ID for this window, for ease of tracking
+        :param int window_ID: a unique ID for this window, for hashing and comparing windows
         :param int sat_indx: index of the satellite
         :param int gs_ID: ground station ID for this downlink
         :param int sat_gs_indx: the index of this dlnk in the list of sat-gs downlinks from gp_input_gslink.mat
@@ -192,12 +190,11 @@ class DlnkWindow(CommWindow):
         '''
 
         self.sat_indx = sat_indx
-        self.window_ID = window_ID
         self.gs_ID = gs_ID
         self.sat_gs_indx = sat_gs_indx
         self.routed_data_vol = 0
 
-        super(DlnkWindow, self).__init__(start, end)
+        super(DlnkWindow, self).__init__(start, end, window_ID)
 
     def print_self(self,  print_data_vol = True):
         print('DlnkWindow')
@@ -222,7 +219,7 @@ class XlnkWindow(CommWindow):
         '''
         A downlink window. Can represent a window during which an activity can happen, or the actual activity itself
 
-        :param int window_ID: a unique ID for this window, for ease of tracking
+        :param int window_ID: a unique ID for this window, for hashing and comparing windows
         :param int sat_indx: index of the satellite on "side A" of the link
         :param int xsat_indx: index of the satellite on "side B" of the link (should be > sat_indx)
         :param int sat_xsat_indx: the serial index of this xlnk in the list of sat-xsat links from input struct
@@ -231,7 +228,6 @@ class XlnkWindow(CommWindow):
         '''
 
         self.sat_indx = sat_indx
-        self.window_ID = window_ID
         self.xsat_indx = xsat_indx
         self.sat_xsat_indx = sat_xsat_indx
         # this stores the amount of data routed to either sat index during the xlnk. Dictionary keys are integers representing the sat index routed to, and the values are the amount of data routed
@@ -240,7 +236,7 @@ class XlnkWindow(CommWindow):
         self.routed_pkts_to_sat_indx = {}
         self.routed_pkt_ids_to_sat_indx = {}
 
-        super(XlnkWindow, self).__init__(start, end)
+        super(XlnkWindow, self).__init__(start, end, window_ID)
 
     def print_self(self,  print_data_vol = True):
         print('XlnkWindow')

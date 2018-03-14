@@ -81,6 +81,9 @@ class GPPlotting():
         # have to sort before applying axis labels, otherwise x label shows up in a weird place
         # sats.sort(key=lambda x: x.agent_ID)
 
+        # keep a running list of all the window IDs seen,  which we'll use for a sanity check
+        all_wind_ids = []
+
         # for each agent
         for  plot_indx, sat_indx in enumerate (sats_indcs_list):
 
@@ -133,6 +136,10 @@ class GPPlotting():
             # obs
             ###################
 
+            obs_choices_rectangle_rotator_hist = {}
+            dlnk_choices_rectangle_rotator_hist = {}
+            xlnk_choices_rectangle_rotator_hist = {}
+
             # plot the  observations
             if self.winds_plot_obs_choices:
                 if len(all_obs_winds_flat) > 0:
@@ -146,6 +153,11 @@ class GPPlotting():
                         d = Rectangle((obs_start, bottom_vert_loc), obs_end-obs_start, bottom_vert_loc+1,alpha=1,fill=True,color='#BFFFBF')
                         current_axis.add_patch(d)
 
+                        # plt.text(obs_start+0.15, bottom_vert_loc+0.1, obs_wind.window_ID , fontsize=10, color = 'k')
+
+                        # save off the rotator choice so that we can look it up again
+                        obs_choices_rectangle_rotator_hist[obs_wind] = obs_choices_rectangle_rotator
+
                         obs_choices_rectangle_rotator =  (obs_choices_rectangle_rotator+1)%obs_rotation_rollover
 
             if self.winds_plot_obs:
@@ -155,12 +167,20 @@ class GPPlotting():
                         obs_start = (obs_wind.start-plot_start).total_seconds()/time_divisor
                         obs_end = (obs_wind.end-plot_start).total_seconds()/time_divisor
 
+                        #  update the rotator value if we've already added this window to the plot in the "choices" code above
+                        if obs_wind in obs_choices_rectangle_rotator_hist.keys ():
+                            obs_rectangle_rotator = obs_choices_rectangle_rotator_hist[obs_wind]
+
                         # plot the task duration
                         bottom_vert_loc = obs_rectangle_rotator
                         d = Rectangle((obs_start, bottom_vert_loc), obs_end-obs_start, bottom_vert_loc+1,alpha=1,fill=False,color='#00FF00',hatch='///////')
                         current_axis.add_patch(d)
 
                         obs_rectangle_rotator =  (obs_rectangle_rotator+1)%obs_rotation_rollover
+
+                        if obs_wind.window_ID in all_wind_ids:
+                            raise Exception('Found a duplicate unique window ID where it should not have been possible')
+                        all_wind_ids.append(obs_wind.window_ID)
 
             ###################
             # dlnks
@@ -183,6 +203,11 @@ class GPPlotting():
                         current_axis.add_patch(d_w)
                         # plt.text( (dlnk_wind_end+dlnk_wind_start)/2 - 0.15, 0.1, dlnk_wind.gs_ID , fontsize=10, color = 'k')
 
+                        # plt.text(dlnk_wind_start+0.15, bottom_vert_loc+0.1, dlnk_wind.window_ID , fontsize=10, color = 'k')
+
+                        # save off the rotator choice so that we can look it up again
+                        dlnk_choices_rectangle_rotator_hist[dlnk_wind] = dlnk_choices_rectangle_rotator
+
                         dlnk_choices_rectangle_rotator =  (dlnk_choices_rectangle_rotator+1)%dlnk_rotation_rollover
 
                         num_dlnk_wind += 1
@@ -198,12 +223,20 @@ class GPPlotting():
 
                         gs_indx = dlnk_wind.gs_ID
 
+                        #  update the rotator value if we've already added this window to the plot in the "choices" code above
+                        if dlnk_wind in dlnk_choices_rectangle_rotator_hist.keys ():
+                            dlnk_rectangle_rotator = dlnk_choices_rectangle_rotator_hist[dlnk_wind]
+
                         # plot the task duration
                         bottom_vert_loc = dlnk_rectangle_rotator
                         d = Rectangle((dlnk_start, bottom_vert_loc), dlnk_end-dlnk_start, bottom_vert_loc+1,alpha=1,fill=False,color='#0000FF',hatch='///////')
                         current_axis.add_patch(d)
 
                         dlnk_rectangle_rotator =  (dlnk_rectangle_rotator+1)%dlnk_rotation_rollover
+
+                        if dlnk_wind.window_ID in all_wind_ids:
+                            raise Exception('Found a duplicate unique window ID where it should not have been possible')
+                        all_wind_ids.append(dlnk_wind.window_ID)
 
                         if plot_include_labels:
                             label_text = ""
@@ -250,6 +283,11 @@ class GPPlotting():
 
                         current_axis.add_patch(x_w)
 
+                        # plt.text(xlnk_wind_start+0.15, bottom_vert_loc+0.1, xlnk_wind.window_ID , fontsize=10, color = 'k')
+
+                        # save off the rotator choice so that we can look it up again
+                        xlnk_choices_rectangle_rotator_hist[xlnk_wind] = xlnk_choices_rectangle_rotator
+
                         xlnk_choices_rectangle_rotator =  (xlnk_choices_rectangle_rotator+1)%xlnk_rotation_rollover
                         num_xlnk_wind += 1
 
@@ -261,6 +299,10 @@ class GPPlotting():
 
                         xlnk_start = (xlnk_wind.start-plot_start).total_seconds()/time_divisor
                         xlnk_end = (xlnk_wind.end-plot_start).total_seconds()/time_divisor
+
+                        #  update the rotator value if we've already added this window to the plot in the "choices" code above
+                        if xlnk_wind in xlnk_choices_rectangle_rotator_hist.keys ():
+                            xlnk_rectangle_rotator = xlnk_choices_rectangle_rotator_hist[xlnk_wind]
 
                         bottom_vert_loc = xlnk_rectangle_rotator
 
