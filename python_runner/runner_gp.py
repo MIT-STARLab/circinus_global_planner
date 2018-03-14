@@ -383,6 +383,25 @@ class GlobalPlannerRunner:
             fig_name='plots/test.pdf'
         )
 
+        self.gp_plot.plot_data_circles(
+            sats_to_include,
+            sched_obs_winds_flat,
+            sched_obs_winds_flat,
+            sched_dlnk_winds_flat,
+            sched_dlnk_winds_flat, 
+            sched_xlnk_winds_flat,
+            sched_xlnk_winds_flat,
+            route_indcs_by_wind,
+            self.general_params['start_utc_dt'],
+            # self.general_params['start_utc_dt'] + timedelta( seconds= self.route_selection_params['wind_filter_duration_s']),
+            self.general_params['end_utc_dt'],
+            plot_title = 'Scheduled Activities',
+            plot_size_inches = (18,12),
+            plot_include_labels = self.activity_scheduling_params['plot_include_labels'],
+            show=  False,
+            fig_name='plots/test2.pdf'
+        )
+
     def validate_unique_windows( self,obs_winds,dlnk_winds_flat,xlnk_winds):
         all_wind_ids = []
 
