@@ -41,6 +41,12 @@
         "winds_plot_dlnks":  true,
         "winds_plot_dlnks_choices":   true,
         "winds_plot_xlnks":  true,
-        "winds_plot_xlnks_choices":    true
+        "winds_plot_xlnks_choices":    true,
+        "energy_usage_plot_params": {
+            "plot_bound_e_min_Wh": 13,    
+            "plot_bound_e_max_Wh": 21,
+            "display_e_min_constraint": false,
+            "display_e_max_constraint": false
+        }
     }
 }

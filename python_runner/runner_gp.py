@@ -83,14 +83,15 @@ class GlobalPlannerRunner:
         t_b = time.time()
         # gp_as.print_sol ()
         print('extract_routes')
-        routes = gp_as. extract_utilized_routes ( verbose  = False)
+        routes = gp_as.extract_utilized_routes ( verbose  = False)
+        energy_usage = gp_as.extract_resource_usage(  decimation_factor =1)
 
         print('len(routes)')
         print(len(routes))
 
         time_elapsed = t_b-t_a
 
-        return  routes
+        return  routes, energy_usage
 
     def run_route_selection(self,gp_ps,obs,dlnk_winds_flat,xlnk_winds,obj_weights,dr_uid):
         """[summary]
@@ -318,7 +319,7 @@ class GlobalPlannerRunner:
             )
 
 
-    def  plot_activity_scheduling_results ( self,obs_routes,routes):
+    def  plot_activity_scheduling_results ( self,obs_routes,routes,energy_usage):
 
         # do a bunch of stuff to extract the windows from all of the routes as indexed by observation
         # note that this stuff is not thewindows from the scheduled routes, but rather the windows from all the route selected in route selection
@@ -351,12 +352,12 @@ class GlobalPlannerRunner:
         #  update the window beginning and end times based upon their amount of scheduled data volume
         for sat_indx in range(self.general_params['num_sats']):
             for wind in sched_obs_winds_flat[sat_indx] + sched_dlnk_winds_flat[sat_indx] + sched_xlnk_winds_flat[sat_indx]:
-                print(wind)
-                print(wind.data_vol)
-                print(wind.scheduled_data_vol)
-                if not  type (wind) == ObsWindow:
-                    print(link_info_by_wind[wind])
-                    print(route_indcs_by_wind[wind])
+                # print(wind)
+                # print(wind.data_vol)
+                # print(wind.scheduled_data_vol)
+                # if not  type (wind) == ObsWindow:
+                #     print(link_info_by_wind[wind])
+                #     print(route_indcs_by_wind[wind])
                 wind.update_duration_from_scheduled_dv ()
 
         sats_to_include =  range (self.general_params['num_sats'])
@@ -380,7 +381,7 @@ class GlobalPlannerRunner:
             plot_size_inches = (18,12),
             plot_include_labels = self.activity_scheduling_params['plot_include_labels'],
             show=  False,
-            fig_name='plots/test.pdf'
+            fig_name='plots/test_activity_times.pdf'
         )
 
         self.gp_plot.plot_data_circles(
@@ -395,12 +396,25 @@ class GlobalPlannerRunner:
             self.general_params['start_utc_dt'],
             # self.general_params['start_utc_dt'] + timedelta( seconds= self.route_selection_params['wind_filter_duration_s']),
             self.general_params['end_utc_dt'],
-            plot_title = 'Scheduled Activities',
+            plot_title = 'Activity Data Volumes',
             plot_size_inches = (18,12),
             plot_include_labels = self.activity_scheduling_params['plot_include_labels'],
             show=  False,
-            fig_name='plots/test2.pdf'
+            fig_name='plots/test_data_volume.pdf'
         )
+
+        self.gp_plot.plot_energy_usage(
+            sats_to_include,
+            energy_usage,
+            self.general_params['start_utc_dt'],
+            self.general_params['end_utc_dt'],
+            plot_title = 'Energy Utilization',
+            plot_size_inches = (18,12),
+            show=  False,
+            fig_name='plots/test_energy.pdf'
+        )
+
+        
 
     def validate_unique_windows( self,obs_winds,dlnk_winds_flat,xlnk_winds):
         all_wind_ids = []
@@ -475,7 +489,7 @@ class GlobalPlannerRunner:
         #         dr.validate_route()
 
 
-        scheduled_routes = self.run_nominal_activity_scheduling(obs_routes)
+        scheduled_routes,energy_usage = self.run_nominal_activity_scheduling(obs_routes)
 
         #################################
         #   output stage
@@ -487,7 +501,7 @@ class GlobalPlannerRunner:
             self.plot_route_selection_results (obs_routes,dlnk_winds_flat,xlnk_winds_flat)
 
         if self.activity_scheduling_params['plot_activity_scheduling_results']:
-            self.plot_activity_scheduling_results(obs_routes,scheduled_routes)
+            self.plot_activity_scheduling_results(obs_routes,scheduled_routes,energy_usage)
           
 
         outputs = None

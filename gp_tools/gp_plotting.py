@@ -34,6 +34,7 @@ class GPPlotting():
         self.winds_plot_dlnks_choices=params['winds_plot_dlnks_choices']
         self.winds_plot_xlnks=params['winds_plot_xlnks']
         self.winds_plot_xlnks_choices=params['winds_plot_xlnks_choices']
+        self.energy_usage_plot_params=params['energy_usage_plot_params']
 
     def plot_winds(
         self,
@@ -719,6 +720,94 @@ class GPPlotting():
         if x: 
             legend_objects.append(x)
             legend_objects_labels.append('Xlnk')
+
+        plt.legend(legend_objects, legend_objects_labels ,bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+
+        plt.xlabel('Time (%s)'%(self.time_units))
+
+        if show:
+            plt.show()
+        else:
+            savefig(fig_name,format=self.plot_fig_extension)
+
+    def plot_energy_usage(
+        self,
+        sats_indcs_list,
+        energy_usage,
+        plot_start,
+        plot_end,
+        plot_title = 'Energy Utilization', 
+        plot_size_inches = (12,12),
+        show=False,
+        fig_name='plots/energy_plot.pdf'):
+
+        if self.time_units == 'hours':
+            time_divisor = 3600
+        if self.time_units == 'minutes':
+            time_divisor = 60
+        
+        time_to_end = (plot_end-plot_start).total_seconds()/time_divisor
+
+        num_sats = len(sats_indcs_list)
+
+        #  make a new figure
+        plt.figure()
+
+        #  create subplots for satellites
+        axes = plt.subplot(num_sats,1,1)
+        axes.patch.set_facecolor('w')
+        fig = plt.gcf()
+        fig.set_size_inches( plot_size_inches)
+        # print fig.get_size_inches()
+
+        plt.title( plot_title)
+
+        # for each agent
+        for  plot_indx, sat_indx in enumerate (sats_indcs_list):
+
+            # 
+            plt.subplot( num_sats,1,plot_indx+1)
+            if plot_indx == np.floor(num_sats/2):
+                plt.ylabel('Satellite Index\n\n' + str(sat_indx))
+            else:
+                plt.ylabel('' + str(sat_indx))
+
+
+            # no y-axis labels
+            plt.tick_params(
+                axis='y',
+                which='both',
+                left='off',
+                right='off',
+                labelleft='off'
+            )
+
+            # set axis length. Time starts at 0
+            vert_min = self.energy_usage_plot_params['plot_bound_e_min_Wh']
+            vert_max = self.energy_usage_plot_params['plot_bound_e_max_Wh']
+            plt.axis((0, time_to_end, vert_min, vert_max))
+
+            current_axis = plt.gca()
+
+            #  these hold the very last plot object of a given type added. Used for legend below
+            e_usage = None
+            e_max = None
+            e_min = None
+
+            plt.plot(energy_usage['time_mins'],energy_usage['e_sats'][sat_indx])
+
+
+        legend_objects = []
+        legend_objects_labels = []
+        if e_usage: 
+            legend_objects.append(d_w)
+            legend_objects_labels.append('e util')
+        if e_max: 
+            legend_objects.append(d)
+            legend_objects_labels.append('e max')
+        if e_min: 
+            legend_objects.append(x_w)
+            legend_objects_labels.append('e min')
 
         plt.legend(legend_objects, legend_objects_labels ,bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 
