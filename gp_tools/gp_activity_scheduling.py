@@ -1,6 +1,4 @@
-# Contains functionality for turning input data structures into the 
-# objects used by the global planner  scheduling module
-# 
+# contains model and Solver for global planner activity scheduling capability
 # 
 # @author Kit Kennedy
 #

@@ -3,3 +3,4 @@ from .  import input_processing
 from .  import gp_route_selection
 from .  import routing_objects
 from .  import gp_plotting
+from .  import gp_metrics

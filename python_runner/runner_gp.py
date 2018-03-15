@@ -23,6 +23,7 @@ from gp_tools.input_processing import GPProcessorIO
 from gp_tools.gp_plotting import GPPlotting
 from gp_tools.gp_route_selection import GPDataRouteSelection
 from gp_tools.gp_activity_scheduling import GPActivityScheduling
+from gp_tools.gp_metrics import GPMetrics
 
 # TODO: remove this line if not needed
 from gp_tools.custom_activity_window import ObsWindow
@@ -72,6 +73,7 @@ class GlobalPlannerRunner:
     def run_nominal_activity_scheduling( self, all_routes,ecl_winds):
         
         gp_as = GPActivityScheduling ( dict(list (self.general_params.items()) + list (self.activity_scheduling_params. items())))
+        gp_met = GPMetrics({})
 
         # flatten the list of all routes, which currently has nested lists for each observation
         routes_flat = [item for sublist in all_routes for item in sublist]
@@ -88,8 +90,12 @@ class GlobalPlannerRunner:
         routes = gp_as.extract_utilized_routes ( verbose  = False)
         energy_usage = gp_as.extract_resource_usage(  decimation_factor =1)
 
+        dv_stats = gp_met.assess_routes_dv (routes)
         print('len(routes)')
         print(len(routes))
+        print("dv_stats['total_dv']")
+        print(dv_stats['total_dv'])
+        print(dv_stats)
 
         time_elapsed = t_b-t_a
 
