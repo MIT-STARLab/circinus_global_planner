@@ -24,11 +24,41 @@ class ActivityWindow(object):
         self.scheduled_data_vol = const.UNASSIGNED
         self.remaining_data_vol = const.UNASSIGNED
 
+        self._center_cache = None
+        self._ave_data_rate_cache = None
+
     def __hash__(self):
         return self.window_ID
 
     def __eq__(self, other):
         return self.window_ID ==  other.window_ID
+
+    @property
+    def center(self):
+        #  adding this try except to deal with already pickled activity Windows
+        # TODO: remove this error checking later once all code solidified?
+        try:
+            if not self._center_cache:
+                self._center_cache = self.calc_center()
+            return self._center_cache
+        except AttributeError:
+            self._center_cache = self.calc_center()
+            return self._center_cache
+
+    @property
+    def ave_data_rate(self):
+        #  adding this try except to deal with already pickled activity Windows
+        # TODO: remove this error checking later once all code solidified?
+        try:
+            if not self._ave_data_rate_cache:
+                self._ave_data_rate_cache =  act.data_vol / ( act.end - act.start).total_seconds ()
+            return self._ave_data_rate_cache
+        except AttributeError:
+            self._ave_data_rate_cache = act.data_vol / ( act.end - act.start).total_seconds ()
+            return self._ave_data_rate_cache
+
+    def calc_center ( self):
+        return self.start + ( self.end -  self.start)/2
 
     def update_duration_from_scheduled_dv( self):
         """ update duration based on schedule data volume

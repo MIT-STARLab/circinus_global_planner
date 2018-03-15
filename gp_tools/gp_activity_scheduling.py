@@ -196,13 +196,6 @@ class GPActivityScheduling():
             path_indcs_by_link_act,
             dv_by_link_act) =  self.get_activity_structs(routes_flat)
 
-        #  calculate center times and average data rates for activities in advance
-        for sat_indx in range (self.num_sats):
-            for act in sat_acts[sat_indx]:
-                act.center_time = ( act.end - act.start) / 2
-
-                act.ave_data_rate =  act.data_vol / ( act.end - act.start).total_seconds ()
-
         # construct a set of dance cards for every satellite, 
         # each of which keeps track of all of the activities of satellite 
         # can possibly execute at any given time slice delta T. 
@@ -315,12 +308,12 @@ class GPActivityScheduling():
 
                     #  if the activities overlap in center time, then it's not possible to have sufficient transition time between them
                     #  add constraint to rule out the possibility of scheduling both of them
-                    elif (act2.center_time - act1.center_time).total_seconds() <= self.transition_time_s['simple']:
+                    elif (act2.center - act1.center).total_seconds() <= self.transition_time_s['simple']:
                         model.c4.add( model.var_act_indic[act1_uindx]+ model.var_act_indic[act2_uindx] <= 1)
 
                     # If they don't overlap in center time, but they do overlap to some amount, then we need to constrain their end and start times to be consistent with one another
                     else:
-                        center_time_diff = (act2.center_time - act1.center_time).total_seconds()
+                        center_time_diff = (act2.center - act1.center).total_seconds()
                         # this is the adjustment added to the center time to get to the start or end of the activity
                         time_adjust_1 = model.par_act_dv[act1_uindx]*model.var_activity_utilization[act1_uindx]/2/act1.ave_data_rate
                         time_adjust_2 = model.par_act_dv[act2_uindx]*model.var_activity_utilization[act2_uindx]/2/act2.ave_data_rate

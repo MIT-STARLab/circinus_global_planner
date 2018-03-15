@@ -33,11 +33,12 @@ class DataRoute(object):
     def get_dlnk( self):
         return self.route[-1]
 
-    def get_latency( self,units='minutes',obs_option = 'end', dlnk_option = 'start'):
+    def get_latency( self,units='minutes',obs_option = 'end', dlnk_option = 'center'):
         obs =  self.route[0]
         dlnk =  self.route[-1]
-        lat_start = obs.start if obs_option == 'start' else obs.end
-        lat_end = dlnk.start if dlnk_option == 'start' else dlnk.end
+
+        lat_start = getattr(obs,obs_option)
+        lat_end = getattr(dlnk,dlnk_option)
     
         if units == 'minutes':
             return (lat_end-lat_start).total_seconds()/60

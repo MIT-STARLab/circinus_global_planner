@@ -91,7 +91,6 @@ class GlobalPlannerRunner:
     def run_nominal_activity_scheduling( self, all_routes,ecl_winds):
         
         gp_as = GPActivityScheduling ( dict(list (self.general_params.items()) + list (self.activity_scheduling_params. items()) +  list (self.other_params.items())))
-        gp_met = GPMetrics(self.other_params)
 
         # flatten the list of all routes, which currently has nested lists for each observation
         routes_flat = [item for sublist in all_routes for item in sublist]
@@ -108,21 +107,25 @@ class GlobalPlannerRunner:
         routes = gp_as.extract_utilized_routes ( verbose  = False)
         energy_usage = gp_as.extract_resource_usage(  decimation_factor =1)
 
+        time_elapsed = t_b-t_a
+
+        return  routes, energy_usage
+
+    def calc_activity_scheduling_results ( self,routes, energy_usage):
+        gp_met = GPMetrics(self.other_params)
+
         print('len(routes)')
         print(len(routes))
         dv_stats = gp_met.assess_dv_all_routes (routes,verbose = True)
         dv_obs_stats = gp_met.assess_dv_by_obs (routes,verbose = True)
         lat_stats = gp_met.assess_latency_all_routes (routes,verbose = True)
+        lat_obs_stats = gp_met.assess_latency_by_obs (routes,verbose = True)
         # print("dv_stats['total_dv']")
         # print(dv_stats['total_dv'])
         # print('dv_stats')
         # print(dv_stats)
         # print('lat_stats')
         # print(lat_stats)
-
-        time_elapsed = t_b-t_a
-
-        return  routes, energy_usage
 
     def run_route_selection(self,gp_ps,obs,dlnk_winds_flat,xlnk_winds,obj_weights,dr_uid):
         """[summary]
@@ -539,6 +542,8 @@ class GlobalPlannerRunner:
         # if we are saving to file, do that
         if self.pickle_params['pickle_act_scheduling_results']:
             self.pickle_actsc_stuff(obs_routes,ecl_winds,scheduled_routes,energy_usage,window_uid)
+
+        self.calc_activity_scheduling_results (scheduled_routes, energy_usage)
 
         #################################
         #   output stage

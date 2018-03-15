@@ -48,6 +48,11 @@ class GPDataRouteSelection():
         self.wind_filter_duration =  timedelta (seconds =params['wind_filter_duration_s'])
         self.latency_params =  params['latency_calculation']
 
+        if self.latency_params['obs'] not in ['start','end']:
+            raise NotImplementedError
+        if self.latency_params['dlnk'] not in ['start','end','center']:
+            raise NotImplementedError
+
         #   quick sanity check on M time value
         total_duration =(self.end_utc_dt- self.start_utc_dt).total_seconds ()
         if  total_duration  > self.M_t_s:
@@ -134,6 +139,7 @@ class GPDataRouteSelection():
         #  start and end times of links, indexed by dlnk i,k tuple
         t_start_o_dict_by_tuple =  {}
         t_end_o_dict_by_tuple = {}
+        t_center_o_dict_by_tuple = {}
 
         #  need to decide if using the start or the end of the observation as the point from which to measure downlink latency
         if latency_params['obs'] == 'start':
@@ -150,8 +156,14 @@ class GPDataRouteSelection():
             for dlnk_indx in  range (len (dlink_winds_flat[sat_indx])):
                 tup = (sat_indx,dlnk_indx)
                 wind = dlink_winds_flat[sat_indx][dlnk_indx]
-                t_start_o_dict_by_tuple[tup] =  (wind.start - ref_time).total_seconds ()
-                t_end_o_dict_by_tuple[tup] = (wind.end - ref_time).total_seconds ()
+
+                #  only store the calculation we're interested in, as a pathetic attempt to reduce calculation time in this already gigantic runtime
+                if latency_params['dlnk'] == 'start':
+                    t_start_o_dict_by_tuple[tup] =  (wind.start - ref_time).total_seconds ()
+                elif latency_params['dlnk'] == 'end':
+                    t_end_o_dict_by_tuple[tup] = (wind.end - ref_time).total_seconds ()
+                elif latency_params['dlnk'] == 'center':
+                    t_center_o_dict_by_tuple[tup] = (wind.center - ref_time).total_seconds ()
 
         #  calculate score factors
         score_factors_dict = {}
@@ -161,6 +173,8 @@ class GPDataRouteSelection():
             latencies_by_tuple = t_start_o_dict_by_tuple
         elif latency_params['dlnk'] == 'end':
             latencies_by_tuple = t_end_o_dict_by_tuple
+        elif latency_params['dlnk'] == 'center':
+            latencies_by_tuple = t_center_o_dict_by_tuple
         else:
             raise NotImplementedError
 

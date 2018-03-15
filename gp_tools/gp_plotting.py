@@ -848,6 +848,7 @@ class GPPlotting():
         all_ave_latencies = []
         all_cum_dv = []
         for routes in all_routes:
+            raise RuntimeWarning("TODO:  update the line of code below")
             latencies = [(rt.route[-1].end - rt.route[0].end).total_seconds()/60 for rt in  routes]
             all_ave_latencies.append ( np.mean(latencies))
             all_cum_dv.append ( sum(dr.data_vol for dr in routes))
