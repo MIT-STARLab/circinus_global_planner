@@ -27,6 +27,23 @@ class DataRoute(object):
         #  check the timing and satellite indices along the route.  throws an exception if a problem is seen
         self.validate_route()
 
+    def get_obs( self):
+        return self.route[0]
+
+    def get_dlnk( self):
+        return self.route[-1]
+
+    def get_latency( self,units='minutes',obs_option = 'end', dlnk_option = 'start'):
+        obs =  self.route[0]
+        dlnk =  self.route[-1]
+        lat_start = obs.start if obs_option == 'start' else obs.end
+        lat_end = dlnk.start if dlnk_option == 'start' else dlnk.end
+    
+        if units == 'minutes':
+            return (lat_end-lat_start).total_seconds()/60
+        else:
+            raise NotImplementedError
+
     def  sort_windows(self):
         self.route.sort(key=lambda x: x.start)
 

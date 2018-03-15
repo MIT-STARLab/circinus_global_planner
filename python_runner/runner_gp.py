@@ -46,7 +46,7 @@ class GlobalPlannerRunner:
         self.io_proc =GPProcessorIO( dict(list (self.general_params.items()) +  list (self.other_params.items()) ))
         self.gp_plot =GPPlotting( self.plot_params)
 
-    def pickle_stuff(self,all_routes,all_routes_obs,all_stats,route_times_s,obs_indx,ecl_winds,window_uid):
+    def pickle_rtsel_stuff(self,all_routes,all_routes_obs,all_stats,route_times_s,obs_indx,ecl_winds,window_uid):
 
         pickle_stuff =  {}
         pickle_stuff['all_routes'] = all_routes
@@ -57,23 +57,41 @@ class GlobalPlannerRunner:
         pickle_stuff['obs_indx'] = obs_indx
         pickle_stuff['ecl_winds'] = ecl_winds
         pickle_stuff['window_uid'] = window_uid
-        pickle_name ='%s_obsindx%d_%s' %( self.general_params['new_pickle_file_name_pre'],obs_indx,datetime.utcnow().isoformat().replace (':','_'))
+        pickle_name ='pickles/rs_%s_oi%d_%s' %( self.general_params['new_pickle_file_name_pre'],obs_indx,datetime.utcnow().isoformat().replace (':','_'))
         with open('%s.pkl' % ( pickle_name),'wb') as f:
             pickle.dump(  pickle_stuff,f)
 
-    def unpickle_stuff( self):
+    def pickle_actsc_stuff(self,obs_routes,ecl_winds,scheduled_routes,energy_usage,window_uid):
+
+        pickle_stuff =  {}
+        pickle_stuff['obs_routes'] = obs_routes
+        pickle_stuff['ecl_winds'] = ecl_winds
+        pickle_stuff['scheduled_routes'] = scheduled_routes
+        pickle_stuff['energy_usage'] = energy_usage
+        pickle_stuff['window_uid'] = window_uid
+        pickle_name ='pickles/as_%s' %(datetime.utcnow().isoformat().replace (':','_'))
+        with open('%s.pkl' % ( pickle_name),'wb') as f:
+            pickle.dump(  pickle_stuff,f)
+
+    def unpickle_rtsel_stuff( self):
 
         p = pickle.load (open ( self.pickle_params['route_selection_pickle'],'rb'))
         self.params = p['params']
 
         return p['all_routes'],p['all_routes_obs'],p['all_stats'],p['route_times_s'],p['obs_indx'],p['ecl_winds'],p['window_uid']
 
+    def unpickle_actsc_stuff( self):
+
+        p = pickle.load (open ( self.pickle_params['act_scheduling_pickle'],'rb'))
+
+        return p['obs_routes'],p['ecl_winds'],p['scheduled_routes'],p['energy_usage'],p['window_uid']
+
     
 
     def run_nominal_activity_scheduling( self, all_routes,ecl_winds):
         
         gp_as = GPActivityScheduling ( dict(list (self.general_params.items()) + list (self.activity_scheduling_params. items()) +  list (self.other_params.items())))
-        gp_met = GPMetrics({})
+        gp_met = GPMetrics(self.other_params)
 
         # flatten the list of all routes, which currently has nested lists for each observation
         routes_flat = [item for sublist in all_routes for item in sublist]
@@ -90,12 +108,17 @@ class GlobalPlannerRunner:
         routes = gp_as.extract_utilized_routes ( verbose  = False)
         energy_usage = gp_as.extract_resource_usage(  decimation_factor =1)
 
-        dv_stats = gp_met.assess_routes_dv (routes)
         print('len(routes)')
         print(len(routes))
-        print("dv_stats['total_dv']")
-        print(dv_stats['total_dv'])
-        print(dv_stats)
+        dv_stats = gp_met.assess_dv_all_routes (routes,verbose = True)
+        dv_obs_stats = gp_met.assess_dv_by_obs (routes,verbose = True)
+        lat_stats = gp_met.assess_latency_all_routes (routes,verbose = True)
+        # print("dv_stats['total_dv']")
+        # print(dv_stats['total_dv'])
+        # print('dv_stats')
+        # print(dv_stats)
+        # print('lat_stats')
+        # print(lat_stats)
 
         time_elapsed = t_b-t_a
 
@@ -488,7 +511,7 @@ class GlobalPlannerRunner:
 
         #  if  we are loading from file, do that
         if self.pickle_params['unpickle_pre_route_selection']:
-            obs_routes,all_routes_obs,all_stats,route_times_s,obs_indx,ecl_winds,window_uid = self.unpickle_stuff()
+            obs_routes,all_routes_obs,all_stats,route_times_s,obs_indx,ecl_winds,window_uid = self.unpickle_rtsel_stuff()
 
         #  otherwise run route selection
         else:
@@ -496,7 +519,7 @@ class GlobalPlannerRunner:
             # obs_routes,all_routes_obs,all_stats,route_times_s, obs_indx, weights_tups  =  self.run_test_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
 
         if self.pickle_params['pickle_route_selection_results']:
-            self.pickle_stuff(obs_routes,all_routes_obs,all_stats,route_times_s,obs_indx,ecl_winds,window_uid)
+            self.pickle_rtsel_stuff(obs_routes,all_routes_obs,all_stats,route_times_s,obs_indx,ecl_winds,window_uid)
         
         #################################
         #  activity scheduling stage
@@ -507,7 +530,15 @@ class GlobalPlannerRunner:
         #     for dr in routes:
         #         dr.validate_route()
 
-        scheduled_routes,energy_usage = self.run_nominal_activity_scheduling(obs_routes,ecl_winds)
+        #  if  we are loading from file, do that
+        if self.pickle_params['unpickle_pre_act_scheduling']:
+            obs_routes,ecl_winds,scheduled_routes,energy_usage,window_uid = self.unpickle_actsc_stuff()
+        else:
+            scheduled_routes,energy_usage = self.run_nominal_activity_scheduling(obs_routes,ecl_winds)
+
+        # if we are saving to file, do that
+        if self.pickle_params['pickle_act_scheduling_results']:
+            self.pickle_actsc_stuff(obs_routes,ecl_winds,scheduled_routes,energy_usage,window_uid)
 
         #################################
         #   output stage
@@ -542,7 +573,7 @@ class PipelineRunner:
 
         gp_params = {}
         gp_general_params = {}
-        gp_general_params['new_pickle_file_name_pre']  = 'pickles/'  + file_params.get ('orbit_prop_inputs_file' ,'default.json').split ('.')[0]
+        gp_general_params['new_pickle_file_name_pre']  = file_params.get ('orbit_prop_inputs_file' ,'default.json').split ('.')[0]
 
         if orbit_prop_inputs['version'] == "0.3": 
             
