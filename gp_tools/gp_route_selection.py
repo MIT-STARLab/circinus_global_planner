@@ -46,6 +46,7 @@ class GPDataRouteSelection():
         self.solver_name =params['solver_name']
         self.solver_run_remotely =params['solver_run_remotely']
         self.wind_filter_duration =  timedelta (seconds =params['wind_filter_duration_s'])
+        self.latency_params =  params['latency_calculation']
 
         #   quick sanity check on M time value
         total_duration =(self.end_utc_dt- self.start_utc_dt).total_seconds ()
@@ -116,17 +117,6 @@ class GPDataRouteSelection():
                 t_end_dict_by_tuple[tup] = (wind.end - start_utc_dt).total_seconds ()
                 dv_dict_by_tuple[tup] = wind.data_vol
 
-        #  calculate score factors
-        score_factors_dict = {}
-        inverse_sum = sum (1/t for t in t_end_dict_by_tuple.values())
-        for key in t_end_dict_by_tuple.keys ():
-            score_factors_dict[key] = 1/t_end_dict_by_tuple[key] / inverse_sum
-
-        largest_factor = max (score_factors_dict.values ())
-        # now normalize by the highest factor found
-        for key in t_end_dict_by_tuple.keys ():
-            score_factors_dict[key] =score_factors_dict[key]/largest_factor
-
         #  now loop through and include paths as an index
         tuple_list_paths = []
 
@@ -136,7 +126,55 @@ class GPDataRouteSelection():
                     for dlnk_indx in  range (len (dlink_winds_flat[sat_indx])):
                         tuple_list_paths.append ((path_indx,sat_indx,dlnk_indx))
 
-        return tuple_list, tuple_list_paths, t_start_dict_by_tuple, t_end_dict_by_tuple, dv_dict_by_tuple, score_factors_dict
+        return tuple_list, tuple_list_paths, t_start_dict_by_tuple, t_end_dict_by_tuple, dv_dict_by_tuple
+
+    @staticmethod
+    def get_downlink_score_factors(obs_wind,dlink_winds_flat,num_sats,latency_params):
+        tuple_list =[]
+        #  start and end times of links, indexed by dlnk i,k tuple
+        t_start_o_dict_by_tuple =  {}
+        t_end_o_dict_by_tuple = {}
+
+        #  need to decide if using the start or the end of the observation as the point from which to measure downlink latency
+        if latency_params['obs'] == 'start':
+            ref_time = obs_wind.start
+        elif latency_params['obs'] == 'end':
+            ref_time = obs_wind.end
+        else:
+            raise NotImplementedError
+
+        # loop through all satellites and their downlinks
+        # explicitly indexing by num_sats just to include a bit of error checking
+        for sat_indx in  range (num_sats):
+
+            for dlnk_indx in  range (len (dlink_winds_flat[sat_indx])):
+                tup = (sat_indx,dlnk_indx)
+                wind = dlink_winds_flat[sat_indx][dlnk_indx]
+                t_start_o_dict_by_tuple[tup] =  (wind.start - ref_time).total_seconds ()
+                t_end_o_dict_by_tuple[tup] = (wind.end - ref_time).total_seconds ()
+
+        #  calculate score factors
+        score_factors_dict = {}
+
+        #  need to decide if using the start or the end of the dlnk as the point to which to measure downlink latency
+        if latency_params['dlnk'] == 'start':
+            latencies_by_tuple = t_start_o_dict_by_tuple
+        elif latency_params['dlnk'] == 'end':
+            latencies_by_tuple = t_end_o_dict_by_tuple
+        else:
+            raise NotImplementedError
+
+        inverse_sum = sum (1/t for t in latencies_by_tuple.values())
+        for key in latencies_by_tuple.keys ():
+            score_factors_dict[key] = 1/latencies_by_tuple[key] / inverse_sum
+
+        largest_factor = max (score_factors_dict.values ())
+        # now normalize by the highest factor found
+        for key in latencies_by_tuple.keys ():
+            score_factors_dict[key] =score_factors_dict[key]/largest_factor
+
+        return score_factors_dict
+
 
     @staticmethod
     def  filter_windows(obs_wind,dlink_winds_flat,xlink_winds,num_sats,end_utc_dt,wind_filter_duration):
@@ -173,12 +211,13 @@ class GPDataRouteSelection():
             dlnk_path_subscripts,
             dlnk_t_start_dict, 
             dlnk_t_end_dict,
-            dlnk_dv_dict,
-            dlnk_sfact_dict)  = self.get_downlink_model_objects(
+            dlnk_dv_dict)  = self.get_downlink_model_objects(
                                         self.dlink_winds_flat,
                                         self.num_paths,
                                         self.num_sats,
                                         self.start_utc_dt)
+
+        dlnk_sfact_dict = self.get_downlink_score_factors(self.obs_wind,self.dlink_winds_flat,self.num_sats, self.latency_params)
 
         # get lists of indices ( as tuples) and start and end times for  crosslinks
         (xlnk_subscripts, 

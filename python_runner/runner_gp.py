@@ -72,7 +72,7 @@ class GlobalPlannerRunner:
 
     def run_nominal_activity_scheduling( self, all_routes,ecl_winds):
         
-        gp_as = GPActivityScheduling ( dict(list (self.general_params.items()) + list (self.activity_scheduling_params. items())))
+        gp_as = GPActivityScheduling ( dict(list (self.general_params.items()) + list (self.activity_scheduling_params. items()) +  list (self.other_params.items())))
         gp_met = GPMetrics({})
 
         # flatten the list of all routes, which currently has nested lists for each observation
@@ -134,7 +134,7 @@ class GlobalPlannerRunner:
         return routes,obs,stats,time_elapsed,dr_uid
 
     def run_nominal_route_selection( self,obs_winds,dlnk_winds_flat,xlnk_winds):
-        gp_ps = GPDataRouteSelection ( dict(list (self.general_params.items()) + list (self.route_selection_params. items())))
+        gp_ps = GPDataRouteSelection ( dict(list (self.general_params.items()) + list (self.route_selection_params. items()) +  list (self.other_params.items())))
 
         print ('nominal route selection')
 

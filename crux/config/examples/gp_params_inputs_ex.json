@@ -4,7 +4,11 @@
         "targ_ignore_list": [],
         "gs_ignore_list": [6],
         "min_allowed_dv_xlnk_Mb" : 100,
-        "min_allowed_dv_dlnk_Mb" : 100
+        "min_allowed_dv_dlnk_Mb" : 100,
+        "latency_calculation": {
+            "dlnk": "start",
+            "obs": "end"
+        }
     },
     "route_selection_params": {
         "num_paths" :  5,
@@ -30,7 +34,7 @@
     },
     "pickle_params":  {
         "pickle_route_selection_results":               false,
-        "unpickle_pre_route_selection":                 true,
+        "unpickle_pre_route_selection":                 false,
         "route_selection_pickle": "pickles/walker30_all_obs_30smax_better.pkl"
     },
     "plot_params":  {
