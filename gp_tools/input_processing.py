@@ -10,7 +10,7 @@ from copy import copy, deepcopy
 
 from circinus_tools  import time_tools as tt
 from circinus_tools  import  constants as const
-from .custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow
+from .custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow, EclipseWindow
 from .schedule_objects  import Dancecard
 from .routing_objects import LinkInfo
 
@@ -46,6 +46,7 @@ class GPProcessorIO():
         self.xlnk_rates=params['xlnk_rates']
         self.min_allowed_dv_xlnk=params['min_allowed_dv_xlnk_Mb']
 
+        self.eclipse_times=params['eclipse_times']
 
 
     def merge_sat_obs_windows(self,obs_window_list,next_window_uid):
@@ -226,6 +227,35 @@ class GPProcessorIO():
 
 
         return dlink_winds,dlink_winds_flat, next_window_uid
+
+    def import_eclipse_winds( self,next_window_uid=0):
+        """  Turn Eclipse times into eclipse windows
+
+        Parse input data structure to create eclipse windows. Uses
+          indexing  of the input data structure
+        
+        :returns: [description]
+        :rtype: {[type]}
+        """
+        ecl_winds = []
+        for sat_indx, ecl_times in enumerate(self.eclipse_times):
+            sat_ecl_winds = []
+
+            for ecl_indx, ecl in enumerate(ecl_times):
+
+                #   convert input date format over to datetime
+                if self.input_date_format == const.MODIFIED_JULIAN_DATE:
+                    start =tt.mjd2datetime(ecl[0])
+                    end=tt.mjd2datetime(ecl[1])
+                else:
+                    raise NotImplementedError
+
+                sat_ecl_winds.append(EclipseWindow(next_window_uid,start= start,end= end))
+                next_window_uid+=1
+
+            ecl_winds.append(sat_ecl_winds)
+
+        return ecl_winds, next_window_uid
 
     def extract_flat_windows( self, routes_flat,  copy_windows= False):
         """ extracts all the activity windows used from a set of routes

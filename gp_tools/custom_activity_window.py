@@ -39,7 +39,6 @@ class ObsWindow(ActivityWindow):
         print('window_ID: ' + str(self.window_ID))
         print('start: ' + str(self.start))
         print('end: ' + str(self.end))
-        print('duration: ' + str(self.duration))
         print('......')
 
     def combine_with_window(self, other_obs):
@@ -49,7 +48,7 @@ class ObsWindow(ActivityWindow):
         super(ObsWindow, self).combine_with_window(other_obs)
 
     def calc_data_vol(self,pl_data_rate):
-        self.data_vol = self.duration.total_seconds()*pl_data_rate
+        self.data_vol = (self.end- self.start).total_seconds()*pl_data_rate
         self.remaining_data_vol = self.data_vol
         self.unmodified_data_vol = self.data_vol
 
@@ -128,7 +127,6 @@ class CommWindow(ActivityWindow):
             old_end = self.end + timedelta(seconds=5)
             self.start = tt.mjd2datetime(first_mjd_with_nonzero)
             self.end = tt.mjd2datetime(last_mjd_with_nonzero)
-            self.refresh_duration()
 
             # if the window is actually way too short, indicate by making data vol 0
             if self.end - self.start < timedelta(seconds=5):
@@ -205,7 +203,6 @@ class DlnkWindow(CommWindow):
         if print_data_vol:  print('data_vol: ' + str(self.data_vol))
         print('start: ' + str(self.start))
         print('end: ' + str(self.end))
-        print('duration: ' + str(self.duration))
         print('......')
 
     def __str__(self):
@@ -247,7 +244,6 @@ class XlnkWindow(CommWindow):
         if print_data_vol:  print('data_vol: ' + str(self.data_vol))
         print('start: ' + str(self.start))
         print('end: ' + str(self.end))
-        print('duration: ' + str(self.duration))
         print('......')
 
     def get_total_routed_data(self):
@@ -277,3 +273,22 @@ class UrgentWindow(ActivityWindow):
 
         self.target_ID = target_ID
         super(UrgentWindow, self).__init__(start, end)
+
+
+class EclipseWindow(ActivityWindow):
+    def __init__(self, window_ID, start, end):
+        '''
+        An eclipse window. Meant to represent when a satellite is in eclipse and can't see the sun
+
+        :param int window_ID: a unique ID for this obs window, for hashing and comparing windows
+        :param datetime start: start time of the window
+        :param datetime end: end time of the window
+        '''
+
+        super(EclipseWindow, self).__init__(start, end, window_ID)
+
+    def __str__(self):
+        return  "(EclipseWindow id %d; %s,%s)" % ( self.window_ID,self.start.isoformat (),self.end.isoformat())
+
+    def __repr__(self):
+        return  "(EclipseWindow id %d; %s,%s)" % ( self.window_ID,self.start.isoformat (),self.end.isoformat())

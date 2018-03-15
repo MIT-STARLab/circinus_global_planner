@@ -45,7 +45,7 @@ class GlobalPlannerRunner:
         self.io_proc =GPProcessorIO( dict(list (self.general_params.items()) +  list (self.other_params.items()) ))
         self.gp_plot =GPPlotting( self.plot_params)
 
-    def pickle_stuff(self,all_routes,all_routes_obs,all_stats,route_times_s,obs_indx):
+    def pickle_stuff(self,all_routes,all_routes_obs,all_stats,route_times_s,obs_indx,ecl_winds,window_uid):
 
         pickle_stuff =  {}
         pickle_stuff['all_routes'] = all_routes
@@ -54,6 +54,8 @@ class GlobalPlannerRunner:
         pickle_stuff['route_times_s'] = route_times_s
         pickle_stuff['params'] =  self.params
         pickle_stuff['obs_indx'] = obs_indx
+        pickle_stuff['ecl_winds'] = ecl_winds
+        pickle_stuff['window_uid'] = window_uid
         pickle_name ='%s_obsindx%d_%s' %( self.general_params['new_pickle_file_name_pre'],obs_indx,datetime.utcnow().isoformat().replace (':','_'))
         with open('%s.pkl' % ( pickle_name),'wb') as f:
             pickle.dump(  pickle_stuff,f)
@@ -63,11 +65,11 @@ class GlobalPlannerRunner:
         p = pickle.load (open ( self.pickle_params['route_selection_pickle'],'rb'))
         self.params = p['params']
 
-        return p['all_routes'],p['all_routes_obs'],p['all_stats'],p['route_times_s'],p['obs_indx']
+        return p['all_routes'],p['all_routes_obs'],p['all_stats'],p['route_times_s'],p['obs_indx'],p['ecl_winds'],p['window_uid']
 
     
 
-    def run_nominal_activity_scheduling( self, all_routes):
+    def run_nominal_activity_scheduling( self, all_routes,ecl_winds):
         
         gp_as = GPActivityScheduling ( dict(list (self.general_params.items()) + list (self.activity_scheduling_params. items())))
 
@@ -75,7 +77,7 @@ class GlobalPlannerRunner:
         routes_flat = [item for sublist in all_routes for item in sublist]
 
         print('make activity scheduling model')
-        gp_as.make_model (routes_flat, verbose = True)
+        gp_as.make_model (routes_flat, ecl_winds,verbose = True)
         stats =gp_as.get_stats (verbose = True)
         print('solve activity scheduling')
         t_a = time.time()
@@ -319,7 +321,7 @@ class GlobalPlannerRunner:
             )
 
 
-    def  plot_activity_scheduling_results ( self,obs_routes,routes,energy_usage):
+    def  plot_activity_scheduling_results ( self,obs_routes,routes,energy_usage,ecl_winds):
 
         # do a bunch of stuff to extract the windows from all of the routes as indexed by observation
         # note that this stuff is not thewindows from the scheduled routes, but rather the windows from all the route selected in route selection
@@ -406,6 +408,7 @@ class GlobalPlannerRunner:
         self.gp_plot.plot_energy_usage(
             sats_to_include,
             energy_usage,
+            ecl_winds,
             self.general_params['start_utc_dt'],
             self.general_params['end_utc_dt'],
             plot_title = 'Energy Utilization',
@@ -416,7 +419,7 @@ class GlobalPlannerRunner:
 
         
 
-    def validate_unique_windows( self,obs_winds,dlnk_winds_flat,xlnk_winds):
+    def validate_unique_windows( self,obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds):
         all_wind_ids = []
 
         for indx in range(len(obs_winds)):
@@ -438,6 +441,12 @@ class GlobalPlannerRunner:
                         raise Exception('Found a duplicate unique window ID where it should not have been possible')
                     all_wind_ids.append(wind.window_ID)
 
+        for indx in range(len(ecl_winds)):
+            for wind in ecl_winds[indx]:
+                if wind.window_ID in all_wind_ids:
+                    raise Exception('Found a duplicate unique window ID where it should not have been possible')
+                all_wind_ids.append(wind.window_ID)
+
     def run( self):
 
         #################################
@@ -450,9 +459,13 @@ class GlobalPlannerRunner:
             obs_winds, window_uid =self.io_proc.import_obs_winds(window_uid)
             dlnk_winds, dlnk_winds_flat, window_uid =self.io_proc.import_dlnk_winds(window_uid)
             xlnk_winds, xlnk_winds_flat, window_uid =self.io_proc.import_xlnk_winds(window_uid)
+            ecl_winds, window_uid =self.io_proc.import_eclipse_winds(window_uid)
+
+            # with open('temp.pkl','wb') as f:
+                # pickle.dump( {'ecl':ecl_winds,'window_uid':window_uid},f)
 
             # important to check this because window unique IDs are used as hashes in dictionaries in the scheduling code
-            self.validate_unique_windows(obs_winds,dlnk_winds_flat,xlnk_winds)
+            self.validate_unique_windows(obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds)
 
             # todo:  probably ought to delete the input times and rates matrices to free up space
 
@@ -469,7 +482,7 @@ class GlobalPlannerRunner:
 
         #  if  we are loading from file, do that
         if self.pickle_params['unpickle_pre_route_selection']:
-            obs_routes,all_routes_obs,all_stats,route_times_s,obs_indx = self.unpickle_stuff()
+            obs_routes,all_routes_obs,all_stats,route_times_s,obs_indx,ecl_winds,window_uid = self.unpickle_stuff()
 
         #  otherwise run route selection
         else:
@@ -477,7 +490,7 @@ class GlobalPlannerRunner:
             # obs_routes,all_routes_obs,all_stats,route_times_s, obs_indx, weights_tups  =  self.run_test_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
 
         if self.pickle_params['pickle_route_selection_results']:
-            self.pickle_stuff(obs_routes,all_routes_obs,all_stats,route_times_s,obs_indx)
+            self.pickle_stuff(obs_routes,all_routes_obs,all_stats,route_times_s,obs_indx,ecl_winds,window_uid)
         
         #################################
         #  activity scheduling stage
@@ -488,8 +501,7 @@ class GlobalPlannerRunner:
         #     for dr in routes:
         #         dr.validate_route()
 
-
-        scheduled_routes,energy_usage = self.run_nominal_activity_scheduling(obs_routes)
+        scheduled_routes,energy_usage = self.run_nominal_activity_scheduling(obs_routes,ecl_winds)
 
         #################################
         #   output stage
@@ -501,7 +513,7 @@ class GlobalPlannerRunner:
             self.plot_route_selection_results (obs_routes,dlnk_winds_flat,xlnk_winds_flat)
 
         if self.activity_scheduling_params['plot_activity_scheduling_results']:
-            self.plot_activity_scheduling_results(obs_routes,scheduled_routes,energy_usage)
+            self.plot_activity_scheduling_results(obs_routes,scheduled_routes,energy_usage,ecl_winds)
           
 
         outputs = None
@@ -553,13 +565,18 @@ class PipelineRunner:
             gp_params['activity_scheduling_params'] = gp_params_inputs['activity_scheduling_params']
             gp_params['pickle_params'] = gp_params_inputs['pickle_params']
             gp_params['plot_params'] = gp_params_inputs['plot_params']
+        else:
+            raise NotImplementedError
 
-        if data_rates_output['version'] == "0.1": 
+        if data_rates_output['version'] == "0.2": 
             gp_general_params['obs_times'] = data_rates_output['accesses_data_rates']['obs_times']
             gp_general_params['dlnk_times'] = data_rates_output['accesses_data_rates']['dlnk_times']
             gp_general_params['dlnk_rates'] = data_rates_output['accesses_data_rates']['dlnk_rates']
             gp_general_params['xlnk_times'] = data_rates_output['accesses_data_rates']['xlnk_times']
             gp_general_params['xlnk_rates'] = data_rates_output['accesses_data_rates']['xlnk_rates']
+            gp_general_params['eclipse_times'] = data_rates_output['other_data']['eclipse_times']
+        else:
+            raise NotImplementedError
 
         gp_params['general_params'] = gp_general_params
         gp_runner = GlobalPlannerRunner (gp_params)

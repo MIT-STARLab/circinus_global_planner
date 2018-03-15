@@ -29,8 +29,8 @@
         "resource_delta_t_s": 10
     },
     "pickle_params":  {
-        "pickle_route_selection_results":              false,
-        "unpickle_pre_route_selection":               true,
+        "pickle_route_selection_results":               false,
+        "unpickle_pre_route_selection":                 true,
         "route_selection_pickle": "pickles/walker30_all_obs_30smax_better.pkl"
     },
     "plot_params":  {
@@ -46,7 +46,8 @@
             "plot_bound_e_min_Wh": 13,    
             "plot_bound_e_max_Wh": 21,
             "display_e_min_constraint": false,
-            "display_e_max_constraint": false
+            "display_e_max_constraint": false,
+            "include_eclipse_windows": true
         }
     }
 }

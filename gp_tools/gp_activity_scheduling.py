@@ -11,7 +11,7 @@ from  datetime import timedelta
 from pyomo import environ  as pe
 from pyomo import opt  as po
 
-from .custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow
+from .custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
 from .routing_objects import DataRoute
 from .schedule_objects import Dancecard
 from circinus_tools  import io_tools
@@ -43,6 +43,8 @@ class GPActivityScheduling():
         self.sats_emin_Wh = [p_params['battery_storage_Wh']['e_min'][p_params['battery_option']] for p_params in self.power_params]
         self.sats_emax_Wh = [p_params['battery_storage_Wh']['e_max'][p_params['battery_option']] for p_params in self.power_params]
 
+        self.energy_unit = "Wh"
+
         self.sats_edot_by_act_W = []
         for p_params in self.power_params:
             sat_edot_by_act = {}
@@ -56,8 +58,11 @@ class GPActivityScheduling():
         self.act_type_map = {
             ObsWindow: 'obs',
             DlnkWindow: 'dlnk',
-            XlnkWindow: 'xlnk'
+            XlnkWindow: 'xlnk',
+            EclipseWindow: 'charging'
         }
+
+        self.standard_activities = [ObsWindow,DlnkWindow,XlnkWindow]
 
     def get_stats(self,verbose=True):
         stats = {}
@@ -164,12 +169,13 @@ class GPActivityScheduling():
 
 
 
-    def make_model ( self,routes_flat, verbose = True):
+    def make_model ( self,routes_flat, ecl_winds, verbose = True):
         model = pe.ConcreteModel()
 
         # print(routes_flat)
 
         self.routes_flat = routes_flat
+        self.ecl_winds = ecl_winds
 
         if verbose:
             pass
@@ -205,6 +211,7 @@ class GPActivityScheduling():
         activity_dancecards = [Dancecard(self.start_utc_dt,self.end_utc_dt,self.resource_delta_t_s) for sat_indx in range (self.num_sats)]
         for sat_indx in range (self.num_sats): 
             activity_dancecards[sat_indx].add_winds_to_dancecard(sat_acts[sat_indx])
+            activity_dancecards[sat_indx].add_winds_to_dancecard(ecl_winds[sat_indx])
 
         self.all_acts_indcs = all_acts_indcs
         self.obs_act_indcs = obs_act_indcs
@@ -242,7 +249,10 @@ class GPActivityScheduling():
         model.par_path_subscrs_by_obs_act = pe.Param(model.obs_acts,initialize =path_indcs_by_obs_act)
         model.par_path_subscrs_by_act = pe.Param(model.acts,initialize =path_indcs_by_act)
 
-        model.par_resource_delta_t = pe.Param (initialize= self.resource_delta_t_s) 
+        if self.energy_unit == "Wh":
+            model.par_resource_delta_t = pe.Param (initialize= self.resource_delta_t_s/3600)
+        else: 
+            raise NotImplementedError
         model.par_sats_estore_initial = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_init_estate_Wh)})
         model.par_sats_estore_min = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_emin_Wh)})
         model.par_sats_estore_max = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_emax_Wh)})
@@ -336,19 +346,25 @@ class GPActivityScheduling():
                 model.c6.add( model.var_sats_estore[sat_indx,timepoint] <= model.par_sats_estore_max[sat_indx])
 
                 # determine activity energy consumption
+                charging = True
                 activity_delta_e = 0 
                 #  get the activities that were active during the time step immediately preceding time point
                 activities = activity_dancecards[sat_indx].get_objects_pre_timepoint_indx(timepoint)
                 for act in activities:
-                    act_uindx = all_acts_by_obj[act]
-                    activity_delta_e += (
-                        model.par_sats_edot_by_act[sat_indx][self.act_type_map[type(act)]] 
-                        * model.var_activity_utilization[act_uindx]
-                        * model.par_resource_delta_t
-                    )
+                    #  if this is a "standard activity" that we can choose to perform or not
+                    if type(act) in self.standard_activities:
+                        act_uindx = all_acts_by_obj[act]
+                        activity_delta_e += (
+                            model.par_sats_edot_by_act[sat_indx][self.act_type_map[type(act)]] 
+                            * model.var_activity_utilization[act_uindx]
+                            * model.par_resource_delta_t
+                        )
 
-                # determine whether or not the satellite is in sunlight and thus charging
-                charging = True
+                    #  if the satellite is not in sunlight then we can't charge
+                    elif type(act) == EclipseWindow:
+                        charging = False
+
+                # add in charging energy contribution ( if possible)
                 charging_delta_e = model.par_sats_edot_by_act[sat_indx]['charging']*model.par_resource_delta_t if charging else 0
 
                 #  base-level satellite energy usage (not including additional activities)
@@ -357,7 +373,7 @@ class GPActivityScheduling():
                 # maximum bound of energy at current time step based on last time step
                 model.c6.add( model.var_sats_estore[sat_indx,timepoint] <= 
                     model.var_sats_estore[sat_indx,timepoint-1]
-                    + activity_delta_e
+                    # + activity_delta_e
                     + charging_delta_e
                     + base_delta_e
                 )
@@ -365,9 +381,15 @@ class GPActivityScheduling():
                 # maximum bound of energy at current time step based on last time step
                 model.c6.add( model.var_sats_estore[sat_indx,timepoint] >= 
                     model.var_sats_estore[sat_indx,timepoint-1]
-                    + activity_delta_e
+                    # + activity_delta_e
                     + base_delta_e
+                    # - self.allowed_allowed_delta_e
+                    # - 1
                 )
+
+                # print (dir(model.c6))
+                # print (model.c6.display())
+                # input ()
 
 
 
@@ -408,6 +430,7 @@ class GPActivityScheduling():
             print('this is feasible and optimal')
         elif results.solver.termination_condition == po.TerminationCondition.infeasible:
             print ('infeasible')
+            raise RuntimeError('Model is infeasible with current parameters')
         else:
             # something else is wrong
             print (results.solver)

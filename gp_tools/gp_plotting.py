@@ -71,8 +71,6 @@ class GPPlotting():
         plt.figure()
 
         #  create subplots for satellites
-        axes = plt.subplot(num_sats,1,1)
-        axes.patch.set_facecolor('w')
         fig = plt.gcf()
         fig.set_size_inches( plot_size_inches)
         # print fig.get_size_inches()
@@ -89,7 +87,7 @@ class GPPlotting():
         for  plot_indx, sat_indx in enumerate (sats_indcs_list):
 
             # 
-            plt.subplot( num_sats,1,plot_indx+1)
+            axes = plt.subplot( num_sats,1,plot_indx+1)
             if plot_indx == np.floor(num_sats/2):
                 plt.ylabel('Satellite Index\n\n' + str(sat_indx))
             else:
@@ -367,6 +365,9 @@ class GPPlotting():
 
         plt.xlabel('Time (%s)'%(self.time_units))
 
+        # use the last axes to set the entire plot background color
+        axes.patch.set_facecolor('w')
+
         if show:
             plt.show()
         else:
@@ -417,8 +418,6 @@ class GPPlotting():
         plt.figure()
 
         #  create subplots for satellites
-        axes = plt.subplot(num_sats,1,1)
-        axes.patch.set_facecolor('w')
         fig = plt.gcf()
         fig.set_size_inches( plot_size_inches)
         # print fig.get_size_inches()
@@ -435,7 +434,7 @@ class GPPlotting():
         for  plot_indx, sat_indx in enumerate (sats_indcs_list):
 
             # 
-            plt.subplot( num_sats,1,plot_indx+1)
+            axes = plt.subplot( num_sats,1,plot_indx+1)
             if plot_indx == np.floor(num_sats/2):
                 plt.ylabel('Satellite Index\n\n' + str(sat_indx))
             else:
@@ -725,6 +724,9 @@ class GPPlotting():
 
         plt.xlabel('Time (%s)'%(self.time_units))
 
+        # use the last axes to set the entire plot background color
+        axes.patch.set_facecolor('w')
+
         if show:
             plt.show()
         else:
@@ -734,12 +736,20 @@ class GPPlotting():
         self,
         sats_indcs_list,
         energy_usage,
+        ecl_winds,
         plot_start,
         plot_end,
         plot_title = 'Energy Utilization', 
         plot_size_inches = (12,12),
         show=False,
         fig_name='plots/energy_plot.pdf'):
+
+        plot_labels = {
+            "e usage": "e usage",
+            "e max": "e max",
+            "e min": "e min",
+            "ecl": "ecl"
+        }
 
         if self.time_units == 'hours':
             time_divisor = 3600
@@ -754,19 +764,23 @@ class GPPlotting():
         plt.figure()
 
         #  create subplots for satellites
-        axes = plt.subplot(num_sats,1,1)
-        axes.patch.set_facecolor('w')
         fig = plt.gcf()
         fig.set_size_inches( plot_size_inches)
         # print fig.get_size_inches()
 
         plt.title( plot_title)
 
+        #  these hold the very last plot object of a given type added. Used for legend below
+        e_usage_plot = None
+        e_max_plot = None
+        e_min_plot = None
+        ecl_plot = None
+
         # for each agent
         for  plot_indx, sat_indx in enumerate (sats_indcs_list):
 
-            # 
-            plt.subplot( num_sats,1,plot_indx+1)
+            #  make a subplot for each
+            axes = plt.subplot( num_sats,1,plot_indx+1)
             if plot_indx == np.floor(num_sats/2):
                 plt.ylabel('Satellite Index\n\n' + str(sat_indx))
             else:
@@ -789,29 +803,36 @@ class GPPlotting():
 
             current_axis = plt.gca()
 
-            #  these hold the very last plot object of a given type added. Used for legend below
-            e_usage = None
-            e_max = None
-            e_min = None
+            # the first return value is a handle for our line, everything else can be ignored
+            e_usage_plot,*dummy = plt.plot(energy_usage['time_mins'],energy_usage['e_sats'][sat_indx], label =  plot_labels["e usage"])
 
-            plt.plot(energy_usage['time_mins'],energy_usage['e_sats'][sat_indx])
+            if self.energy_usage_plot_params['include_eclipse_windows']:
+                for ecl_wind in ecl_winds[sat_indx]:
+                    ecl_wind_start = (ecl_wind.start-plot_start).total_seconds()/time_divisor
+                    ecl_wind_end = (ecl_wind.end-plot_start).total_seconds()/time_divisor
+
+                    height = 2
+                    ecl_plot = Rectangle((ecl_wind_start, vert_min), ecl_wind_end-ecl_wind_start, vert_min+height,alpha=0.3,fill=True,color='#202020',label= plot_labels["ecl"])
+
+                    current_axis.add_patch(ecl_plot)
 
 
         legend_objects = []
-        legend_objects_labels = []
-        if e_usage: 
-            legend_objects.append(d_w)
-            legend_objects_labels.append('e util')
-        if e_max: 
-            legend_objects.append(d)
-            legend_objects_labels.append('e max')
-        if e_min: 
-            legend_objects.append(x_w)
-            legend_objects_labels.append('e min')
+        if e_usage_plot: 
+            legend_objects.append(e_usage_plot)
+        if e_max_plot: 
+            legend_objects.append(e_max_plot)
+        if e_min_plot: 
+            legend_objects.append(e_min_plot)
+        if ecl_plot: 
+            legend_objects.append(ecl_plot)
 
-        plt.legend(legend_objects, legend_objects_labels ,bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+        plt.legend(handles=legend_objects ,bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 
         plt.xlabel('Time (%s)'%(self.time_units))
+
+        # use the last axes to set the entire plot background color
+        axes.patch.set_facecolor('w')
 
         if show:
             plt.show()
