@@ -373,7 +373,7 @@ class GPActivityScheduling():
                 # maximum bound of energy at current time step based on last time step
                 model.c6.add( model.var_sats_estore[sat_indx,timepoint] <= 
                     model.var_sats_estore[sat_indx,timepoint-1]
-                    # + activity_delta_e
+                    + activity_delta_e
                     + charging_delta_e
                     + base_delta_e
                 )
@@ -381,15 +381,34 @@ class GPActivityScheduling():
                 # maximum bound of energy at current time step based on last time step
                 model.c6.add( model.var_sats_estore[sat_indx,timepoint] >= 
                     model.var_sats_estore[sat_indx,timepoint-1]
-                    # + activity_delta_e
+                    + activity_delta_e
                     + base_delta_e
-                    # - self.allowed_allowed_delta_e
-                    # - 1
                 )
 
-                # print (dir(model.c6))
-                # print (model.c6.display())
-                # input ()
+                #  TODO: reassess if adding this version of the code backend is faster
+                # if charging:
+                #     # maximum bound of energy at current time step based on last time step
+                #     model.c6.add( model.var_sats_estore[sat_indx,timepoint] <= 
+                #         model.var_sats_estore[sat_indx,timepoint-1]
+                #         + activity_delta_e
+                #         + charging_delta_e
+                #         + base_delta_e
+                #     )
+
+                #     # maximum bound of energy at current time step based on last time step
+                #     model.c6.add( model.var_sats_estore[sat_indx,timepoint] >= 
+                #         model.var_sats_estore[sat_indx,timepoint-1]
+                #         + activity_delta_e
+                #         + base_delta_e
+                #     )
+                # else:
+                #     # energy at time step is deterministic function of last time step
+                #     model.c6.add( model.var_sats_estore[sat_indx,timepoint] == 
+                #         model.var_sats_estore[sat_indx,timepoint-1]
+                #         + activity_delta_e
+                #         + base_delta_e
+                #     )
+
 
 
 
