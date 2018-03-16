@@ -85,7 +85,8 @@ class GlobalPlannerRunner:
     def unpickle_rtsel_stuff( self):
 
         p = pickle.load (open ( self.pickle_params['route_selection_pickle'],'rb'))
-        self.params = p['params']
+        #  TODO:  uncommon this  if want to reload parameters from file
+        # self.params = p['params']
 
         return p['all_routes'],p['all_routes_obs'],p['all_stats'],p['route_times_s'],p['obs_indx'],p['ecl_winds'],p['window_uid']
 
@@ -98,7 +99,6 @@ class GlobalPlannerRunner:
     
 
     def run_nominal_activity_scheduling( self, all_routes,ecl_winds):
-        
         gp_as = GPActivityScheduling ( self.params)
 
         # flatten the list of all routes, which currently has nested lists for each observation
@@ -129,6 +129,7 @@ class GlobalPlannerRunner:
         dv_obs_stats = gp_met.assess_dv_by_obs (routes,verbose = True)
         lat_stats = gp_met.assess_latency_all_routes (routes,verbose = True)
         lat_obs_stats = gp_met.assess_latency_by_obs (routes,verbose = True)
+        aoi_targ_stats = gp_met.assess_aoi_by_obs_target(routes,include_routing=True,verbose = True)
         # print("dv_stats['total_dv']")
         # print(dv_stats['total_dv'])
         # print('dv_stats')

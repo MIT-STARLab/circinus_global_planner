@@ -25,6 +25,7 @@ from pyomo import opt  as po
 
 
 from .routing_objects import DataRoute
+from circinus_tools  import time_tools as tt
 
 class GPDataRouteSelection():
     """docstring for GP route selection"""
@@ -44,11 +45,12 @@ class GPDataRouteSelection():
         sat_params = gp_params['gp_orbit_prop_params']['sat_params']
         rt_params = gp_params['gp_general_params']['route_selection_params']
         gp_general_other_params = gp_params['gp_general_params']['other_params']
+        gp_inst_params = gp_params['gp_instance_params']['route_selection_params']
 
         self.num_sats=sat_params['num_sats']
         self.num_paths=rt_params['num_paths']
-        self.start_utc_dt  =scenario_params['start_utc_dt']
-        self.end_utc_dt  =scenario_params['end_utc_dt']
+        self.sel_start_utc_dt  = tt.iso_string_to_dt (gp_inst_params['start_utc'])
+        self.sel_end_utc_dt  = tt.iso_string_to_dt (gp_inst_params['end_utc'])
 
         # note: M values should be as low as possible to prevent numerical issues (see: https://orinanobworld.blogspot.com/2011/07/perils-of-big-m.html)
         self.M_t_s= 86400 # 1 day
@@ -226,7 +228,7 @@ class GPDataRouteSelection():
         model = pe.ConcreteModel()
 
         self.obs_wind = obs_wind
-        self.dlink_winds_flat,self.xlink_winds =  self.filter_windows (obs_wind,dlink_winds_flat,xlink_winds, self.num_sats, self.end_utc_dt, self.wind_filter_duration)
+        self.dlink_winds_flat,self.xlink_winds =  self.filter_windows (obs_wind,dlink_winds_flat,xlink_winds, self.num_sats, self.sel_end_utc_dt, self.wind_filter_duration)
 
         ##############################
         #  Make indices/ subscripts

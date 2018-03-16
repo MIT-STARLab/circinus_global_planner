@@ -9,6 +9,7 @@ from  datetime import timedelta
 from pyomo import environ  as pe
 from pyomo import opt  as po
 
+from circinus_tools  import time_tools as tt
 from .custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
 from .routing_objects import DataRoute
 from .schedule_objects import Dancecard
@@ -31,6 +32,7 @@ class GPActivityScheduling():
         scenario_params = gp_params['gp_orbit_prop_params']['scenario_params']
         sat_params = gp_params['gp_orbit_prop_params']['sat_params']
         as_params = gp_params['gp_general_params']['activity_scheduling_params']
+        gp_inst_params = gp_params['gp_instance_params']['activity_scheduling_params']
         
         self.solver_max_runtime =as_params['solver_max_runtime_s']
         self.solver_name =as_params['solver_name']
@@ -38,8 +40,8 @@ class GPActivityScheduling():
         self.min_path_dv =as_params['min_path_dv_Mb']
         self.num_sats=sat_params['num_sats']
         self.transition_time_s=as_params['transition_time_s']
-        self.start_utc_dt  =scenario_params['start_utc_dt']
-        self.end_utc_dt  =scenario_params['end_utc_dt']
+        self.sched_start_utc_dt  = tt.iso_string_to_dt (gp_inst_params['start_utc'])
+        self.sched_end_utc_dt  = tt.iso_string_to_dt (gp_inst_params['end_utc'])
         self.resource_delta_t_s  =as_params['resource_delta_t_s']
         sat_id_order= sat_params['sat_id_order']
 
@@ -175,6 +177,19 @@ class GPActivityScheduling():
         return sat_acts,all_acts_indcs,path_indcs_by_act,dv_by_act,all_acts_by_obj,obs_act_indcs,path_indcs_by_obs_act,dv_by_obs_act,link_act_indcs,path_indcs_by_link_act,dv_by_link_act
                     
 
+    def filter_routes( self,routes_flat):
+
+        new_routes = []
+        for dr in routes_flat:
+            dr_start = dr.get_obs().start
+            dr_end = dr.get_dlnk().end
+
+            if dr_start < self.sched_start_utc_dt or dr_end > self.sched_end_utc_dt:
+                pass
+            else:
+                new_routes.append (dr)
+
+        return new_routes
 
 
 
@@ -182,6 +197,9 @@ class GPActivityScheduling():
         model = pe.ConcreteModel()
 
         # print(routes_flat)
+
+        # filter the routes to make sure that  none of their activities fall outside the scheduling window
+        routes_flat = self.filter_routes(routes_flat)
 
         self.routes_flat = routes_flat
         self.ecl_winds = ecl_winds
@@ -210,7 +228,7 @@ class GPActivityScheduling():
         # construct a set of dance cards for every satellite, 
         # each of which keeps track of all of the activities of satellite 
         # can possibly execute at any given time slice delta T. 
-        activity_dancecards = [Dancecard(self.start_utc_dt,self.end_utc_dt,self.resource_delta_t_s) for sat_indx in range (self.num_sats)]
+        activity_dancecards = [Dancecard(self.sched_start_utc_dt,self.sched_end_utc_dt,self.resource_delta_t_s) for sat_indx in range (self.num_sats)]
         for sat_indx in range (self.num_sats): 
             activity_dancecards[sat_indx].add_winds_to_dancecard(sat_acts[sat_indx])
             activity_dancecards[sat_indx].add_winds_to_dancecard(ecl_winds[sat_indx])

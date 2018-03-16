@@ -7,6 +7,7 @@
 from datetime import datetime
 import numpy as np
 
+from circinus_tools  import time_tools as tt
 
 class GPMetrics():
     """docstring for GPMetrics"""
@@ -18,12 +19,34 @@ class GPMetrics():
         :param gp_params: global namespace parameters created from input files (possibly with some small non-structural modifications to params). The name spaces here should trace up all the way to the input files.
         :type params: dict
         """
+        scenario_params = gp_params['gp_orbit_prop_params']['scenario_params']
+        gp_inst_params = gp_params['gp_instance_params']['metrics_params']
+        obs_params = gp_params['gp_orbit_prop_params']['obs_params']
+        gp_general_other_params = gp_params['gp_general_params']['other_params']
+        metrics_params = gp_params['gp_general_params']['metrics_params']
+        plot_params = gp_params['gp_general_params']['plot_params']
 
         self.latency_params = gp_params['gp_general_params']['other_params']['latency_calculation']
-        self.min_obs_dv = gp_params['gp_general_params']['other_params']['metrics_min_obs_dv_Mb']
+        self.met_start_utc_dt  = tt.iso_string_to_dt (gp_inst_params['start_utc'])
+        self.met_end_utc_dt  = tt.iso_string_to_dt (gp_inst_params['end_utc'])
+        self.num_targ = obs_params['num_targets']
+        self.all_targ_IDs = [targ['id'] for targ in obs_params['targets']]
+        self.targ_ignore_list = gp_general_other_params['targ_ignore_list']
+
+        self.min_obs_dv = metrics_params['min_obs_dv_Mb']
+        self.aoi_units = metrics_params['aoi_units']
+        self.aoi_plot_t_units=plot_params['time_units']
 
         # the amount by which the minimum data volume is allowed to be lower than self.min_obs_dv
         self.min_obs_dv_slop = self.min_obs_dv*0.01
+
+        # if two downlink times are within this number of seconds, then they are counted as being at the same time for the purposes of AoI calculation
+        self.dlnk_same_time_slop_s = scenario_params['timestep_s'] - 1
+
+        if self.latency_params['obs'] not in ['start','end']:
+            raise NotImplementedError
+        if self.latency_params['dlnk'] not in ['start','end','center']:
+            raise NotImplementedError
 
     def assess_dv_all_routes(self, routes,  verbose  = False):
         stats = {}
@@ -215,14 +238,34 @@ class GPMetrics():
             print("%s: %f"%('min_obs_final_lat',stats['min_obs_final_lat']))
             print("%s: %f"%('max_obs_final_lat',stats['max_obs_final_lat']))
 
-            for obs in final_lat_by_obs.keys ():
-                i = intial_lat_by_obs.get(obs,99999.0)
-                f = final_lat_by_obs.get(obs,99999.0)
-                print("%s: i %f, f %f"%(obs,i,f))
+            # for obs in final_lat_by_obs.keys ():
+            #     i = intial_lat_by_obs.get(obs,99999.0)
+            #     f = final_lat_by_obs.get(obs,99999.0)
+            #     print("%s: i %f, f %f"%(obs,i,f))
 
         return stats
 
-    def calc_aoi_integration( d_c_mat, start_calc_window, end_calc_window,input_type="datetime",output_units='hours'):
+    @staticmethod
+    def t_conv_func(t_end,t_start,input_type='datetime',output_units='hours'):
+        """ converts input time range to a float difference in desired output units """
+        if input_type == "datetime":
+            diff = (t_end-t_start).total_seconds ()
+        elif input_type == "seconds":
+            diff =  t_end-t_start
+        else:
+            raise NotImplementedError
+
+        if output_units == 'seconds':
+            return diff
+        elif output_units == 'minutes':
+            return diff/60
+        elif output_units == 'hours':
+            return diff/3600
+        else:
+            raise NotImplementedError
+
+    @staticmethod
+    def calc_av_aoi( d_c_mat, start_calc_window, end_calc_window,input_type="datetime",output_units='hours'):
         """ performs AoI calculation on a formatted input matrix
         
         calculates Age of Information (AoI) based on the data in input matrix.  this is the integration process  performed by summing up the triangular sections representing an AoI curve.
@@ -263,6 +306,9 @@ class GPMetrics():
 
         When calculating AOI, we sum up a series of triangles defined by the creation and delivery times for data. For each of the time points above, at 'b' new data is being delivered to a destination. At 'a', this data was created. Therefore  the data is already as old as the time between 'a' and 'b' when it arrives at the destination. During the time between 't-1 b' and 't b' the data that was delivered at 't-1 b' is aging, without any updates. At 't b' we receive updated data, that again, already has some age. So we go through all the timepoints summing up the triangle specified by 't-1 b' and 't b', with the tip from 't-1 a' to 't-1 b' subtracted (which actually leaves us with a trapezoid).  once we sum up all of these trapezoids, we divide by the total time to get a time-averaged age of data (or AoI).
 
+        TODO:  update this reference when I  actually publish the equation...
+        This calculation is performed per equation ? in ?
+
         :param d_c_mat: [description]
         :type d_c_mat: [type]
         :param start_calc_window: [description]
@@ -279,99 +325,231 @@ class GPMetrics():
 
         # Now sum up trapezoidal sections of AoI curve (integration)
 
-        def conv_func(t_end,t_start):
-            """ converts input time range to a float difference in seconds """
-            if input_type == "datetime":
-                return (t_end-t_start).total_seconds ()
-            elif input_type == "seconds":
-                return t_end-t_start
+        conv_func = GPMetrics.t_conv_func
 
         aoi_summation = 0
         for t in range(1,len(d_c_mat)):
-            trap_addition = (conv_func(d_c_mat[t][0],d_c_mat[t-1][1]).total_seconds()**2 - conv_func(d_c_mat[t-1][0],d_c_mat[t-1][1])**2)/2
+            trap_addition = (conv_func(d_c_mat[t][0],d_c_mat[t-1][1],input_type,output_units)**2 - conv_func(d_c_mat[t-1][0],d_c_mat[t-1][1],input_type,output_units)**2)/2
             aoi_summation += trap_addition
 
+        av_aoi = aoi_summation / conv_func(end_calc_window,start_calc_window,input_type,output_units)
+        return av_aoi
 
-        av_aoi = aoi_summation / conv_func(end_calc_window,start_calc_window)
-        if output_units=='hours':
-            return av_aoi/3600  # in hours
-        elif output_units=='seconds':
-            return av_aoi   # in seconds
-        else:
-            raise NotImplementedError
+    @staticmethod
+    def get_aoi_curve(d_c_mat,base_time,input_type="datetime",x_units='minutes',y_units='hours'):
+        """get X and Y for plotting AoI
+        
+        [description]
+        :param d_c_mat: [description]
+        :type d_c_mat: [type]
+        :param base_time: [description]
+        :type base_time: [type]
+        :param input_type: [description], defaults to "datetime"
+        :type input_type: str, optional
+        :param x_units: [description], defaults to 'minutes'
+        :type x_units: str, optional
+        :param y_units: [description], defaults to 'hours'
+        :type y_units: str, optional
+        """
+        
+        conv_func = GPMetrics.t_conv_func
 
-    # def assess_aoi_by_obs_target(routes,num_targ,targ_ignore_list,start_calc_window, end_calc_window, tstep_td,include_routing=False):
+        x = []
+        y = []
+        for indx, row in  enumerate (d_c_mat):
+            if indx==0:
+                x.append(conv_func(row[0],base_time,input_type,x_units))
+                y.append(conv_func(row[0],row[1],input_type,y_units))
+            else:
+                last_row = d_c_mat[indx-1]
+                x.append(conv_func(row[0],base_time,input_type,x_units))
+                y.append(conv_func(row[0],last_row[1],input_type,y_units))
 
-    #     # note: adapted from code in comm_constellation_MDO repo, commit e2d82dbace8e43bb81b1b2b69955f0a143bf7c62
+        aoi_curve = {
+            'x': x,
+            'y': y
+        }
+        return aoi_curve
 
-    #     target_av_aoi_no_routing = []
-    #     target_av_aoi_routing = []
+    @staticmethod
+    def get_av_aoi_routing(d_c_mat_targ,start_calc_window,end_calc_window,dlnk_same_time_slop_s,aoi_units='hours',aoi_plot_t_units='minutes'):
+        """ preprocess delivery creation matrix and do AoI calculation, with routing
+        
+        this code first pre-processes the matrix to get rid of superfluous information that would throw off the AoI calculation. This essentially smooths down the data to the saw-like shape expected for an AoI (versus time) curve.  in the preprocessing we progress through delivery (downlink) times, looking for the earliest creation (observation) time for each delivery time. Here we account for the fact that it can take time to deliver data after its creation
+        :param d_c_mat_targ:  the delivery creation matrix for a given target (list of lists, each of two elements - delivery, creation time)
+        :type d_c_mat_targ: list(list)
+        :param start_calc_window: the start of the window for calculating AoI
+        :type start_calc_window: datetime or float
+        :param end_calc_window: the end of the window for calculating AoI
+        :type end_calc_window: datetime or float
+        :param dlnk_same_time_slop_s:  the time delta by which delivery times can differ and still be considered the same time
+        :type dlnk_same_time_slop_s: float
+        :param output_units:  the time output units used for AoI, defaults to 'hours'
+        :type output_units: str, optional
+        """
 
-    #     # First we need to seperate downlink time and creation time of all obs taken for this target. Put these into a matrix for convenient sorting.
-    #     # for each row of dlnk_obs_times_mat[targ_indx]:
-    #     # column 1 is downlink time
-    #     # column 2 is observation time
-    #     dlnk_obs_times_mat = [[] for targ_indx in range(num_targ)]
+        #  this builds in the assumption that AoI starts at zero time zero
+        d_c_mat_filt = [[start_calc_window,start_calc_window]]
 
-    #     rts_by_obs = self.get_routes_by_obs (routes)
+        current_time = start_calc_window
+        last_creation_time = start_calc_window
 
-    #     # start, center, end...whichever we're using for the latency calculation
-    #     time_option = self.latency_params['dlnk']
+        for mat_indx, row in enumerate(d_c_mat_targ):
+            if row[0] > current_time:
+                current_time = row[0]  # update to most recent delivery (downlink) time
 
-    #     for obs_wind,rts in rts_by_obs.items():
+                # the check here with last_creation_time is what ensures that creation (observation) times are always increasing - we want this when looking at data routing for the following reason: it's not helpful to hear later about an earlier event than we previously knew about - because that information does not help us make better TIME SENSITIVE decisions
+                if (row[1] > last_creation_time):
+                    last_creation_time = row[1]
+                    #  add data delivery time (the current time) and the creation time of that data
+                    d_c_mat_filt.append([current_time,last_creation_time])
 
-    #         for targ_ID in obs_wind.target_IDs:
+            # if this next row has the same delivery time as previous one
+            elif (row[0]-current_time).total_seconds() <= dlnk_same_time_slop_s:
 
-    #             # skip ignored targets
-    #             if targ_ID in targ_ignore_list:
-    #                 continue
+                # but if the creation time of this row is BEFORE what's currently in the d_c mat...
+                # (have to check this because we only sorted by delivery time before - not assuming that we also sorted by creation time under each distinct delivery time)
+                if (row[1] > last_creation_time):
+                    last_creation_time = row[1]
+                    d_c_mat_filt[-1][1] = last_creation_time  #replace the last creation time, because it turns out we've seen it more recently
 
-    #             if not include_routing:
-    #                 # add row for this observation. Note: there should be no duplicate observations in obs_winds
-    #                 dlnk_obs_times_mat[targ_ID].append([None,obs_wind.start])
+        # add on end time - important for getting proper AoI over whole scenario (first point (start_calc_window,start_calc_window) was already added on matrix)
+        d_c_mat_filt.append([end_calc_window,end_calc_window])
 
-    #             else:
-    #                 #  want to sort these by earliest time so that we favor earlier downlinks
-    #                 rts.sort (key=lambda rt: getattr(rt.get_dlnk(),time_option))
+        avaoi = GPMetrics.calc_av_aoi( d_c_mat_filt, start_calc_window, end_calc_window,input_type="datetime",output_units=aoi_units)
+        aoi_curve = GPMetrics.get_aoi_curve(d_c_mat_filt,start_calc_window,input_type="datetime",x_units=aoi_plot_t_units,y_units=aoi_units)
 
-    #                 # figure out at which data route we meet the minimum DV downlink requirement
-    #                 cum_dv = 0
-    #                 for dr in rts:
-    #                     cum_dv += dr.scheduled_dv
+        return avaoi, aoi_curve
+
+    
+
+    @staticmethod
+    def get_av_aoi_no_routing(d_c_mat_targ,start_calc_window,end_calc_window,aoi_units='hours',aoi_plot_t_units='minutes'):
+        """ preprocess delivery creation matrix and do AoI calculation, without routing
+        
+        this code first pre-processes the matrix to get rid of superfluous information that would throw off the AoI calculation. This essentially smooths down the data to the saw-like shape expected for an AoI (versus time) curve.  in the preprocessing we progress through delivery (downlink) times, looking for the earliest creation (observation) time for each delivery time. Here we assume that delivery time equals creation time
+        :param d_c_mat_targ:  the delivery creation matrix for a given target (list of lists, each of two elements - delivery, creation time)
+        :type d_c_mat_targ: list(list)
+        :param start_calc_window: the start of the window for calculating AoI
+        :type start_calc_window: datetime or float
+        :param end_calc_window: the end of the window for calculating AoI
+        :type end_calc_window: datetime or float
+        :param dlnk_same_time_slop_s:  the time delta by which delivery times can differ and still be considered the same time
+        :type dlnk_same_time_slop_s: float
+        :param output_units:  the time output units used for AoI, defaults to 'hours'
+        :type output_units: str, optional
+        """
+
+        #  this builds in the assumption that AoI starts at zero time zero
+        d_c_mat_filt = [[start_calc_window,start_calc_window]]
+
+        last_creation_time = start_calc_window
+
+        for mat_indx, row in enumerate(d_c_mat_targ):
+            if row[1] > last_creation_time:
+                last_creation_time = row[1]
+                # right here we're effectively saying that delivery time is the same as creation time
+                # (this will cause a cancellation of the second term in the AoI summation equation)
+                d_c_mat_filt.append([last_creation_time,last_creation_time])
+
+        # add on end time - important for getting proper AoI over whole scenario (first point (start_calc_window) was already added on matrix)
+        d_c_mat_filt.append([end_calc_window,end_calc_window])
+
+        avaoi = self.calc_av_aoi( d_c_mat_filt, start_calc_window, end_calc_window,input_type="datetime",output_units=aoi_units)
+        aoi_curve = self.get_aoi_curve(d_c_mat_filt,start_calc_window,input_type="datetime",x_units=aoi_plot_t_units,y_units=aoi_units)
+
+        return avaoi, aoi_curve
+
+
+    def assess_aoi_by_obs_target(self,routes,include_routing=False,verbose = True):
+
+        # note: adapted from code in comm_constellation_MDO repo, commit e2d82dbace8e43bb81b1b2b69955f0a143bf7c62
+
+        av_aoi_vals = []
+        av_aoi_by_targID = {}
+        aoi_curves_vals = []
+        aoi_curves_by_targID = {}
+
+        # First we need to seperate downlink time and creation time of all obs taken for this target. Put these into a matrix for convenient sorting.
+        # for each row of dlnk_obs_times_mat[targ_indx]:
+        # column 1 is downlink time
+        # column 2 is observation time
+        dlnk_obs_times_mat = [[] for targ_indx in range(self.num_targ)]
+
+        rts_by_obs = self.get_routes_by_obs (routes)
+
+        # start, center, end...whichever we're using for the latency calculation
+        time_option = self.latency_params['dlnk']
+
+        for obs_wind,rts in rts_by_obs.items():
+
+            for targ_ID in obs_wind.target_IDs:
+
+                # skip ignored targets
+                if targ_ID in  self.targ_ignore_list:
+                    continue
+
+                targ_indx = self.all_targ_IDs.index(targ_ID)
+
+                if not include_routing:
+                    # add row for this observation. Note: there should be no duplicate observations in obs_winds
+                    dlnk_obs_times_mat[targ_indx].append([None,obs_wind.start])
+
+                else:
+                    #  want to sort these by earliest time so that we favor earlier downlinks
+                    rts.sort (key=lambda rt: getattr(rt.get_dlnk(),time_option))
+
+                    # figure out at which data route we meet the minimum DV downlink requirement
+                    cum_dv = 0
+                    for dr in rts:
+                        cum_dv += dr.scheduled_dv
                         
-    #                     #  if we have reached our minimum required data volume amount...
-    #                     if cum_dv >= self.min_obs_dv - self.min_obs_dv_slop:
+                        #  if we have reached our minimum required data volume amount...
+                        if cum_dv >= self.min_obs_dv - self.min_obs_dv_slop:
 
-    #                         dlnk_obs_times_mat[targ_ID].append([getattr(dr.get_dlnk(),time_option), obs_wind.start])
-
-
-    #     FIX FROM HERE
-    #     for targ_indx in range(num_targ):
-    #         dlnk_obs_times_mat_targ = dlnk_obs_times_mat[targ_indx]
-
-    #         if not include_routing:
-    #             dlnk_obs_times_mat_targ.sort(key=lambda row: row[1])  # sort by creation time
-
-    #             av_aoi_no_routing_temp = calcAvAoI_noRouting(dlnk_obs_times_mat_targ,start_calc_window, end_calc_window)
-    #             target_av_aoi_no_routing.append(av_aoi_no_routing_temp)
-
-    #         else:
-    #             dlnk_obs_times_mat_targ.sort(key=lambda row: row[0])  # sort by downlink time
-
-    #             av_aoi_routing_temp = calcAvAoI_routing(dlnk_obs_times_mat_targ, start_calc_window,end_calc_window,tstep_td)
-    #             target_av_aoi_routing.append(av_aoi_routing_temp)
+                            dlnk_obs_times_mat[targ_indx].append([getattr(dr.get_dlnk(),time_option), obs_wind.start])
 
 
-    #     if not include_routing:
-    #         avavaoi = np.mean(target_av_aoi_no_routing)
-    #         stdavaoi = np.std(target_av_aoi_no_routing)
-    #         # print 'target_av_aoi_no_routing: '+str(target_av_aoi_no_routing)
-    #         # print 'mean: '+str(avavaoi)
+        for targ_indx in range(self.num_targ):
+            dlnk_obs_times_mat_targ = dlnk_obs_times_mat[targ_indx]
 
-    #         return avavaoi,stdavaoi
-    #     else:
-    #         avavaoi = np.mean(target_av_aoi_routing)
-    #         stdavaoi = np.std(target_av_aoi_routing)
-    #         # print 'target_av_aoi_routing: ' + str(target_av_aoi_routing)
-    #         # print 'mean: ' + str(np.mean(target_av_aoi_routing))
-    #         return avavaoi,stdavaoi
+            if not include_routing:
+                dlnk_obs_times_mat_targ.sort(key=lambda row: row[1])  # sort by creation time
+
+                av_aoi,aoi_curve = self.get_av_aoi_no_routing(dlnk_obs_times_mat_targ, self.met_start_utc_dt, self.met_end_utc_dt,aoi_units=self.aoi_units,aoi_plot_t_units=self.aoi_plot_t_units)
+
+            else:
+                dlnk_obs_times_mat_targ.sort(key=lambda row: row[0])  # sort by downlink time
+
+                av_aoi,aoi_curve = self.get_av_aoi_routing(dlnk_obs_times_mat_targ,  self.met_start_utc_dt,self.met_end_utc_dt,self.dlnk_same_time_slop_s,aoi_units=self.aoi_units,aoi_plot_t_units=self.aoi_plot_t_units)
+            
+            av_aoi_vals.append(av_aoi)
+            aoi_curves_vals.append(aoi_curve)
+            targ_ID = self.all_targ_IDs[targ_indx]
+            av_aoi_by_targID[targ_ID] = av_aoi
+            aoi_curves_by_targID[targ_ID] = aoi_curve
+
+
+        valid = len(av_aoi_vals) > 0
+
+        stats =  {}
+        stats['av_av_aoi'] = np.mean(av_aoi_vals) if valid else None
+        stats['min_av_aoi'] = np.min(av_aoi_vals) if valid else None
+        stats['max_av_aoi'] = np.max(av_aoi_vals) if valid else None
+        stats['std_av_aoi'] = np.std(av_aoi_vals) if valid else None
+
+        stats['av_aoi_by_targID'] = av_aoi_by_targID
+        stats['aoi_curves_by_targID'] = aoi_curves_by_targID
+
+        if verbose:
+            print('AoI values')
+            print("%s: %f"%('av_av_aoi',stats['av_av_aoi']))
+            print("%s: %f"%('min_av_aoi',stats['min_av_aoi']))
+            print("%s: %f"%('max_av_aoi',stats['max_av_aoi']))
+            print("%s: %f"%('std_av_aoi',stats['std_av_aoi']))
+
+            for targ_ID in av_aoi_by_targID.keys ():
+                avaoi = av_aoi_by_targID.get(targ_ID,None)
+                print("targ_ID %d: av aoi %f"%(targ_ID,avaoi))
+
+        return stats
