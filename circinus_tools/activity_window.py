@@ -51,10 +51,10 @@ class ActivityWindow(object):
         # TODO: remove this error checking later once all code solidified?
         try:
             if not self._ave_data_rate_cache:
-                self._ave_data_rate_cache =  act.data_vol / ( act.end - act.start).total_seconds ()
+                self._ave_data_rate_cache =  self.data_vol / ( self.end - self.start).total_seconds ()
             return self._ave_data_rate_cache
         except AttributeError:
-            self._ave_data_rate_cache = act.data_vol / ( act.end - act.start).total_seconds ()
+            self._ave_data_rate_cache = self.data_vol / ( self.end - self.start).total_seconds ()
             return self._ave_data_rate_cache
 
     def calc_center ( self):

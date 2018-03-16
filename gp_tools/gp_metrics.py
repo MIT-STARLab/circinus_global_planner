@@ -11,9 +11,16 @@ import numpy as np
 class GPMetrics():
     """docstring for GPMetrics"""
 
-    def __init__(self, params):
-        self.latency_params = params['latency_calculation']
-        self.min_obs_dv = params['metrics_min_obs_dv_Mb']
+    def __init__(self, gp_params):
+        """initializes based on parameters
+        
+        initializes based on parameters
+        :param gp_params: global namespace parameters created from input files (possibly with some small non-structural modifications to params). The name spaces here should trace up all the way to the input files.
+        :type params: dict
+        """
+
+        self.latency_params = gp_params['gp_general_params']['other_params']['latency_calculation']
+        self.min_obs_dv = gp_params['gp_general_params']['other_params']['metrics_min_obs_dv_Mb']
 
         # the amount by which the minimum data volume is allowed to be lower than self.min_obs_dv
         self.min_obs_dv_slop = self.min_obs_dv*0.01

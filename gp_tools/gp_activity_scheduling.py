@@ -20,21 +20,32 @@ class GPActivityScheduling():
     # how close a binary variable must be to zero or one to be counted as that
     binary_epsilon = 0.1
 
-    def __init__(self,params):
-        self.solver_max_runtime =params['solver_max_runtime_s']
-        self.solver_name =params['solver_name']
-        self.solver_run_remotely =params['solver_run_remotely']
-        self.min_path_dv =params['min_path_dv_Mb']
-        self.num_sats=params['num_sats']
-        self.transition_time_s=params['transition_time_s']
-        self.start_utc_dt  =params['start_utc_dt']
-        self.end_utc_dt  =params['end_utc_dt']
-        self.resource_delta_t_s  =params['resource_delta_t_s']
-        sat_id_order= params['sat_id_order']
+    def __init__(self,gp_params):
+        """initializes based on parameters
+        
+        initializes based on parameters
+        :param gp_params: global namespace parameters created from input files (possibly with some small non-structural modifications to params). The name spaces here should trace up all the way to the input files.
+        :type params: dict
+        """
+
+        scenario_params = gp_params['gp_orbit_prop_params']['scenario_params']
+        sat_params = gp_params['gp_orbit_prop_params']['sat_params']
+        as_params = gp_params['gp_general_params']['activity_scheduling_params']
+        
+        self.solver_max_runtime =as_params['solver_max_runtime_s']
+        self.solver_name =as_params['solver_name']
+        self.solver_run_remotely =as_params['solver_run_remotely']
+        self.min_path_dv =as_params['min_path_dv_Mb']
+        self.num_sats=sat_params['num_sats']
+        self.transition_time_s=as_params['transition_time_s']
+        self.start_utc_dt  =scenario_params['start_utc_dt']
+        self.end_utc_dt  =scenario_params['end_utc_dt']
+        self.resource_delta_t_s  =as_params['resource_delta_t_s']
+        sat_id_order= sat_params['sat_id_order']
 
         #  sort these now in case they weren't before
-        self.power_params = io_tools.sort_input_params_by_sat_indcs(params['power_params'],sat_id_order)
-        self.initial_state = io_tools.sort_input_params_by_sat_indcs(params['initial_state'],sat_id_order)
+        self.power_params = io_tools.sort_input_params_by_sat_indcs(sat_params['power_params'],sat_id_order)
+        self.initial_state = io_tools.sort_input_params_by_sat_indcs(sat_params['initial_state'],sat_id_order)
 
         # these lists are in order of satellite index because we've sorted 
         self.sats_init_estate_Wh = [sat_state['batt_e_Wh'] for sat_state in self.initial_state]

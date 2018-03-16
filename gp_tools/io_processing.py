@@ -17,36 +17,48 @@ from .routing_objects import LinkInfo
 class GPProcessorIO():
     """docstring for GPInputProcessor"""
 
-    def __init__(self,params):
+    def __init__(self,gp_params):
+        """initializes based on parameters
+        
+        initializes based on parameters
+        :param gp_params: global namespace parameters created from input files (possibly with some small non-structural modifications to params). The name spaces here should trace up all the way to the input files.
+        :type params: dict
+        """
+
         #  assume modified Julian date for now. todo: make this a parameter
         self.input_date_format = const.MODIFIED_JULIAN_DATE
 
-        #   note: we're implicitly testing for the presence of these parameters  below
+        scenario_params = gp_params['gp_orbit_prop_params']['scenario_params']
+        sat_params = gp_params['gp_orbit_prop_params']['sat_params']
+        gs_params = gp_params['gp_orbit_prop_params']['gs_params']
+        gp_general_other_params = gp_params['gp_general_params']['other_params']
+        gp_data_rates_accesses_params = gp_params['gp_data_rates_params']['accesses_data_rates']
+        gp_data_rates_other_params = gp_params['gp_data_rates_params']['other_data']
 
         #  common parameters used for processing  multiple types of input windows
         # scenario_start: datetime storing the start of the overall simulation period
         # scenario_end: datetime storing the end of the overall simulation period
         # tstep_sec: timestep for sim, in seconds
-        self.scenario_start=params['start_utc_dt']
-        self.scenario_end=params['end_utc_dt']
-        self.tstep_sec=params['timestep_s']
-        self.num_sats=params['num_sats']
-        self.num_gs=params['num_gs']
+        self.scenario_start=scenario_params['start_utc_dt']
+        self.scenario_end=scenario_params['end_utc_dt']
+        self.tstep_sec=scenario_params['timestep_s']
+        self.num_sats=sat_params['num_sats']
+        self.num_gs=gs_params['num_gs']
 
-        self.obs_times=params['obs_times']
-        self.pl_data_rate=params['pl_data_rate']
-        self.targ_ignore_list=params['targ_ignore_list']
+        self.obs_times=gp_data_rates_accesses_params['obs_times']
+        self.pl_data_rate=sat_params['pl_data_rate']
+        self.targ_ignore_list=gp_general_other_params['targ_ignore_list']
 
-        self.dlnk_times=params['dlnk_times']
-        self.dlnk_rates=params['dlnk_rates']
-        self.min_allowed_dv_dlnk=params['min_allowed_dv_dlnk_Mb']
-        self.gs_ignore_list=params['gs_ignore_list']
+        self.dlnk_times=gp_data_rates_accesses_params['dlnk_times']
+        self.dlnk_rates=gp_data_rates_accesses_params['dlnk_rates']
+        self.min_allowed_dv_dlnk=gp_general_other_params['min_allowed_dv_dlnk_Mb']
+        self.gs_ignore_list=gp_general_other_params['gs_ignore_list']
 
-        self.xlnk_times=params['xlnk_times']
-        self.xlnk_rates=params['xlnk_rates']
-        self.min_allowed_dv_xlnk=params['min_allowed_dv_xlnk_Mb']
+        self.xlnk_times=gp_data_rates_accesses_params['xlnk_times']
+        self.xlnk_rates=gp_data_rates_accesses_params['xlnk_rates']
+        self.min_allowed_dv_xlnk=gp_general_other_params['min_allowed_dv_xlnk_Mb']
 
-        self.eclipse_times=params['eclipse_times']
+        self.eclipse_times=gp_data_rates_other_params['eclipse_times']
 
 
     def merge_sat_obs_windows(self,obs_window_list,next_window_uid):

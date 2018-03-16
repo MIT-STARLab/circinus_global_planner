@@ -32,21 +32,33 @@ class GPDataRouteSelection():
     # how close a binary variable must be to zero or one to be counted as that
     binary_epsilon = 0.1
 
-    def __init__(self,params):
-        self.num_sats=params['num_sats']
-        self.num_paths=params['num_paths']
-        self.start_utc_dt  =params['start_utc_dt']
-        self.end_utc_dt  =params['end_utc_dt']
+    def __init__(self,gp_params):
+        """initializes based on parameters
+        
+        initializes based on parameters
+        :param gp_params: global namespace parameters created from input files (possibly with some small non-structural modifications to params). The name spaces here should trace up all the way to the input files.
+        :type params: dict
+        """
+
+        scenario_params = gp_params['gp_orbit_prop_params']['scenario_params']
+        sat_params = gp_params['gp_orbit_prop_params']['sat_params']
+        rt_params = gp_params['gp_general_params']['route_selection_params']
+        gp_general_other_params = gp_params['gp_general_params']['other_params']
+
+        self.num_sats=sat_params['num_sats']
+        self.num_paths=rt_params['num_paths']
+        self.start_utc_dt  =scenario_params['start_utc_dt']
+        self.end_utc_dt  =scenario_params['end_utc_dt']
 
         # note: M values should be as low as possible to prevent numerical issues (see: https://orinanobworld.blogspot.com/2011/07/perils-of-big-m.html)
         self.M_t_s= 86400 # 1 day
         self.M_dv_Mb= 1000000 #  1000 gigabits
-        self.min_path_dv =params['min_path_dv_Mb']
-        self.solver_max_runtime =params['solver_max_runtime_s']
-        self.solver_name =params['solver_name']
-        self.solver_run_remotely =params['solver_run_remotely']
-        self.wind_filter_duration =  timedelta (seconds =params['wind_filter_duration_s'])
-        self.latency_params =  params['latency_calculation']
+        self.min_path_dv =rt_params['min_path_dv_Mb']
+        self.solver_max_runtime =rt_params['solver_max_runtime_s']
+        self.solver_name =rt_params['solver_name']
+        self.solver_run_remotely =rt_params['solver_run_remotely']
+        self.wind_filter_duration =  timedelta (seconds =rt_params['wind_filter_duration_s'])
+        self.latency_params =  gp_general_other_params['latency_calculation']
 
         if self.latency_params['obs'] not in ['start','end']:
             raise NotImplementedError

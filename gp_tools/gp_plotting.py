@@ -23,18 +23,25 @@ class GPPlotting():
     # hard coding that we will use the first data route index in the list of data indices to decide the color for a link
     route_index_to_use = 0
 
-    """docstring for GP route selection"""
-    def __init__(self,params):
+    """docstring for GP plotting"""
+    def __init__(self,gp_params):
+        """initializes based on parameters
+        
+        initializes based on parameters
+        :param gp_params: global namespace parameters created from input files (possibly with some small non-structural modifications to params). The name spaces here should trace up all the way to the input files.
+        :type params: dict
+        """
+        plot_params = gp_params['gp_general_params']['plot_params']
 
-        self.plot_fig_extension=params['plot_fig_extension']
-        self.time_units=params['time_units']
-        self.winds_plot_obs=params['winds_plot_obs']
-        self.winds_plot_obs_choices=params['winds_plot_obs_choices']
-        self.winds_plot_dlnks=params['winds_plot_dlnks']
-        self.winds_plot_dlnks_choices=params['winds_plot_dlnks_choices']
-        self.winds_plot_xlnks=params['winds_plot_xlnks']
-        self.winds_plot_xlnks_choices=params['winds_plot_xlnks_choices']
-        self.energy_usage_plot_params=params['energy_usage_plot_params']
+        self.plot_fig_extension=plot_params['plot_fig_extension']
+        self.time_units=plot_params['time_units']
+        self.winds_plot_obs=plot_params['winds_plot_obs']
+        self.winds_plot_obs_choices=plot_params['winds_plot_obs_choices']
+        self.winds_plot_dlnks=plot_params['winds_plot_dlnks']
+        self.winds_plot_dlnks_choices=plot_params['winds_plot_dlnks_choices']
+        self.winds_plot_xlnks=plot_params['winds_plot_xlnks']
+        self.winds_plot_xlnks_choices=plot_params['winds_plot_xlnks_choices']
+        self.energy_usage_plot_params=plot_params['energy_usage_plot_params']
 
     def plot_winds(
         self,
