@@ -364,6 +364,8 @@ class GPMetrics():
                 last_row = d_c_mat[indx-1]
                 x.append(conv_func(row[0],base_time,input_type,x_units))
                 y.append(conv_func(row[0],last_row[1],input_type,y_units))
+                x.append(conv_func(row[0],base_time,input_type,x_units))
+                y.append(conv_func(row[0],row[1],input_type,y_units))
 
         aoi_curve = {
             'x': x,
@@ -415,6 +417,7 @@ class GPMetrics():
 
         # add on end time - important for getting proper AoI over whole scenario (first point (start_calc_window,start_calc_window) was already added on matrix)
         d_c_mat_filt.append([end_calc_window,end_calc_window])
+
 
         avaoi = GPMetrics.calc_av_aoi( d_c_mat_filt, start_calc_window, end_calc_window,input_type="datetime",output_units=aoi_units)
         aoi_curve = GPMetrics.get_aoi_curve(d_c_mat_filt,start_calc_window,input_type="datetime",x_units=aoi_plot_t_units,y_units=aoi_units)
@@ -512,6 +515,7 @@ class GPMetrics():
 
         for targ_indx in range(self.num_targ):
             dlnk_obs_times_mat_targ = dlnk_obs_times_mat[targ_indx]
+
 
             if not include_routing:
                 dlnk_obs_times_mat_targ.sort(key=lambda row: row[1])  # sort by creation time

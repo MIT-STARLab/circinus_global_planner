@@ -47,11 +47,15 @@ class GlobalPlannerRunner:
         self.params = gp_params
         self.scenario_params = self.params['gp_orbit_prop_params']['scenario_params']
         self.sat_params = self.params['gp_orbit_prop_params']['sat_params']
+        self.obs_params = self.params['gp_orbit_prop_params']['obs_params']
+        self.sat_orbit_params = self.params['gp_orbit_prop_params']['sat_orbit_params']
+        self.obs_params = self.params['gp_orbit_prop_params']['obs_params']
         self.pickle_params = self.params['gp_general_params']['pickle_params']
         self.other_params = self.params['gp_other_params']
         self.plot_params = self.params['gp_general_params']['plot_params']
         self.rs_params = self.params['gp_general_params']['route_selection_params']
         self.as_params = self.params['gp_general_params']['activity_scheduling_params']
+        self.as_inst_params = self.params['gp_instance_params']['activity_scheduling_params']
         self.io_proc =GPProcessorIO(self.params)
         self.gp_plot =GPPlotting( self.params)
 
@@ -130,12 +134,10 @@ class GlobalPlannerRunner:
         lat_stats = gp_met.assess_latency_all_routes (routes,verbose = True)
         lat_obs_stats = gp_met.assess_latency_by_obs (routes,verbose = True)
         aoi_targ_stats = gp_met.assess_aoi_by_obs_target(routes,include_routing=True,verbose = True)
-        # print("dv_stats['total_dv']")
-        # print(dv_stats['total_dv'])
-        # print('dv_stats')
-        # print(dv_stats)
-        # print('lat_stats')
-        # print(lat_stats)
+
+        plot_outputs = {}
+        plot_outputs['aoi_curves_by_targID'] = aoi_targ_stats['aoi_curves_by_targID']
+        return plot_outputs
 
     def run_route_selection(self,gp_ps,obs,dlnk_winds_flat,xlnk_winds,obj_weights,dr_uid):
         """[summary]
@@ -363,7 +365,7 @@ class GlobalPlannerRunner:
             )
 
 
-    def  plot_activity_scheduling_results ( self,obs_routes,routes,energy_usage,ecl_winds):
+    def  plot_activity_scheduling_results ( self,obs_routes,routes,energy_usage,ecl_winds,metrics_plot_inputs):
 
         # do a bunch of stuff to extract the windows from all of the routes as indexed by observation
         # note that this stuff is not thewindows from the scheduled routes, but rather the windows from all the route selected in route selection
@@ -404,59 +406,74 @@ class GlobalPlannerRunner:
                 #     print(route_indcs_by_wind[wind])
                 wind.update_duration_from_scheduled_dv ()
 
-        sats_to_include =  range (self.sat_params['num_sats'])
+        # 
+        sats_to_include =  [sat_p['sat_id'] for sat_p in self.sat_orbit_params]
         # sats_to_include = [0,9,21,22,23]
 
 
         #  plot the selected down links and cross-links
-        self.gp_plot.plot_winds(
-            sats_to_include,
-            sel_obs_winds_flat,
-            sched_obs_winds_flat,
-            sel_dlnk_winds_flat,
-            sched_dlnk_winds_flat, 
-            sel_xlnk_winds_flat,
-            sched_xlnk_winds_flat,
-            route_indcs_by_wind,
-            self.scenario_params['start_utc_dt'],
-            # self.scenario_params['start_utc_dt'] + timedelta( seconds= self.rs_params['wind_filter_duration_s']),
-            self.scenario_params['end_utc_dt'],
-            plot_title = 'Scheduled Activities',
-            plot_size_inches = (18,12),
-            plot_include_labels = self.as_params['plot_include_labels'],
-            show=  False,
-            fig_name='plots/test_activity_times.pdf'
-        )
+        # self.gp_plot.plot_winds(
+        #     sats_to_include,
+        #     sel_obs_winds_flat,
+        #     sched_obs_winds_flat,
+        #     sel_dlnk_winds_flat,
+        #     sched_dlnk_winds_flat, 
+        #     sel_xlnk_winds_flat,
+        #     sched_xlnk_winds_flat,
+        #     route_indcs_by_wind,
+        #     self.as_inst_params['start_utc_dt'],
+        #     # self.as_inst_params['start_utc_dt'] + timedelta( seconds= self.rs_params['wind_filter_duration_s']),
+        #     self.as_inst_params['end_utc_dt'],
+        #     plot_title = 'Scheduled Activities',
+        #     plot_size_inches = (18,12),
+        #     plot_include_labels = self.as_params['plot_include_labels'],
+        #     show=  False,
+        #     fig_name='plots/test_activity_times.pdf'
+        # )
 
-        self.gp_plot.plot_data_circles(
-            sats_to_include,
-            sched_obs_winds_flat,
-            sched_obs_winds_flat,
-            sched_dlnk_winds_flat,
-            sched_dlnk_winds_flat, 
-            sched_xlnk_winds_flat,
-            sched_xlnk_winds_flat,
-            route_indcs_by_wind,
-            self.scenario_params['start_utc_dt'],
-            # self.scenario_params['start_utc_dt'] + timedelta( seconds= self.rs_params['wind_filter_duration_s']),
-            self.scenario_params['end_utc_dt'],
-            plot_title = 'Activity Data Volumes',
-            plot_size_inches = (18,12),
-            plot_include_labels = self.as_params['plot_include_labels'],
-            show=  False,
-            fig_name='plots/test_data_volume.pdf'
-        )
+        # self.gp_plot.plot_data_circles(
+        #     sats_to_include,
+        #     sched_obs_winds_flat,
+        #     sched_obs_winds_flat,
+        #     sched_dlnk_winds_flat,
+        #     sched_dlnk_winds_flat, 
+        #     sched_xlnk_winds_flat,
+        #     sched_xlnk_winds_flat,
+        #     route_indcs_by_wind,
+        #     self.as_inst_params['start_utc_dt'],
+        #     # self.as_inst_params['start_utc_dt'] + timedelta( seconds= self.rs_params['wind_filter_duration_s']),
+        #     self.as_inst_params['end_utc_dt'],
+        #     plot_title = 'Activity Data Volumes',
+        #     plot_size_inches = (18,12),
+        #     plot_include_labels = self.as_params['plot_include_labels'],
+        #     show=  False,
+        #     fig_name='plots/test_data_volume.pdf'
+        # )
 
-        self.gp_plot.plot_energy_usage(
-            sats_to_include,
-            energy_usage,
-            ecl_winds,
-            self.scenario_params['start_utc_dt'],
-            self.scenario_params['end_utc_dt'],
-            plot_title = 'Energy Utilization',
+        # self.gp_plot.plot_energy_usage(
+        #     sats_to_include,
+        #     energy_usage,
+        #     ecl_winds,
+        #     self.as_inst_params['start_utc_dt'],
+        #     self.as_inst_params['end_utc_dt'],
+        #     plot_title = 'Energy Utilization',
+        #     plot_size_inches = (18,12),
+        #     show=  False,
+        #     fig_name='plots/test_energy.pdf'
+        # )
+
+        targs_to_include = [targ['id'] for targ in self.obs_params['targets']]
+        # targs_to_include = [0,3,4,7,8]
+        targs_to_include = range(15)
+        self.gp_plot.plot_obs_aoi(
+            targs_to_include,
+            metrics_plot_inputs['aoi_curves_by_targID'],
+            self.as_inst_params['start_utc_dt'],
+            self.as_inst_params['end_utc_dt'],
+            plot_title = 'Observation Target AoI', 
             plot_size_inches = (18,12),
-            show=  False,
-            fig_name='plots/test_energy.pdf'
+            show=False,
+            fig_name='plots/obs_aoi_plot.pdf'
         )
 
         
@@ -553,7 +570,7 @@ class GlobalPlannerRunner:
         if self.pickle_params['pickle_act_scheduling_results']:
             self.pickle_actsc_stuff(obs_routes,ecl_winds,scheduled_routes,energy_usage,window_uid)
 
-        self.calc_activity_scheduling_results (scheduled_routes, energy_usage)
+        metrics_plot_inputs = self.calc_activity_scheduling_results (scheduled_routes, energy_usage)
 
         #################################
         #   output stage
@@ -565,7 +582,7 @@ class GlobalPlannerRunner:
             self.plot_route_selection_results (obs_routes,dlnk_winds_flat,xlnk_winds_flat)
 
         if self.as_params['plot_activity_scheduling_results']:
-            self.plot_activity_scheduling_results(obs_routes,scheduled_routes,energy_usage,ecl_winds)
+            self.plot_activity_scheduling_results(obs_routes,scheduled_routes,energy_usage,ecl_winds,metrics_plot_inputs)
           
 
         outputs = None
@@ -602,6 +619,7 @@ class PipelineRunner:
             orbit_prop_inputs['sat_params']['num_sats'] = orbit_prop_inputs['sat_params']['num_satellites']
             orbit_prop_inputs['gs_params']['num_gs'] = orbit_prop_inputs['gs_params']['num_stations']
             orbit_prop_inputs['sat_params']['pl_data_rate'] = orbit_prop_inputs['sat_params']['payload_data_rate_Mbps']
+            orbit_prop_inputs['sat_orbit_params'], dummy = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_orbit_params'],force_duplicate =  True)
             orbit_prop_inputs['sat_params']['power_params'], all_sat_ids1 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['power_params'])
             orbit_prop_inputs['sat_params']['initial_state'], all_sat_ids2 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['initial_state'])
 
@@ -621,7 +639,14 @@ class PipelineRunner:
             raise NotImplementedError
 
         #  check that it's the right version
-        if not gp_instance_params['version'] == "0.1": 
+        if gp_instance_params['version'] == "0.1": 
+            gp_instance_params['route_selection_params']['start_utc_dt'] = tt.iso_string_to_dt ( gp_instance_params['route_selection_params']['start_utc'])
+            gp_instance_params['activity_scheduling_params']['start_utc_dt'] = tt.iso_string_to_dt ( gp_instance_params['activity_scheduling_params']['start_utc'])
+            gp_instance_params['metrics_params']['start_utc_dt'] = tt.iso_string_to_dt ( gp_instance_params['metrics_params']['start_utc'])
+            gp_instance_params['route_selection_params']['end_utc_dt'] = tt.iso_string_to_dt ( gp_instance_params['route_selection_params']['end_utc'])
+            gp_instance_params['activity_scheduling_params']['end_utc_dt'] = tt.iso_string_to_dt ( gp_instance_params['activity_scheduling_params']['end_utc'])
+            gp_instance_params['metrics_params']['end_utc_dt'] = tt.iso_string_to_dt ( gp_instance_params['metrics_params']['end_utc'])
+        else:
             raise NotImplementedError
 
         #  check that it's the right version

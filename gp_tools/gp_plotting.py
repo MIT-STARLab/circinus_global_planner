@@ -32,6 +32,8 @@ class GPPlotting():
         :type params: dict
         """
         plot_params = gp_params['gp_general_params']['plot_params']
+        sat_params = gp_params['gp_orbit_prop_params']['sat_params']
+        self.obs_params = gp_params['gp_orbit_prop_params']['obs_params']
 
         self.plot_fig_extension=plot_params['plot_fig_extension']
         self.time_units=plot_params['time_units']
@@ -42,10 +44,14 @@ class GPPlotting():
         self.winds_plot_xlnks=plot_params['winds_plot_xlnks']
         self.winds_plot_xlnks_choices=plot_params['winds_plot_xlnks_choices']
         self.energy_usage_plot_params=plot_params['energy_usage_plot_params']
+        self.obs_metrics_plot_params=plot_params['obs_metrics_plot_params']
+
+        self.sat_id_order = sat_params['sat_id_order']
+        self.all_targ_IDs = [targ['id'] for targ in self.obs_params['targets']]
 
     def plot_winds(
         self,
-        sats_indcs_list,
+        sats_ids_list,
         all_obs_winds_flat,
         obs_winds_flat,
         all_dlnk_winds_flat,
@@ -72,7 +78,7 @@ class GPPlotting():
         
         time_to_end = (plot_end-plot_start).total_seconds()/time_divisor
 
-        num_sats = len(sats_indcs_list)
+        num_sats = len(sats_ids_list)
 
         #  make a new figure
         plt.figure()
@@ -91,7 +97,9 @@ class GPPlotting():
         all_wind_ids = []
 
         # for each agent
-        for  plot_indx, sat_indx in enumerate (sats_indcs_list):
+        for  plot_indx, sat_id in enumerate (sats_ids_list):
+            #  get the index for this ID
+            sat_indx = self.sat_id_order.index(sat_id)
 
             # 
             axes = plt.subplot( num_sats,1,plot_indx+1)
@@ -382,7 +390,7 @@ class GPPlotting():
 
     def plot_data_circles(
         self,
-        sats_indcs_list,
+        sats_ids_list,
         all_obs_winds_flat,
         obs_winds_flat,
         all_dlnk_winds_flat,
@@ -409,7 +417,7 @@ class GPPlotting():
         
         time_to_end = (plot_end-plot_start).total_seconds()/time_divisor
 
-        num_sats = len(sats_indcs_list)
+        num_sats = len(sats_ids_list)
 
         def dv_radius_scale(data_vol):
             scaler = 100*10
@@ -438,7 +446,9 @@ class GPPlotting():
         all_wind_ids = []
 
         # for each agent
-        for  plot_indx, sat_indx in enumerate (sats_indcs_list):
+        for  plot_indx, sat_id in enumerate (sats_ids_list):
+            #  get the index for this ID
+            sat_indx = self.sat_id_order.index(sat_id)
 
             # 
             axes = plt.subplot( num_sats,1,plot_indx+1)
@@ -741,7 +751,7 @@ class GPPlotting():
 
     def plot_energy_usage(
         self,
-        sats_indcs_list,
+        sats_ids_list,
         energy_usage,
         ecl_winds,
         plot_start,
@@ -765,7 +775,7 @@ class GPPlotting():
         
         time_to_end = (plot_end-plot_start).total_seconds()/time_divisor
 
-        num_sats = len(sats_indcs_list)
+        num_sats = len(sats_ids_list)
 
         #  make a new figure
         plt.figure()
@@ -784,7 +794,9 @@ class GPPlotting():
         ecl_plot = None
 
         # for each agent
-        for  plot_indx, sat_indx in enumerate (sats_indcs_list):
+        for  plot_indx, sat_id in enumerate (sats_ids_list):
+            #  get the index for this ID
+            sat_indx = self.sat_id_order.index(sat_id)
 
             #  make a subplot for each
             axes = plt.subplot( num_sats,1,plot_indx+1)
@@ -833,6 +845,91 @@ class GPPlotting():
             legend_objects.append(e_min_plot)
         if ecl_plot: 
             legend_objects.append(ecl_plot)
+
+        plt.legend(handles=legend_objects ,bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+
+        plt.xlabel('Time (%s)'%(self.time_units))
+
+        # use the last axes to set the entire plot background color
+        axes.patch.set_facecolor('w')
+
+        if show:
+            plt.show()
+        else:
+            savefig(fig_name,format=self.plot_fig_extension)
+
+    def plot_obs_aoi(
+        self,
+        targ_ids_list,
+        aoi_curves_by_targID,
+        plot_start,
+        plot_end,
+        plot_title = 'Observation Target AoI', 
+        plot_size_inches = (12,12),
+        show=False,
+        fig_name='plots/obs_aoi_plot.pdf'):
+
+        plot_labels = {
+            "aoi": "aoi",
+        }
+
+        if self.time_units == 'hours':
+            time_divisor = 3600
+        if self.time_units == 'minutes':
+            time_divisor = 60
+        
+        time_to_end = (plot_end-plot_start).total_seconds()/time_divisor
+
+        num_targs = len(targ_ids_list)
+
+        #  make a new figure
+        plt.figure()
+
+        #  create subplots for satellites
+        fig = plt.gcf()
+        fig.set_size_inches( plot_size_inches)
+        # print fig.get_size_inches()
+
+        plt.title( plot_title)
+
+        #  these hold the very last plot object of a given type added. Used for legend below
+        aoi_plot = None
+
+        # for each agent
+        for  plot_indx, targ_id in enumerate (targ_ids_list):
+            #  get the index for this ID
+            targ_indx = self.all_targ_IDs.index(targ_id)
+
+            #  make a subplot for each
+            axes = plt.subplot( num_targs,1,plot_indx+1)
+            if plot_indx == np.floor(num_targs/2):
+                plt.ylabel('Target Index\n\n' + str(targ_indx))
+            else:
+                plt.ylabel('' + str(targ_indx))
+
+
+            # no y-axis labels
+            plt.tick_params(
+                axis='y',
+                which='both',
+                left='off',
+                right='off',
+                labelleft='off'
+            )
+
+            # set axis length. Time starts at 0
+            vert_min = self.obs_metrics_plot_params['plot_bound_min_aoi_h']
+            vert_max = self.obs_metrics_plot_params['plot_bound_max_aoi_h']
+            plt.axis((0, time_to_end, vert_min, vert_max))
+
+            current_axis = plt.gca()
+
+            # the first return value is a handle for our line, everything else can be ignored
+            aoi_plot,*dummy = plt.plot(aoi_curves_by_targID[targ_id]['x'],aoi_curves_by_targID[targ_id]['y'], label =  plot_labels["aoi"])
+
+        legend_objects = []
+        if aoi_plot: 
+            legend_objects.append(aoi_plot)
 
         plt.legend(handles=legend_objects ,bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 

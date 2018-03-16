@@ -1,12 +1,12 @@
 import copy
 
-def duplicate_entry_for_sat_ids(params_entry):
+def duplicate_entry_for_sat_ids(params_entry,force_duplicate = False):
     new_entries = []
 
-    def parse_sat_ids(sat_ids_spec):
+    def parse_sat_ids(sat_ids_spec,force_duplicate = False):
         if type (sat_ids_spec)==str:
             tokens = sat_ids_spec.split (',')
-            if tokens[0] == 'duplicate':
+            if tokens[0] == 'duplicate' or force_duplicate:
                 if  tokens[1] == 'range_inclusive':
                     sat_ids =  range ( int(tokens[2]), int (tokens[3])+1)
                     return sat_ids
@@ -16,7 +16,7 @@ def duplicate_entry_for_sat_ids(params_entry):
                 raise  Exception ("Expected 'duplicate' as first token for sat_ids (%s)"%(sat_ids_spec))
         raise NotImplementedError
 
-    sat_ids = parse_sat_ids(params_entry['sat_ids'])
+    sat_ids = parse_sat_ids(params_entry['sat_ids'],force_duplicate)
 
     for sat_id in sat_ids:
         new_entry =  copy.copy (params_entry)
@@ -26,7 +26,7 @@ def duplicate_entry_for_sat_ids(params_entry):
 
     return new_entries
 
-def unpack_sat_entry_list(entry_list):
+def unpack_sat_entry_list(entry_list,force_duplicate = False):
     """unpacks a list of parameter entries for a set of satellites
     
     a list of parameter entries can contain collapsed entries that specify the properties for more than one satellite ID. in this case we need to convert those collapsed entries into unique entries for each satellite ID. So this:
@@ -92,7 +92,7 @@ def unpack_sat_entry_list(entry_list):
     for entry in entry_list:
         #  if this field is present, that means the parameter entry applies for more than one satellite ID.  need to unpack for all the relevant satellite ID
         if entry.get('sat_ids', None):
-            new_entries += duplicate_entry_for_sat_ids ( entry)
+            new_entries += duplicate_entry_for_sat_ids ( entry,force_duplicate)
         else:
             new_entries.append(entry)
 
@@ -104,7 +104,7 @@ def sort_input_params_by_sat_indcs(params_list,sat_id_order):
 
     sorted_params = []
     def sort_func(params_entry):
-        return sat_id_order.index (str(params_entry['sat_id']))
+        return sat_id_order.index (params_entry['sat_id'])
 
     sorted_params_list = sorted(params_list, key= lambda x: sort_func(x))
 
@@ -117,17 +117,17 @@ def make_and_validate_sat_id_order(sat_id_order_pre,num_satellites,all_sat_ids=N
     converts the sat ID order list found in the orbit prop inputs file into a list that is usable for ordering satellites In internal CIRCINUS components. It is often specified as "default" in the input file. A valid output looks like this, for example:
 
     "sat_id_order": [
-        "0",
-        "1",
+        0,
+        1,
         "2",
         "my_favorite_satellite",
-        "99",
+        99,
         "5"
     ],
 
-    in this case, the user has chosen to replace the normal satellite IDs 3 and 4  with custom IDs.  this is perfectly fine.
+    In this case, the user has chosen to replace the normal satellite IDs 3 and 4  with custom IDs.  this is perfectly fine. Note that satellite IDs can be integers, strings, floats, whatever...
 
-    If the "sat_id_order" field in sat_params from the input file is "defaut", then the output sat_id_order will either be a list of ordinals for every satellite, converted to string e.g. (["0","1","2",..]) if all_sat_ids is  not provided,  or will be equal to all_sat_ids ( with each converted to string) if it is provided.
+    If the "sat_id_order" field in sat_params from the input file is "defaut", then the output sat_id_order will either be a list of ordinals for every satellite if all_sat_ids is  not provided, or will be equal to all_sat_ids if it is provided.
 
     :param sat_id_order_pre:  the "sat_id_order" from the input file
     :type sat_id_order_pre: list
@@ -144,10 +144,10 @@ def make_and_validate_sat_id_order(sat_id_order_pre,num_satellites,all_sat_ids=N
     if sat_id_order_pre == 'default':
         #  if are provided a list of all the IDs, use that as the default
         if all_sat_ids:
-            sat_id_order = [str(sat_id) for sat_id in all_sat_ids]
+            sat_id_order = [sat_id for sat_id in all_sat_ids]
         #  if we are not provided a list of the all the IDs,  we assume that every ID is just an ordinal
         else:            
-            sat_id_order = [str (sat_indx) for sat_indx in range (num_satellites)]
+            sat_id_order = [sat_indx for sat_indx in range (num_satellites)]
 
     if len(sat_id_order) != num_satellites:
         raise Exception ("Number of satellite IDs is not equal to number of satellites specified in input file")
