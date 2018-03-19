@@ -405,10 +405,10 @@ class GlobalPlannerRunner:
         sched_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind = self.io_proc.extract_flat_windows (routes,copy_windows= False)
 
         # 
-        sats_to_include =  [sat_p['sat_id'] for sat_p in self.sat_orbit_params]
-        # sats_to_include = [0,9,21,22,23]
+        # sats_to_include =  [sat_p['sat_id'] for sat_p in self.sat_orbit_params]
+        sats_to_include = [20,21,29]
 
-        sats_to_include =  range(10)
+        # sats_to_include =  range(20,30)
         # plot the selected down links and cross-links this
         self.gp_plot.plot_winds(
             sats_to_include,
@@ -424,7 +424,8 @@ class GlobalPlannerRunner:
             self.as_inst_params['end_utc_dt'],
             plot_title = 'Scheduled Activities',
             plot_size_inches = (18,12),
-            plot_include_labels = self.as_params['plot_include_labels'],
+            plot_include_dlnk_labels = self.as_params['plot_include_dlnk_labels'],
+            plot_include_xlnk_labels = self.as_params['plot_include_xlnk_labels'],
             show=  False,
             fig_name='plots/test_activity_times.pdf'
         )
@@ -475,7 +476,7 @@ class GlobalPlannerRunner:
         )
 
         # sats_to_include =  [sat_p['sat_id'] for sat_p in self.sat_orbit_params]
-        sats_to_include =  range(10)
+        # sats_to_include =  range(10)
         self.gp_plot.plot_sat_cmd_aoi(
             sats_to_include,
             metrics_plot_inputs['cmd_aoi_curves_by_sat_indx'],

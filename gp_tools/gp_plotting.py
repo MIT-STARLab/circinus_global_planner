@@ -64,7 +64,8 @@ class GPPlotting():
         plot_end,
         plot_title = 'Route Plot', 
         plot_size_inches = (12,12),
-        plot_include_labels = True,
+        plot_include_dlnk_labels = True,
+        plot_include_xlnk_labels = True,
         show=False,
         fig_name='plots/xlnk_dlnk_plot.pdf'):
         '''
@@ -253,7 +254,7 @@ class GPPlotting():
                             raise Exception('Found a duplicate unique window ID where it should not have been possible')
                         all_wind_ids.append(dlnk_wind.window_ID)
 
-                        if plot_include_labels:
+                        if plot_include_dlnk_labels:
                             label_text = ""
 
                             # if we have been given route indices, then include them in the label
@@ -268,6 +269,10 @@ class GPPlotting():
 
                             #   put label in desired vertical spot
                             left_horizontal_loc = dlnk_start + 0.15
+                            
+                            #  update the rotator value if we've already added this window to the plot in the "choices" code above
+                            if dlnk_wind in dlnk_choices_rectangle_rotator_hist.keys ():
+                                dlnk_label_rotator = dlnk_choices_rectangle_rotator_hist[dlnk_wind]
                             
                             if dlnk_label_rotator == 0:
                                 plt.text(left_horizontal_loc, 0.1, label_text , fontsize=10, color = 'k')
@@ -338,7 +343,7 @@ class GPPlotting():
 
                         xlnk_rectangle_rotator =  (xlnk_rectangle_rotator+1)%xlnk_rotation_rollover
 
-                        if plot_include_labels:
+                        if plot_include_xlnk_labels:
                             other_sat_indx = xlnk_wind.xsat_indx if xlnk_wind.xsat_indx != sat_indx else xlnk_wind.sat_indx
 
                             #   put label in desired vertical spot
@@ -349,6 +354,10 @@ class GPPlotting():
                                 label_text = "%d,%d" %(dr_indx,other_sat_indx)
                             else:                                
                                 label_text = "%d" %(other_sat_indx)
+
+                            # update the rotator value if we've already added this window to the plot in the "choices" code above
+                            if xlnk_wind in xlnk_choices_rectangle_rotator_hist.keys ():
+                                xlnk_label_rotator = xlnk_choices_rectangle_rotator_hist[xlnk_wind]
 
                             if xlnk_label_rotator == 0:
                                 plt.text(left_horizontal_loc, 0.1, label_text , fontsize=10, color = 'k')
