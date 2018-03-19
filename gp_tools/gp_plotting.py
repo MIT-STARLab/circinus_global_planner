@@ -44,7 +44,8 @@ class GPPlotting():
         self.winds_plot_xlnks=plot_params['winds_plot_xlnks']
         self.winds_plot_xlnks_choices=plot_params['winds_plot_xlnks_choices']
         self.energy_usage_plot_params=plot_params['energy_usage_plot_params']
-        self.obs_metrics_plot_params=plot_params['obs_metrics_plot_params']
+        self.obs_aoi_metrics_plot_params=plot_params['obs_aoi_metrics_plot_params']
+        self.cmd_aoi_metrics_plot_params=plot_params['cmd_aoi_metrics_plot_params']
 
         self.sat_id_order = sat_params['sat_id_order']
         self.all_targ_IDs = [targ['id'] for targ in self.obs_params['targets']]
@@ -215,7 +216,7 @@ class GPPlotting():
                         d_w = Rectangle((dlnk_wind_start, bottom_vert_loc), dlnk_wind_end-dlnk_wind_start, bottom_vert_loc+1,alpha=1,fill=True,color='#BFBFFF')
 
                         current_axis.add_patch(d_w)
-                        # plt.text( (dlnk_wind_end+dlnk_wind_start)/2 - 0.15, 0.1, dlnk_wind.gs_ID , fontsize=10, color = 'k')
+                        # plt.text( (dlnk_wind_end+dlnk_wind_start)/2 - 0.15, 0.1, dlnk_wind.gs_indx , fontsize=10, color = 'k')
 
                         # plt.text(dlnk_wind_start+0.15, bottom_vert_loc+0.1, dlnk_wind.window_ID , fontsize=10, color = 'k')
 
@@ -235,7 +236,7 @@ class GPPlotting():
                         dlnk_start = (dlnk_wind.start-plot_start).total_seconds()/time_divisor
                         dlnk_end = (dlnk_wind.end-plot_start).total_seconds()/time_divisor
 
-                        gs_indx = dlnk_wind.gs_ID
+                        gs_indx = dlnk_wind.gs_indx
 
                         #  update the rotator value if we've already added this window to the plot in the "choices" code above
                         if dlnk_wind in dlnk_choices_rectangle_rotator_hist.keys ():
@@ -570,7 +571,7 @@ class GPPlotting():
                         d_w = Circle((middle, bottom_vert_loc), radius,alpha=1,fill=True,color='#BFBFFF')
 
                         current_axis.add_patch(d_w)
-                        # plt.text( (dlnk_wind_end+dlnk_wind_start)/2 - 0.15, 0.1, dlnk_wind.gs_ID , fontsize=10, color = 'k')
+                        # plt.text( (dlnk_wind_end+dlnk_wind_start)/2 - 0.15, 0.1, dlnk_wind.gs_indx , fontsize=10, color = 'k')
 
                         # plt.text(dlnk_wind_start+0.15, bottom_vert_loc+0.1, dlnk_wind.window_ID , fontsize=10, color = 'k')
 
@@ -591,7 +592,7 @@ class GPPlotting():
                         dlnk_end = (dlnk_wind.end-plot_start).total_seconds()/time_divisor
                         middle = (dlnk_end + dlnk_start)/2
 
-                        gs_indx = dlnk_wind.gs_ID
+                        gs_indx = dlnk_wind.gs_indx
 
                         #  update the rotator value if we've already added this window to the plot in the "choices" code above
                         if dlnk_wind in dlnk_choices_rectangle_rotator_hist.keys ():
@@ -918,14 +919,97 @@ class GPPlotting():
             )
 
             # set axis length. Time starts at 0
-            vert_min = self.obs_metrics_plot_params['plot_bound_min_aoi_h']
-            vert_max = self.obs_metrics_plot_params['plot_bound_max_aoi_h']
+            vert_min = self.obs_aoi_metrics_plot_params['plot_bound_min_aoi_h']
+            vert_max = self.obs_aoi_metrics_plot_params['plot_bound_max_aoi_h']
             plt.axis((0, time_to_end, vert_min, vert_max))
 
             current_axis = plt.gca()
 
             # the first return value is a handle for our line, everything else can be ignored
             aoi_plot,*dummy = plt.plot(aoi_curves_by_targID[targ_id]['x'],aoi_curves_by_targID[targ_id]['y'], label =  plot_labels["aoi"])
+
+        legend_objects = []
+        if aoi_plot: 
+            legend_objects.append(aoi_plot)
+
+        plt.legend(handles=legend_objects ,bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+
+        plt.xlabel('Time (%s)'%(self.time_units))
+
+        # use the last axes to set the entire plot background color
+        axes.patch.set_facecolor('w')
+
+        if show:
+            plt.show()
+        else:
+            savefig(fig_name,format=self.plot_fig_extension)
+
+    def plot_sat_cmd_aoi(
+        self,
+        sats_to_include,
+        aoi_curves_by_sat_indx,
+        plot_start,
+        plot_end,
+        plot_title = 'Satellite Command Uplink AoI', 
+        plot_size_inches = (12,12),
+        show=False,
+        fig_name='plots/cmd_aoi_plot.pdf'):
+
+        plot_labels = {
+            "aoi": "aoi",
+        }
+
+        if self.time_units == 'hours':
+            time_divisor = 3600
+        if self.time_units == 'minutes':
+            time_divisor = 60
+        
+        time_to_end = (plot_end-plot_start).total_seconds()/time_divisor
+
+        num_sats = len(sats_to_include)
+
+        #  make a new figure
+        plt.figure()
+
+        #  create subplots for satellites
+        fig = plt.gcf()
+        fig.set_size_inches( plot_size_inches)
+        # print fig.get_size_inches()
+
+        plt.title( plot_title)
+
+        #  these hold the very last plot object of a given type added. Used for legend below
+        aoi_plot = None
+
+        # for each agent
+        for  plot_indx, sat_indx in enumerate (sats_to_include):
+
+            #  make a subplot for each
+            axes = plt.subplot( num_sats,1,plot_indx+1)
+            if plot_indx == np.floor(num_sats/2):
+                plt.ylabel('Satellite Index\n\n' + str(sat_indx))
+            else:
+                plt.ylabel('' + str(sat_indx))
+
+
+            # no y-axis labels
+            plt.tick_params(
+                axis='y',
+                which='both',
+                left='off',
+                right='off',
+                labelleft='off'
+            )
+
+            # set axis length. Time starts at 0
+            vert_min = self.cmd_aoi_metrics_plot_params['plot_bound_min_aoi_h']
+            vert_max = self.cmd_aoi_metrics_plot_params['plot_bound_max_aoi_h']
+            plt.axis((0, time_to_end, vert_min, vert_max))
+
+            current_axis = plt.gca()
+
+            # the first return value is a handle for our line, everything else can be ignored
+            aoi_plot,*dummy = plt.plot(aoi_curves_by_sat_indx[sat_indx]['x'],aoi_curves_by_sat_indx[sat_indx]['y'], label =  plot_labels["aoi"])
 
         legend_objects = []
         if aoi_plot: 

@@ -30,6 +30,7 @@ class GPProcessorIO():
 
         scenario_params = gp_params['gp_orbit_prop_params']['scenario_params']
         sat_params = gp_params['gp_orbit_prop_params']['sat_params']
+        obs_params = gp_params['gp_orbit_prop_params']['obs_params']
         gs_params = gp_params['gp_orbit_prop_params']['gs_params']
         gp_general_other_params = gp_params['gp_general_params']['other_params']
         gp_data_rates_accesses_params = gp_params['gp_data_rates_params']['accesses_data_rates']
@@ -47,12 +48,14 @@ class GPProcessorIO():
 
         self.obs_times=gp_data_rates_accesses_params['obs_times']
         self.pl_data_rate=sat_params['pl_data_rate']
-        self.targ_ignore_list=gp_general_other_params['targ_ignore_list']
+        self.targ_id_ignore_list=gp_general_other_params['targ_id_ignore_list']
+        self.all_targ_IDs = [targ['id'] for targ in obs_params['targets']]
 
         self.dlnk_times=gp_data_rates_accesses_params['dlnk_times']
         self.dlnk_rates=gp_data_rates_accesses_params['dlnk_rates']
         self.min_allowed_dv_dlnk=gp_general_other_params['min_allowed_dv_dlnk_Mb']
-        self.gs_ignore_list=gp_general_other_params['gs_ignore_list']
+        self.gs_id_ignore_list=gp_general_other_params['gs_id_ignore_list']
+        self.all_gs_IDs = [stat['id'] for stat in gs_params['stations']]
 
         self.xlnk_times=gp_data_rates_accesses_params['xlnk_times']
         self.xlnk_rates=gp_data_rates_accesses_params['xlnk_rates']
@@ -129,8 +132,7 @@ class GPProcessorIO():
 
             for targ_indx, target_obs in enumerate(all_sat_obs):
 
-                # TODO:  this should operate on ID not on index
-                if targ_indx in self.targ_ignore_list:
+                if self.all_targ_IDs[targ_indx] in self.targ_ignore_list:
                     continue
 
                 for obs_indx, obs in enumerate(target_obs):
@@ -206,8 +208,7 @@ class GPProcessorIO():
 
             for gs_indx, dlnk_list in enumerate(all_sat_dlnk):
 
-                # TODO:  this should operate on ID not on index
-                if gs_indx in self.gs_ignore_list:
+                if self.all_gs_IDs[gs_indx] in self.gs_ignore_list:
                     continue
 
                 for dlnk_indx, dlnk in enumerate(dlnk_list):
@@ -221,7 +222,7 @@ class GPProcessorIO():
 
                     new_wind = DlnkWindow(next_window_uid,sat_indx,gs_indx,dlnk_indx,start, end)
 
-                    new_wind.rates_mat =  self.dlnk_rates[new_wind.sat_indx][new_wind.gs_ID][new_wind.sat_gs_indx]
+                    new_wind.rates_mat =  self.dlnk_rates[new_wind.sat_indx][new_wind.gs_indx][new_wind.sat_gs_indx]
                     new_wind.set_data_vol_and_refresh_times()
 
                     if new_wind.data_vol >  self.min_allowed_dv_dlnk:
@@ -272,7 +273,7 @@ class GPProcessorIO():
     def extract_flat_windows( self, routes_flat,  copy_windows= False):
         """ extracts all the activity windows used from a set of routes
         
-        Note that if not using copy_windows, the input zwindows objects will be modified
+        Note that if not using copy_windows, the input windows objects will be modified
         :param routes_flat:  a flat list of all the routes scheduled
         :type routes_flat: [list(routing_objects.DataRoute)]
         :param copy_windows:  make a copy of the windows within the routes before modifying them, defaults to False
@@ -304,13 +305,14 @@ class GPProcessorIO():
 
                 if type (wind)  == ObsWindow:
                     if wind in all_obs:
+                        pass
                         #  get the matching object ( see note above for all_xlnk)
-                        indx = all_obs.index(wind)
-                        original_wind = all_obs[indx]
+                        # indx = all_obs.index(wind)
+                        # original_wind = all_obs[indx]
                         #  now we can update the schedule data volume on that original object
-                        original_wind.scheduled_data_vol += dr.scheduled_dv
+                        # original_wind.scheduled_data_vol += dr.scheduled_dv
                     else:
-                        wind.scheduled_data_vol = dr.scheduled_dv
+                        # wind.scheduled_data_vol = dr.scheduled_dv
                         all_obs. append (wind)
 
                 elif type (wind)  == XlnkWindow or type (wind)  == DlnkWindow:
@@ -318,24 +320,26 @@ class GPProcessorIO():
                     if type (wind)  == XlnkWindow:
 
                         if wind in all_xlnk:
+                            pass
                             #  if we reach here then we know that the hash of wind is in the list, but it's not going to be the same object if we have copied it. do some gymnastics to get the matching object that was already added to the list
-                            indx = all_xlnk.index(wind)
-                            original_wind = all_xlnk[indx]
-                            #  now we can update the schedule data volume on that original object
-                            original_wind.scheduled_data_vol += dr.scheduled_dv
+                            # indx = all_xlnk.index(wind)
+                            # original_wind = all_xlnk[indx]
+                            # #  now we can update the schedule data volume on that original object
+                            # original_wind.scheduled_data_vol += dr.scheduled_dv
                         else:
-                            wind.scheduled_data_vol = dr.scheduled_dv
+                            # wind.scheduled_data_vol = dr.scheduled_dv
                             all_xlnk. append (wind)
 
                     if type (wind)  == DlnkWindow:
                         if wind in all_dlnk:
+                            pass
                             #  get the matching object ( see note above for all_xlnk)
-                            indx = all_dlnk.index(wind)
-                            original_wind = all_dlnk[indx]
+                            # indx = all_dlnk.index(wind)
+                            # original_wind = all_dlnk[indx]
                             #  now we can update the schedule data volume on that original object
-                            original_wind.scheduled_data_vol += dr.scheduled_dv
+                            # original_wind.scheduled_data_vol += dr.scheduled_dv
                         else:
-                            wind.scheduled_data_vol = dr.scheduled_dv
+                            # wind.scheduled_data_vol = dr.scheduled_dv
                             all_dlnk. append (wind)
 
                     #  create link info for this window
@@ -408,7 +412,7 @@ class GPProcessorIO():
                 end_mjd = tt.datetime2mjd ( wind.end)
                 dlnk_times_flat[sat_indx].append ( [start_mjd, end_mjd]) 
                 dlnk_link_info_history_flat[sat_indx].append ( [start_mjd, end_mjd, str (link_info_by_wind[wind])]) 
-                dlnk_partners[sat_indx].append ( wind.gs_ID)
+                dlnk_partners[sat_indx].append ( wind.gs_indx)
 
 
         # data_history =self.create_data_history( obs_winds_flat,dlnk_winds_flat,xlnk_winds_flat)

@@ -60,17 +60,22 @@ class ActivityWindow(object):
     def calc_center ( self):
         return self.start + ( self.end -  self.start)/2
 
-    def update_duration_from_scheduled_dv( self):
+    def update_duration_from_scheduled_dv( self,min_duration_s=10):
         """ update duration based on schedule data volume
         
         updates the schedule duration for the window based upon the assumption that the data volume scheduled for the window is able to be transferred at an average data rate. Updated window times are based off of the center time of the window.
         """
+        old_duration = self.end - self.start
 
-        center_time = self.start + (self.end - self.start)/2
+        if old_duration.total_seconds() < min_duration_s:
+            raise RuntimeWarning('Original duration (%f) is less than minimum allowed duration (%f) for %s'%(old_duration.total_seconds(),min_duration_s,self))
+
+        center_time = self.start + old_duration/2
 
         average_data_rate = self.data_vol/( self.end- self.start).total_seconds()
 
         scheduled_time_s = self.scheduled_data_vol/average_data_rate
+        scheduled_time_s = max(scheduled_time_s,min_duration_s)
 
         self.start = center_time - timedelta ( seconds = scheduled_time_s/2)
         self.end = center_time + timedelta ( seconds = scheduled_time_s/2)

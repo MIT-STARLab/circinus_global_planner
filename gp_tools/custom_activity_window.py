@@ -2,6 +2,8 @@
 
 # @author: Kit Kennedy
 
+# a note on indices and IDs: indx is the internal representation of an object's ID -  it encodes location of the objects in a number of data structures that hold data for the full set of objects. ID is meant to encode a human readable ID for an object, which may or may not be the same as the internally-used indx. Processing code should be written to operate on indx, not on ID,  unless it's dealing with input or output.
+
 from datetime import datetime, timedelta
 
 from circinus_tools  import time_tools as tt
@@ -175,29 +177,38 @@ class CommWindow(ActivityWindow):
         return total_data_vol
 
 class DlnkWindow(CommWindow):
-    def __init__(self, window_ID, sat_indx, gs_ID, sat_gs_indx, start, end):
+    def __init__(self, window_ID, sat_indx, gs_indx, sat_gs_indx, start, end):
         '''
         A downlink window. Can represent a window during which an activity can happen, or the actual activity itself
 
         :param int window_ID: a unique ID for this window, for hashing and comparing windows
         :param int sat_indx: index of the satellite
-        :param int gs_ID: ground station ID for this downlink
+        :param int gs_indx: ground station indx for this downlink
         :param int sat_gs_indx: the index of this dlnk in the list of sat-gs downlinks from gp_input_gslink.mat
         :param datetime start: start time of the window
         :param datetime end: end time of the window
         '''
 
         self.sat_indx = sat_indx
-        self.gs_ID = gs_ID
+        # TODO: this should be gs_indx, not ID
+        self.gs_indx = gs_indx
         self.sat_gs_indx = sat_gs_indx
         self.routed_data_vol = 0
 
         super(DlnkWindow, self).__init__(start, end, window_ID)
 
+    # THIS IS A DIRTY HACK for dealing with a legacy pick pickle file that uses gs_ID instead of gs_indx. 
+    # TODO: remove this after  initial dev
+    def __getattr__(self, attr):
+        if attr == 'gs_indx' and 'gs_indx' not in dir(self):
+            return self.gs_ID
+        else:
+            super().__getattr__(attr)            
+
     def print_self(self,  print_data_vol = True):
         print('DlnkWindow')
         print('sat_indx: ' + str(self.sat_indx))
-        print('gs_ID: ' + str(self.gs_ID))
+        print('gs_indx: ' + str(self.gs_indx))
         print('sat_gs_indx: ' + str(self.sat_gs_indx))
         print('window_ID: ' + str(self.window_ID))
         if print_data_vol:  print('data_vol: ' + str(self.data_vol))
@@ -206,10 +217,10 @@ class DlnkWindow(CommWindow):
         print('......')
 
     def __str__(self):
-        return  "(DlnkWindow id %d; %d, gs %d; %s,%s)" % (self.window_ID,self.sat_indx, self.gs_ID,self.start.isoformat (),self.end.isoformat())
+        return  "(DlnkWindow id %d; %d, gs %d; %s,%s)" % (self.window_ID,self.sat_indx, self.gs_indx,self.start.isoformat (),self.end.isoformat())
 
     def __repr__(self):
-        return  "(DlnkWindow id %d; %d, gs %d; %s,%s)" % (self.window_ID,self.sat_indx, self.gs_ID,self.start.isoformat (),self.end.isoformat())
+        return  "(DlnkWindow id %d; %d, gs %d; %s,%s)" % (self.window_ID,self.sat_indx, self.gs_indx,self.start.isoformat (),self.end.isoformat())
 
 class XlnkWindow(CommWindow):
     def __init__(self, window_ID, sat_indx, xsat_indx, sat_xsat_indx, start, end):

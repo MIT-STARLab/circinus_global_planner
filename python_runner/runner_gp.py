@@ -25,9 +25,10 @@ from gp_tools.gp_plotting import GPPlotting
 from gp_tools.gp_route_selection import GPDataRouteSelection
 from gp_tools.gp_activity_scheduling import GPActivityScheduling
 from gp_tools.gp_metrics import GPMetrics
+from gp_tools.network_sim.gp_network_sim import GPNetSim
 
 # TODO: remove this line if not needed
-from gp_tools.custom_activity_window import ObsWindow
+# from gp_tools.custom_activity_window import ObsWindow
 
 REPO_BASE = os.path.abspath(os.pardir)  # os.pardir aka '..'
 
@@ -117,7 +118,8 @@ class GlobalPlannerRunner:
         t_b = time.time()
         # gp_as.print_sol ()
         print('extract_routes')
-        routes = gp_as.extract_utilized_routes ( verbose  = False)
+        #  make a copy of the windows in the extracted routes so we don't mess with the original objects ( just to be extra careful)
+        routes = gp_as.extract_utilized_routes ( copy_windows = True, verbose  = False)
         energy_usage = gp_as.extract_resource_usage(  decimation_factor =1)
 
         time_elapsed = t_b-t_a
@@ -135,8 +137,15 @@ class GlobalPlannerRunner:
         lat_obs_stats = gp_met.assess_latency_by_obs (routes,verbose = True)
         aoi_targ_stats = gp_met.assess_aoi_by_obs_target(routes,include_routing=True,verbose = True)
 
+        gp_netsim = GPNetSim ( self.params, self.io_proc)
+        gp_netsim.sim_tlm_cmd_routing(routes, verbose = True)
+        sats_cmd_update_hist = gp_netsim.get_all_sats_cmd_update_hist()
+        aoi_sat_cmd_stats = gp_met.assess_aoi_sat_cmd(sats_cmd_update_hist,verbose = True)
+
+
         plot_outputs = {}
-        plot_outputs['aoi_curves_by_targID'] = aoi_targ_stats['aoi_curves_by_targID']
+        plot_outputs['obs_aoi_curves_by_targID'] = aoi_targ_stats['aoi_curves_by_targID']
+        plot_outputs['cmd_aoi_curves_by_sat_indx'] = aoi_sat_cmd_stats['aoi_curves_by_sat_indx']
         return plot_outputs
 
     def run_route_selection(self,gp_ps,obs,dlnk_winds_flat,xlnk_winds,obj_weights,dr_uid):
@@ -393,43 +402,43 @@ class GlobalPlannerRunner:
         # end
 
         sched_obs_winds_flat, sched_dlnk_winds_flat, \
-        sched_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind = self.io_proc.extract_flat_windows (routes,copy_windows=True)
+        sched_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind = self.io_proc.extract_flat_windows (routes,copy_windows= False)
 
-        #  update the window beginning and end times based upon their amount of scheduled data volume
-        for sat_indx in range(self.sat_params['num_sats']):
-            for wind in sched_obs_winds_flat[sat_indx] + sched_dlnk_winds_flat[sat_indx] + sched_xlnk_winds_flat[sat_indx]:
-                # print(wind)
-                # print(wind.data_vol)
-                # print(wind.scheduled_data_vol)
-                # if not  type (wind) == ObsWindow:
-                #     print(link_info_by_wind[wind])
-                #     print(route_indcs_by_wind[wind])
-                wind.update_duration_from_scheduled_dv ()
+        # #  update the window beginning and end times based upon their amount of scheduled data volume
+        # for sat_indx in range(self.sat_params['num_sats']):
+        #     for wind in sched_obs_winds_flat[sat_indx] + sched_dlnk_winds_flat[sat_indx] + sched_xlnk_winds_flat[sat_indx]:
+        #         # print(wind)
+        #         # print(wind.data_vol)
+        #         # print(wind.scheduled_data_vol)
+        #         # if not  type (wind) == ObsWindow:
+        #         #     print(link_info_by_wind[wind])
+        #         #     print(route_indcs_by_wind[wind])
+        #         wind.update_duration_from_scheduled_dv ()
 
         # 
         sats_to_include =  [sat_p['sat_id'] for sat_p in self.sat_orbit_params]
         # sats_to_include = [0,9,21,22,23]
 
-
-        #  plot the selected down links and cross-links
-        # self.gp_plot.plot_winds(
-        #     sats_to_include,
-        #     sel_obs_winds_flat,
-        #     sched_obs_winds_flat,
-        #     sel_dlnk_winds_flat,
-        #     sched_dlnk_winds_flat, 
-        #     sel_xlnk_winds_flat,
-        #     sched_xlnk_winds_flat,
-        #     route_indcs_by_wind,
-        #     self.as_inst_params['start_utc_dt'],
-        #     # self.as_inst_params['start_utc_dt'] + timedelta( seconds= self.rs_params['wind_filter_duration_s']),
-        #     self.as_inst_params['end_utc_dt'],
-        #     plot_title = 'Scheduled Activities',
-        #     plot_size_inches = (18,12),
-        #     plot_include_labels = self.as_params['plot_include_labels'],
-        #     show=  False,
-        #     fig_name='plots/test_activity_times.pdf'
-        # )
+        sats_to_include =  range(10)
+        # plot the selected down links and cross-links this
+        self.gp_plot.plot_winds(
+            sats_to_include,
+            sel_obs_winds_flat,
+            sched_obs_winds_flat,
+            sel_dlnk_winds_flat,
+            sched_dlnk_winds_flat, 
+            sel_xlnk_winds_flat,
+            sched_xlnk_winds_flat,
+            route_indcs_by_wind,
+            self.as_inst_params['start_utc_dt'],
+            # self.as_inst_params['start_utc_dt'] + timedelta( seconds= self.rs_params['wind_filter_duration_s']),
+            self.as_inst_params['end_utc_dt'],
+            plot_title = 'Scheduled Activities',
+            plot_size_inches = (18,12),
+            plot_include_labels = self.as_params['plot_include_labels'],
+            show=  False,
+            fig_name='plots/test_activity_times.pdf'
+        )
 
         # self.gp_plot.plot_data_circles(
         #     sats_to_include,
@@ -467,15 +476,27 @@ class GlobalPlannerRunner:
         targs_to_include = range(15)
         self.gp_plot.plot_obs_aoi(
             targs_to_include,
-            metrics_plot_inputs['aoi_curves_by_targID'],
+            metrics_plot_inputs['obs_aoi_curves_by_targID'],
             self.as_inst_params['start_utc_dt'],
             self.as_inst_params['end_utc_dt'],
             plot_title = 'Observation Target AoI', 
             plot_size_inches = (18,12),
             show=False,
-            fig_name='plots/obs_aoi_plot.pdf'
+            fig_name='plots/test_obs_aoi_plot.pdf'
         )
 
+        # sats_to_include =  [sat_p['sat_id'] for sat_p in self.sat_orbit_params]
+        sats_to_include =  range(10)
+        self.gp_plot.plot_sat_cmd_aoi(
+            sats_to_include,
+            metrics_plot_inputs['cmd_aoi_curves_by_sat_indx'],
+            self.as_inst_params['start_utc_dt'],
+            self.as_inst_params['end_utc_dt'],
+            plot_title = 'Satellite Command Uplink AoI',
+            plot_size_inches = (18,12),
+            show=False,
+            fig_name='plots/test_cmd_aoi_plot.pdf'
+        )
         
 
     def validate_unique_windows( self,obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds):

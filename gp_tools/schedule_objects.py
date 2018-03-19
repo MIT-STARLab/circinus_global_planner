@@ -49,13 +49,25 @@ class Dancecard(object):
         
         returns a list of indices that are valid for every given time point within this dance card. this is useful for doing other operations that need to refer to the same indices as this dance card
         """
+        # TODO: this method should probably be a generator
+
         return  range (self.num_timepoints)
 
-    def get_timepoint_values ( self,units='seconds'):
+    def get_timepoint_values ( self,units='seconds',time_option ='relative_to_start'):
         """ return the list of indices used for this dance card
         
         returns a list of indices that are valid for every given time step within this dance card. this is useful for doing other operations that need to refer to the same indices as this dance card
         """
+
+        # TODO: this method should probably be a generator
+
+        if time_option == 'relative_to_start':
+            pass
+        # TODO: should implement this option - helpful for case where you want to get datetimes back
+        elif time_option == 'absolute':
+            raise NotImplementedError
+        else:
+            raise NotImplementedError
 
         t_vals_s = [self.tstep_sec*tp_indx for tp_indx in range(self.num_timepoints)]
 

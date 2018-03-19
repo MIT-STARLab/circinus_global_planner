@@ -85,6 +85,11 @@ class DataRoute(object):
             return  '('+self.get_route_string()+'; sched dv: %.0f/%.0f Mb'%( self.scheduled_dv, self.data_vol)+')'
 
     def validate_route (self):
+        """ validates timing and ordering of route
+        
+        [description]
+        :raises: Exception, Exception, Exception
+        """
 
         obs = self.route[0]
         if not type (obs) is ObsWindow:

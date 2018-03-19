@@ -20,6 +20,7 @@ class GPMetrics():
         :type params: dict
         """
         scenario_params = gp_params['gp_orbit_prop_params']['scenario_params']
+        sat_params = gp_params['gp_orbit_prop_params']['sat_params']
         gp_inst_params = gp_params['gp_instance_params']['metrics_params']
         obs_params = gp_params['gp_orbit_prop_params']['obs_params']
         gp_general_other_params = gp_params['gp_general_params']['other_params']
@@ -29,9 +30,10 @@ class GPMetrics():
         self.latency_params = gp_params['gp_general_params']['other_params']['latency_calculation']
         self.met_start_utc_dt  = tt.iso_string_to_dt (gp_inst_params['start_utc'])
         self.met_end_utc_dt  = tt.iso_string_to_dt (gp_inst_params['end_utc'])
+        self.num_sats=sat_params['num_sats']
         self.num_targ = obs_params['num_targets']
         self.all_targ_IDs = [targ['id'] for targ in obs_params['targets']]
-        self.targ_ignore_list = gp_general_other_params['targ_ignore_list']
+        self.targ_id_ignore_list = gp_general_other_params['targ_id_ignore_list']
 
         self.min_obs_dv = metrics_params['min_obs_dv_Mb']
         self.aoi_units = metrics_params['aoi_units']
@@ -489,7 +491,7 @@ class GPMetrics():
             for targ_ID in obs_wind.target_IDs:
 
                 # skip ignored targets
-                if targ_ID in  self.targ_ignore_list:
+                if targ_ID in  self.targ_id_ignore_list:
                     continue
 
                 targ_indx = self.all_targ_IDs.index(targ_ID)
@@ -555,5 +557,52 @@ class GPMetrics():
             for targ_ID in av_aoi_by_targID.keys ():
                 avaoi = av_aoi_by_targID.get(targ_ID,None)
                 print("targ_ID %d: av aoi %f"%(targ_ID,avaoi))
+
+        return stats
+
+    def assess_aoi_sat_cmd(self,sats_cmd_update_hist,verbose = True):
+
+        av_aoi_vals = []
+        av_aoi_by_sat_indx = {}
+        aoi_curves_vals = []
+        aoi_curves_by_sat_indx = {}
+
+        for sat_indx in range(self.num_sats):
+
+            update_hist = sats_cmd_update_hist[sat_indx]
+            d_c_mat = [[t,lut] for t,lut in zip(update_hist.t,update_hist.last_update_time)]
+
+            start_time = d_c_mat[0][0]
+            end_time = d_c_mat[-1][0]
+            av_aoi = self.calc_av_aoi( d_c_mat, start_time, end_time,input_type="seconds",output_units=self.aoi_units)
+            aoi_curve = self.get_aoi_curve(d_c_mat,start_time,input_type="seconds",x_units=self.aoi_plot_t_units,y_units=self.aoi_units)
+            
+            av_aoi_vals.append(av_aoi)
+            aoi_curves_vals.append(aoi_curve)
+            av_aoi_by_sat_indx[sat_indx] = av_aoi
+            aoi_curves_by_sat_indx[sat_indx] = aoi_curve
+
+
+        valid = len(av_aoi_vals) > 0
+
+        stats =  {}
+        stats['av_av_aoi'] = np.mean(av_aoi_vals) if valid else None
+        stats['min_av_aoi'] = np.min(av_aoi_vals) if valid else None
+        stats['max_av_aoi'] = np.max(av_aoi_vals) if valid else None
+        stats['std_av_aoi'] = np.std(av_aoi_vals) if valid else None
+
+        stats['av_aoi_by_sat_indx'] = av_aoi_by_sat_indx
+        stats['aoi_curves_by_sat_indx'] = aoi_curves_by_sat_indx
+
+        if verbose:
+            print('Sat CMD AoI values')
+            print("%s: %f"%('av_av_aoi',stats['av_av_aoi']))
+            print("%s: %f"%('min_av_aoi',stats['min_av_aoi']))
+            print("%s: %f"%('max_av_aoi',stats['max_av_aoi']))
+            print("%s: %f"%('std_av_aoi',stats['std_av_aoi']))
+
+            for sat_indx in range(self.num_sats):
+                avaoi = av_aoi_by_sat_indx.get(sat_indx,None)
+                print("sat_indx %d: av aoi %f"%(sat_indx,avaoi))
 
         return stats

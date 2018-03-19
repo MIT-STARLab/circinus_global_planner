@@ -5,6 +5,7 @@
 #  note that a path is the same as a route. 
 
 from  datetime import timedelta
+from copy import  deepcopy
 
 from pyomo import environ  as pe
 from pyomo import opt  as po
@@ -20,6 +21,7 @@ class GPActivityScheduling():
     
     # how close a binary variable must be to zero or one to be counted as that
     binary_epsilon = 0.1
+
 
     def __init__(self,gp_params):
         """initializes based on parameters
@@ -40,9 +42,10 @@ class GPActivityScheduling():
         self.min_path_dv =as_params['min_path_dv_Mb']
         self.num_sats=sat_params['num_sats']
         self.transition_time_s=as_params['transition_time_s']
-        self.sched_start_utc_dt  = tt.iso_string_to_dt (gp_inst_params['start_utc'])
-        self.sched_end_utc_dt  = tt.iso_string_to_dt (gp_inst_params['end_utc'])
+        self.sched_start_utc_dt  = gp_inst_params['start_utc_dt']
+        self.sched_end_utc_dt  = gp_inst_params['end_utc_dt']
         self.resource_delta_t_s  =as_params['resource_delta_t_s']
+        self.dv_epsilon = as_params['dv_epsilon_Mb']
         sat_id_order= sat_params['sat_id_order']
 
         #  sort these now in case they weren't before
@@ -73,10 +76,17 @@ class GPActivityScheduling():
             EclipseWindow: 'charging'
         }
 
+        self.min_act_duration_s = {
+            ObsWindow: as_params['min_duration_s']['obs'],
+            DlnkWindow: as_params['min_duration_s']['dlnk'],
+            XlnkWindow: as_params['min_duration_s']['xlnk']
+        }
+
         self.standard_activities = [ObsWindow,DlnkWindow,XlnkWindow]
 
     def get_stats(self,verbose=True):
         stats = {}
+        stats['num_routes'] = sum([len ( self.routes_flat)])
         stats['num_acts'] = sum([len ( self.all_acts_indcs)])
         stats['num_obs_acts'] = sum([len ( self.obs_act_indcs)])
         stats['num_link_acts'] = sum([len ( self.link_act_indcs)])
@@ -85,6 +95,7 @@ class GPActivityScheduling():
         stats['num_nconstraints'] = self.model.nconstraints ()
 
         if verbose:
+            print ( "Considering %d routes" % (stats['num_routes']))
             print ( "Considering %d activity windows" % (stats['num_acts']))
             print ( "Considering %d observation windows" % (stats['num_obs_acts']))
             print ( "Considering %d link windows" % (stats['num_link_acts']))
@@ -236,6 +247,7 @@ class GPActivityScheduling():
         self.all_acts_indcs = all_acts_indcs
         self.obs_act_indcs = obs_act_indcs
         self.link_act_indcs = link_act_indcs
+        self.all_acts_by_obj = all_acts_by_obj
 
         #  subscript for each path p
         model.paths = pe.Set(initialize= range(len(routes_flat)))
@@ -317,17 +329,23 @@ class GPActivityScheduling():
             return model.var_act_indic[a] >=  model.var_activity_utilization[a]
         model.c3 =pe.Constraint ( model.acts,  rule=c3_rule)        
 
-        #  activity overlap constraints [4],[5]
+        #  activity overlap constraints [4],[5],[5b]
         model.c4  = pe.ConstraintList()
         model.c5  = pe.ConstraintList()
+        model.c5b  = pe.ConstraintList()
         for sat_indx in range (self.num_sats):
             num_sat_acts = len(sat_acts[sat_indx])
             for  first_act_indx in  range (num_sat_acts):
+
+                act1 = sat_acts[sat_indx][first_act_indx]
+                # get the unique index into model.acts
+                act1_uindx = all_acts_by_obj[act1]
+                length_1 = model.par_act_dv[act1_uindx]*model.var_activity_utilization[act1_uindx]/act1.ave_data_rate
+                model.c5b.add( length_1 >= model.var_act_indic[act1_uindx] * self.min_act_duration_s[type(act1)])
+                
                 for  second_act_indx in  range (first_act_indx+1,num_sat_acts):
-                    act1 = sat_acts[sat_indx][first_act_indx]
                     act2 = sat_acts[sat_indx][ second_act_indx]
-                    # get the unique indices into model.acts
-                    act1_uindx = all_acts_by_obj[act1]
+                    # get the unique index into model.acts
                     act2_uindx = all_acts_by_obj[act2]
 
                     # if there is enough transition time between the two activities, no constraint needs to be added
@@ -504,7 +522,7 @@ class GPActivityScheduling():
                     val  = varobject[index].value
                     print (" ",index, val)
 
-    def extract_utilized_routes( self,verbose = False):
+    def extract_utilized_routes( self, copy_windows = True, verbose = False):
         #  note that routes are the same as paths
 
         # scheduled_dv
@@ -513,15 +531,49 @@ class GPActivityScheduling():
         if verbose:
             print ('utilized routes:')
 
+        def copy_choice(wind):
+            if copy_windows:
+                return deepcopy(wind)
+            else:
+                return wind
+
         # figure out which paths were used, and add the scheduled data volume to each
         for p in self.model.paths:
             if pe.value(self.model.var_path_indic[p]) >= 1.0 - self.binary_epsilon:
-                scheduled_route =  self.routes_flat[p]
+                scheduled_route =  copy_choice (self.routes_flat[p]) 
                 scheduled_route.scheduled_dv = pe.value(self.model.var_path_utilization[p])* self.model.par_path_dv[p]
                 scheduled_routes_flat. append (scheduled_route)
 
                 if verbose:
                     print(scheduled_route)
+
+        # examine the schedulable data volume for every activity window, checking as we go that the data volume is sufficient for at least the route in which the window is found
+        #  note that this code is slightly inefficient because it might duplicate windows across routes. that's fine though, because we're thorough in checking across all routes
+        for dr in scheduled_routes_flat:
+            for wind in dr.route:
+                act_indx = self.all_acts_by_obj[wind]
+                w_s_dv = wind.data_vol * pe.value(self.model.var_act_indic[act_indx])
+                #  initialize this while we're here
+                wind.scheduled_data_vol = 0
+                # wind.scheduled_data_vol = w_s_dv
+                if w_s_dv < dr.scheduled_dv - self.dv_epsilon: 
+                    raise RuntimeWarning('inconsistent activity scheduling results: activity data volume (%f) smaller than route data volume (%f) [%s,%s]'%(w_s_dv,dr.scheduled_dv,dr,wind))
+
+
+        #  now we want to mark the real scheduled data volume for every window. We need to do this separately because the model.var_act_indic continuous variables only give an upper bound on the data volume for an activity. we only actually need to use as much data volume as the data routes want to push through the window
+        # #  first set the scheduled data volume to zero
+        # for dr in scheduled_routes_flat:
+        #     for wind in dr.route:
+        #         wind.scheduled_data_vol = 0
+        #  next add data volume for every route passing through every window
+        for dr in scheduled_routes_flat:
+            for wind in dr.route:
+                wind.scheduled_data_vol += dr.scheduled_dv
+
+        # update the window beginning and end times based upon their amount of scheduled data volume
+        for dr in scheduled_routes_flat:
+            for wind in dr.route:
+                wind.update_duration_from_scheduled_dv (min_duration_s=self.min_act_duration_s[type(wind)])
 
         return scheduled_routes_flat
 
