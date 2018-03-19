@@ -306,13 +306,7 @@ class GPProcessorIO():
                 if type (wind)  == ObsWindow:
                     if wind in all_obs:
                         pass
-                        #  get the matching object ( see note above for all_xlnk)
-                        # indx = all_obs.index(wind)
-                        # original_wind = all_obs[indx]
-                        #  now we can update the schedule data volume on that original object
-                        # original_wind.scheduled_data_vol += dr.scheduled_dv
                     else:
-                        # wind.scheduled_data_vol = dr.scheduled_dv
                         all_obs. append (wind)
 
                 elif type (wind)  == XlnkWindow or type (wind)  == DlnkWindow:
@@ -321,25 +315,13 @@ class GPProcessorIO():
 
                         if wind in all_xlnk:
                             pass
-                            #  if we reach here then we know that the hash of wind is in the list, but it's not going to be the same object if we have copied it. do some gymnastics to get the matching object that was already added to the list
-                            # indx = all_xlnk.index(wind)
-                            # original_wind = all_xlnk[indx]
-                            # #  now we can update the schedule data volume on that original object
-                            # original_wind.scheduled_data_vol += dr.scheduled_dv
                         else:
-                            # wind.scheduled_data_vol = dr.scheduled_dv
                             all_xlnk. append (wind)
 
                     if type (wind)  == DlnkWindow:
                         if wind in all_dlnk:
                             pass
-                            #  get the matching object ( see note above for all_xlnk)
-                            # indx = all_dlnk.index(wind)
-                            # original_wind = all_dlnk[indx]
-                            #  now we can update the schedule data volume on that original object
-                            # original_wind.scheduled_data_vol += dr.scheduled_dv
                         else:
-                            # wind.scheduled_data_vol = dr.scheduled_dv
                             all_dlnk. append (wind)
 
                     #  create link info for this window

@@ -555,17 +555,12 @@ class GPActivityScheduling():
                 w_s_dv = wind.data_vol * pe.value(self.model.var_act_indic[act_indx])
                 #  initialize this while we're here
                 wind.scheduled_data_vol = 0
-                # wind.scheduled_data_vol = w_s_dv
                 if w_s_dv < dr.scheduled_dv - self.dv_epsilon: 
                     raise RuntimeWarning('inconsistent activity scheduling results: activity data volume (%f) smaller than route data volume (%f) [%s,%s]'%(w_s_dv,dr.scheduled_dv,dr,wind))
 
 
         #  now we want to mark the real scheduled data volume for every window. We need to do this separately because the model.var_act_indic continuous variables only give an upper bound on the data volume for an activity. we only actually need to use as much data volume as the data routes want to push through the window
-        # #  first set the scheduled data volume to zero
-        # for dr in scheduled_routes_flat:
-        #     for wind in dr.route:
-        #         wind.scheduled_data_vol = 0
-        #  next add data volume for every route passing through every window
+        #  add data volume for every route passing through every window
         for dr in scheduled_routes_flat:
             for wind in dr.route:
                 wind.scheduled_data_vol += dr.scheduled_dv

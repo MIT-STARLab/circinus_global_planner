@@ -404,17 +404,6 @@ class GlobalPlannerRunner:
         sched_obs_winds_flat, sched_dlnk_winds_flat, \
         sched_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind = self.io_proc.extract_flat_windows (routes,copy_windows= False)
 
-        # #  update the window beginning and end times based upon their amount of scheduled data volume
-        # for sat_indx in range(self.sat_params['num_sats']):
-        #     for wind in sched_obs_winds_flat[sat_indx] + sched_dlnk_winds_flat[sat_indx] + sched_xlnk_winds_flat[sat_indx]:
-        #         # print(wind)
-        #         # print(wind.data_vol)
-        #         # print(wind.scheduled_data_vol)
-        #         # if not  type (wind) == ObsWindow:
-        #         #     print(link_info_by_wind[wind])
-        #         #     print(route_indcs_by_wind[wind])
-        #         wind.update_duration_from_scheduled_dv ()
-
         # 
         sats_to_include =  [sat_p['sat_id'] for sat_p in self.sat_orbit_params]
         # sats_to_include = [0,9,21,22,23]
