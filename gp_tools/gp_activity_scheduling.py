@@ -36,6 +36,7 @@ class GPActivityScheduling():
         as_params = gp_params['gp_general_params']['activity_scheduling_params']
         gp_inst_params = gp_params['gp_instance_params']['activity_scheduling_params']
         
+        self.latency_params = gp_params['gp_general_params']['other_params']['latency_calculation']
         self.solver_max_runtime =as_params['solver_max_runtime_s']
         self.solver_name =as_params['solver_name']
         self.solver_optimality_gap =as_params['solver_optimality_gap']
@@ -48,6 +49,8 @@ class GPActivityScheduling():
         self.resource_delta_t_s  =as_params['resource_delta_t_s']
         self.dv_epsilon = as_params['dv_epsilon_Mb']
         sat_id_order= sat_params['sat_id_order']
+
+        self.obj_weights =as_params['obj_weights']
 
         #  sort these now in case they weren't before
         self.power_params = io_tools.sort_input_params_by_sat_indcs(sat_params['power_params'],sat_id_order)
@@ -84,6 +87,11 @@ class GPActivityScheduling():
         }
 
         self.standard_activities = [ObsWindow,DlnkWindow,XlnkWindow]
+
+        if self.latency_params['obs'] not in ['start','end']:
+            raise NotImplementedError
+        if self.latency_params['dlnk'] not in ['start','end','center']:
+            raise NotImplementedError
 
     def get_stats(self,verbose=True):
         stats = {}
@@ -203,7 +211,33 @@ class GPActivityScheduling():
 
         return new_routes
 
+    @staticmethod
+    def get_path_latency_score_factors(routes_flat,path_indcs_by_obs_act,latency_params):
 
+        path_latency_sf_by_path_indx = {}
+
+        # loop through all satellites and their downlinks
+        # explicitly indexing by num_sats just to include a bit of error checking
+        for obs,dr_indcs in path_indcs_by_obs_act.items():
+            latencies = []
+            for dr_indx in dr_indcs:
+                dr = routes_flat[dr_indx]
+
+                latencies.append(
+                    dr.get_latency(
+                        'minutes',
+                        obs_option = latency_params['obs'], 
+                        dlnk_option = latency_params['dlnk']
+                    )
+                )
+
+             #  the shortest latency path for this observation has a score factor of 1.0, and the score factors for the other paths decrease linearly with increasing latency
+            min_lat = min(latencies)
+            for lat_indx, lat in enumerate(latencies):
+                dr_indx = dr_indcs[lat_indx]
+                path_latency_sf_by_path_indx[dr_indx] = lat/min_lat
+
+        return path_latency_sf_by_path_indx
 
     def make_model ( self,routes_flat, ecl_winds, verbose = True):
         model = pe.ConcreteModel()
@@ -236,6 +270,12 @@ class GPActivityScheduling():
             link_act_indcs,
             path_indcs_by_link_act,
             dv_by_link_act) =  self.get_activity_structs(routes_flat)
+
+        path_latency_sf_by_path_indx =  self.get_path_latency_score_factors(
+            routes_flat,
+            path_indcs_by_obs_act,
+            self.latency_params
+        )
 
         # construct a set of dance cards for every satellite, 
         # each of which keeps track of all of the activities of satellite 
@@ -273,6 +313,7 @@ class GPActivityScheduling():
 
         model.par_min_path_dv = pe.Param (initialize=self.min_path_dv)
         model.par_obs_dv = pe.Param(model.obs_acts,initialize =dv_by_obs_act)
+        model.par_total_obs_dv = sum(dv_by_obs_act.values())
         model.par_link_dv = pe.Param(model.link_acts,initialize =dv_by_link_act)
         model.par_act_dv = pe.Param(model.acts,initialize =dv_by_act)
         model.par_path_dv = pe.Param(model.paths,initialize ={ i: dr.data_vol for i,dr in enumerate (routes_flat)})
@@ -281,6 +322,7 @@ class GPActivityScheduling():
         model.par_path_subscrs_by_link_act = pe.Param(model.link_acts,initialize =path_indcs_by_link_act)
         model.par_path_subscrs_by_obs_act = pe.Param(model.obs_acts,initialize =path_indcs_by_obs_act)
         model.par_path_subscrs_by_act = pe.Param(model.acts,initialize =path_indcs_by_act)
+
 
         if self.energy_unit == "Wh":
             model.par_resource_delta_t = pe.Param (initialize= self.resource_delta_t_s/3600)
@@ -460,13 +502,15 @@ class GPActivityScheduling():
         ##############################
         #  Make objective
         ##############################
-
+        # import ipdb
+        # ipdb.set_trace ()
         def obj_rule(model):
             return (
                 # model.par_obj_weight1 * 1/self.num_paths/model.par_obs_dv * sum(model.var_path_dv_dlnk[p,i,k] for i,k in model.dlnk_subscripts for p in model.paths )  +
                 # model.par_obj_weight2 * 1/self.num_paths                  * sum(model.var_path_indic[p] for p in model.paths) +
                 # model.par_obj_weight3 * 1/self.num_paths                  * sum(model.var_dlnk_path_occ[p,i,k]*model.par_dlnk_sf[i,k] for i,k in model.dlnk_subscripts for p in model.paths )
-                sum(model.par_path_dv[p]*model.var_path_utilization[p] for p in model.paths)
+                self.obj_weights['obs_dv'] * 1/model.par_total_obs_dv * sum(model.par_path_dv[p]*model.var_path_utilization[p] for p in model.paths) 
+                + self.obj_weights['route_latency'] * 1/len(model.obs_acts) * sum(path_latency_sf_by_path_indx[p]*model.var_path_utilization[p] for p in model.paths)
                 # sum(model.var_path_indic[p] for p in model.paths)
             )
         model.obj = pe.Objective( rule=obj_rule, sense=pe.maximize )
