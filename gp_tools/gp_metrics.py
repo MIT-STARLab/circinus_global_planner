@@ -157,7 +157,7 @@ class GPMetrics():
         stats['min_lat_mins'] = np.min(latencies) if valid else None
         stats['max_lat_mins'] = np.max(latencies) if valid else None
 
-        if verbose:
+        if verbose and valid:
             print('latency for routes')
             print("%s: %f"%('ave_lat_mins',stats['ave_lat_mins']))
             print("%s: %f"%('min_lat_mins',stats['min_lat_mins']))
@@ -552,9 +552,9 @@ class GPMetrics():
             print("%s: %f"%('max_av_aoi',stats['max_av_aoi']))
             print("%s: %f"%('std_av_aoi',stats['std_av_aoi']))
 
-            for targ_ID in av_aoi_by_targID.keys ():
-                avaoi = av_aoi_by_targID.get(targ_ID,None)
-                print("targ_ID %d: av aoi %f"%(targ_ID,avaoi))
+            # for targ_ID in av_aoi_by_targID.keys ():
+            #     avaoi = av_aoi_by_targID.get(targ_ID,None)
+            #     print("targ_ID %d: av aoi %f"%(targ_ID,avaoi))
 
         return stats
 
@@ -611,9 +611,9 @@ class GPMetrics():
             print("%s: %f"%('max_av_aoi',stats['max_av_aoi']))
             print("%s: %f"%('std_av_aoi',stats['std_av_aoi']))
 
-            for sat_indx in range(self.num_sats):
-                avaoi = av_aoi_by_sat_indx.get(sat_indx,None)
-                print("sat_indx %d: av aoi %f"%(sat_indx,avaoi))
+            # for sat_indx in range(self.num_sats):
+            #     avaoi = av_aoi_by_sat_indx.get(sat_indx,None)
+            #     print("sat_indx %d: av aoi %f"%(sat_indx,avaoi))
 
         return stats
 
@@ -645,8 +645,8 @@ class GPMetrics():
             print("%s: %f"%('max_av_aoi',stats['max_av_aoi']))
             print("%s: %f"%('std_av_aoi',stats['std_av_aoi']))
 
-            for sat_indx in range(self.num_sats):
-                avaoi = av_aoi_by_sat_indx.get(sat_indx,None)
-                print("sat_indx %d: av aoi %f"%(sat_indx,avaoi))
+            # for sat_indx in range(self.num_sats):
+            #     avaoi = av_aoi_by_sat_indx.get(sat_indx,None)
+            #     print("sat_indx %d: av aoi %f"%(sat_indx,avaoi))
 
         return stats

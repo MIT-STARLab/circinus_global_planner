@@ -38,6 +38,7 @@ class GPActivityScheduling():
         
         self.solver_max_runtime =as_params['solver_max_runtime_s']
         self.solver_name =as_params['solver_name']
+        self.solver_optimality_gap =as_params['solver_optimality_gap']
         self.solver_run_remotely =as_params['solver_run_remotely']
         self.min_path_dv =as_params['min_path_dv_Mb']
         self.num_sats=sat_params['num_sats']
@@ -327,7 +328,11 @@ class GPActivityScheduling():
 
         def c3_rule( model,a):
             return model.var_act_indic[a] >=  model.var_activity_utilization[a]
-        model.c3 =pe.Constraint ( model.acts,  rule=c3_rule)        
+        model.c3 =pe.Constraint ( model.acts,  rule=c3_rule)  
+
+        def c3c_rule( model,p):
+            return model.var_path_indic[p] >=  model.var_path_utilization[p]
+        model.c3c =pe.Constraint ( model.paths,  rule=c3c_rule)
 
         #  activity overlap constraints [4],[5],[5b]
         model.c4  = pe.ConstraintList()
@@ -461,8 +466,8 @@ class GPActivityScheduling():
                 # model.par_obj_weight1 * 1/self.num_paths/model.par_obs_dv * sum(model.var_path_dv_dlnk[p,i,k] for i,k in model.dlnk_subscripts for p in model.paths )  +
                 # model.par_obj_weight2 * 1/self.num_paths                  * sum(model.var_path_indic[p] for p in model.paths) +
                 # model.par_obj_weight3 * 1/self.num_paths                  * sum(model.var_dlnk_path_occ[p,i,k]*model.par_dlnk_sf[i,k] for i,k in model.dlnk_subscripts for p in model.paths )
-                sum(model.par_path_dv[p]*model.var_path_utilization[p] for p in model.paths) +
-                sum(model.var_path_indic[p] for p in model.paths)
+                sum(model.par_path_dv[p]*model.var_path_utilization[p] for p in model.paths)
+                # sum(model.var_path_indic[p] for p in model.paths)
             )
         model.obj = pe.Objective( rule=obj_rule, sense=pe.maximize )
 
@@ -473,6 +478,9 @@ class GPActivityScheduling():
 
         solver = po.SolverFactory(self.solver_name)
         solver.options['timelimit'] = self.solver_max_runtime
+        if self.solver_name == 'gurobi':
+            # note default for this is 1e-4, or 0.01%
+            solver.options['MIPGap'] = self.solver_optimality_gap
 
         # if we're running things remotely, then we will use the NEOS server (https://neos-server.org/neos/)
         if self.solver_run_remotely:

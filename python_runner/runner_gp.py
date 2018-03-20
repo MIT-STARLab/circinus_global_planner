@@ -131,14 +131,14 @@ class GlobalPlannerRunner:
 
         print('len(routes)')
         print(len(routes))
-        dv_stats = gp_met.assess_dv_all_routes (routes,verbose = True)
+        # dv_stats = gp_met.assess_dv_all_routes (routes,verbose = True)
         dv_obs_stats = gp_met.assess_dv_by_obs (routes,verbose = True)
         lat_stats = gp_met.assess_latency_all_routes (routes,verbose = True)
         lat_obs_stats = gp_met.assess_latency_by_obs (routes,verbose = True)
         aoi_targ_stats = gp_met.assess_aoi_by_obs_target(routes,include_routing=True,verbose = True)
 
         gp_netsim = GPNetSim ( self.params, self.io_proc)
-        gp_netsim.sim_tlm_cmd_routing(routes, verbose = True)
+        gp_netsim.sim_tlm_cmd_routing(routes, verbose =  False)
         #  this is indexed by sat index
         sats_cmd_update_hist = gp_netsim.get_all_sats_cmd_update_hist()
         aoi_sat_cmd_stats = gp_met.assess_aoi_sat_cmd(sats_cmd_update_hist,verbose = True)
@@ -411,7 +411,7 @@ class GlobalPlannerRunner:
 
         # 
         sats_to_include =  [sat_p['sat_id'] for sat_p in self.sat_orbit_params]
-        sats_to_include = [12,13,14,15,16]
+        # sats_to_include = [12,13,14,15,16]
 
         # sats_to_include =  range(20,30)
         # plot the selected down links and cross-links this
