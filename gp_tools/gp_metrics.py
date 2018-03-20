@@ -39,6 +39,10 @@ class GPMetrics():
         self.aoi_units = metrics_params['aoi_units']
         self.aoi_plot_t_units=plot_params['time_units']
 
+        self.power_params = sat_params['power_params_sorted']
+        self.sats_emin_Wh = [p_params['battery_storage_Wh']['e_min'][p_params['battery_option']] for p_params in self.power_params]
+        self.sats_emax_Wh = [p_params['battery_storage_Wh']['e_max'][p_params['battery_option']] for p_params in self.power_params]
+
         # the amount by which the minimum data volume is allowed to be lower than self.min_obs_dv
         self.min_obs_dv_slop = self.min_obs_dv*0.01
 
@@ -648,5 +652,54 @@ class GPMetrics():
             # for sat_indx in range(self.num_sats):
             #     avaoi = av_aoi_by_sat_indx.get(sat_indx,None)
             #     print("sat_indx %d: av aoi %f"%(sat_indx,avaoi))
+
+        return stats
+
+
+
+    def assess_resource_margin(self,energy_usage,verbose = True):
+
+        e_margin_by_sat_indx = {}
+        ave_e_margin = []
+        min_e_margin = []
+        max_e_margin = []
+        for sat_indx in range (self.num_sats):
+            e_margin = [e - self.sats_emin_Wh[sat_indx] for e in energy_usage['e_sats'][sat_indx]]
+
+            e_ave = np.mean(e_margin)
+            e_max = np.max(e_margin)
+            e_min = np.min(e_margin)
+            e_margin_by_sat_indx[sat_indx] = {
+                "ave": e_ave,
+                "max": e_max,
+                "min": e_min
+            }
+
+            ave_e_margin.append(e_ave)
+            min_e_margin.append(e_min)
+            max_e_margin.append(e_max)
+
+        valid = len(ave_e_margin) > 0
+
+        stats =  {}
+        stats['av_ave_e_margin'] = np.mean(ave_e_margin) if valid else None
+        stats['min_ave_e_margin'] = np.min(ave_e_margin) if valid else None
+        stats['max_ave_e_margin'] = np.max(ave_e_margin) if valid else None
+        stats['std_ave_e_margin'] = np.std(ave_e_margin) if valid else None
+        stats['min_min_e_margin'] = np.min(min_e_margin) if valid else None
+
+
+        if verbose:
+            print('Sat energy margin values')
+            print("%s: %f"%('av_ave_e_margin',stats['av_ave_e_margin']))
+            print("%s: %f"%('min_ave_e_margin',stats['min_ave_e_margin']))
+            print("%s: %f"%('max_ave_e_margin',stats['max_ave_e_margin']))
+            print("%s: %f"%('std_ave_e_margin',stats['std_ave_e_margin']))
+            print("%s: %f"%('min_min_e_margin',stats['min_min_e_margin']))
+
+            # for sat_indx in range(self.num_sats):
+            #     print("sat_indx %d: av e margin %f"%(sat_indx,e_margin_by_sat_indx[sat_indx]['ave']))
+            #     print("sat_indx %d: min e margin %f"%(sat_indx,e_margin_by_sat_indx[sat_indx]['min']))
+            #     print("sat_indx %d: max e margin %f"%(sat_indx,e_margin_by_sat_indx[sat_indx]['max']))
 
         return stats

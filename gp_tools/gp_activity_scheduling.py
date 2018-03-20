@@ -6,6 +6,7 @@
 
 from  datetime import timedelta
 from copy import  deepcopy
+from math import ceil
 
 from pyomo import environ  as pe
 from pyomo import opt  as po
@@ -14,7 +15,6 @@ from circinus_tools  import time_tools as tt
 from .custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
 from .routing_objects import DataRoute
 from .schedule_objects import Dancecard
-from circinus_tools  import io_tools
 
 class GPActivityScheduling():
     """docstring for GP activity scheduling"""
@@ -48,13 +48,12 @@ class GPActivityScheduling():
         self.sched_end_utc_dt  = gp_inst_params['end_utc_dt']
         self.resource_delta_t_s  =as_params['resource_delta_t_s']
         self.dv_epsilon = as_params['dv_epsilon_Mb']
-        sat_id_order= sat_params['sat_id_order']
+        self.resource_margin_num_timepoints = as_params['resource_margin_num_timepoints']
 
         self.obj_weights =as_params['obj_weights']
 
-        #  sort these now in case they weren't before
-        self.power_params = io_tools.sort_input_params_by_sat_indcs(sat_params['power_params'],sat_id_order)
-        self.initial_state = io_tools.sort_input_params_by_sat_indcs(sat_params['initial_state'],sat_id_order)
+        self.power_params = sat_params['power_params_sorted']
+        self.initial_state = sat_params['initial_state_sorted']
 
         # these lists are in order of satellite index because we've sorted 
         self.sats_init_estate_Wh = [sat_state['batt_e_Wh'] for sat_state in self.initial_state]
@@ -299,7 +298,8 @@ class GPActivityScheduling():
 
         # timepoints is the indices, whereas timepoints_s is the time values in seconds
         #  NOTE: we assume the same time system for every satellite
-        model.timepoints = pe.Set(initialize=  activity_dancecards[0].get_timepoint_indices ())
+        timepoint_indcs = activity_dancecards[0].get_timepoint_indices ()
+        model.timepoint_indcs = pe.Set(initialize=  timepoint_indcs)
         self.timepoints_s = activity_dancecards[0].get_timepoint_values(units='seconds')
         self.timepoints_m = activity_dancecards[0].get_timepoint_values(units='minutes')
 
@@ -348,7 +348,7 @@ class GPActivityScheduling():
         model.var_act_indic  = pe.Var (model.acts, within = pe.Binary)
         
         # satellite energy storage
-        model.var_sats_estore  = pe.Var (model.sats,  model.timepoints,  within = pe.NonNegativeReals)
+        model.var_sats_estore  = pe.Var (model.sats,  model.timepoint_indcs,  within = pe.NonNegativeReals)
         
 
         ##############################
@@ -417,24 +417,23 @@ class GPActivityScheduling():
         model.c6  = pe.ConstraintList()
         for sat_indx in range (self.num_sats): 
 
-            # timepoint serves as an index into the satellite activity dance cards
-            # we will use timepoint as an index into model data structures for consistency
-            for tp_indx, timepoint in enumerate(model.timepoints):
+            # tp_indx serves as an index into the satellite activity dance cards
+            for tp_indx in model.timepoint_indcs:
                 #  constraining first time step to initial energy storage
                 #  continue for loop afterwards because no geq/leq constraints needed for this index
                 if tp_indx == 0:
-                    model.c6.add( model.var_sats_estore[sat_indx,timepoint] ==  model.par_sats_estore_initial[sat_indx])
+                    model.c6.add( model.var_sats_estore[sat_indx,tp_indx] ==  model.par_sats_estore_initial[sat_indx])
                     continue 
 
                 #  minimum and maximum storage constraints
-                model.c6.add( model.var_sats_estore[sat_indx,timepoint] >= model.par_sats_estore_min[sat_indx])
-                model.c6.add( model.var_sats_estore[sat_indx,timepoint] <= model.par_sats_estore_max[sat_indx])
+                model.c6.add( model.var_sats_estore[sat_indx,tp_indx] >= model.par_sats_estore_min[sat_indx])
+                model.c6.add( model.var_sats_estore[sat_indx,tp_indx] <= model.par_sats_estore_max[sat_indx])
 
                 # determine activity energy consumption
                 charging = True
                 activity_delta_e = 0 
                 #  get the activities that were active during the time step immediately preceding time point
-                activities = activity_dancecards[sat_indx].get_objects_pre_timepoint_indx(timepoint)
+                activities = activity_dancecards[sat_indx].get_objects_pre_timepoint_indx(tp_indx)
                 for act in activities:
                     #  if this is a "standard activity" that we can choose to perform or not
                     if type(act) in self.standard_activities:
@@ -456,40 +455,40 @@ class GPActivityScheduling():
                 base_delta_e = model.par_sats_edot_by_act[sat_indx]['base']*model.par_resource_delta_t
 
                 # maximum bound of energy at current time step based on last time step
-                model.c6.add( model.var_sats_estore[sat_indx,timepoint] <= 
-                    model.var_sats_estore[sat_indx,timepoint-1]
+                model.c6.add( model.var_sats_estore[sat_indx,tp_indx] <= 
+                    model.var_sats_estore[sat_indx,tp_indx-1]
                     + activity_delta_e
                     + charging_delta_e
                     + base_delta_e
                 )
 
                 # maximum bound of energy at current time step based on last time step
-                model.c6.add( model.var_sats_estore[sat_indx,timepoint] >= 
-                    model.var_sats_estore[sat_indx,timepoint-1]
+                model.c6.add( model.var_sats_estore[sat_indx,tp_indx] >= 
+                    model.var_sats_estore[sat_indx,tp_indx-1]
                     + activity_delta_e
                     + base_delta_e
                 )
 
-                #  TODO: reassess if adding this version of the code backend is faster
+                #  TODO: reassess if adding this version of the code back in is faster
                 # if charging:
                 #     # maximum bound of energy at current time step based on last time step
-                #     model.c6.add( model.var_sats_estore[sat_indx,timepoint] <= 
-                #         model.var_sats_estore[sat_indx,timepoint-1]
+                #     model.c6.add( model.var_sats_estore[sat_indx,tp_indx] <= 
+                #         model.var_sats_estore[sat_indx,tp_indx-1]
                 #         + activity_delta_e
                 #         + charging_delta_e
                 #         + base_delta_e
                 #     )
 
                 #     # maximum bound of energy at current time step based on last time step
-                #     model.c6.add( model.var_sats_estore[sat_indx,timepoint] >= 
-                #         model.var_sats_estore[sat_indx,timepoint-1]
+                #     model.c6.add( model.var_sats_estore[sat_indx,tp_indx] >= 
+                #         model.var_sats_estore[sat_indx,tp_indx-1]
                 #         + activity_delta_e
                 #         + base_delta_e
                 #     )
                 # else:
                 #     # energy at time step is deterministic function of last time step
-                #     model.c6.add( model.var_sats_estore[sat_indx,timepoint] == 
-                #         model.var_sats_estore[sat_indx,timepoint-1]
+                #     model.c6.add( model.var_sats_estore[sat_indx,tp_indx] == 
+                #         model.var_sats_estore[sat_indx,tp_indx-1]
                 #         + activity_delta_e
                 #         + base_delta_e
                 #     )
@@ -502,6 +501,12 @@ class GPActivityScheduling():
         ##############################
         #  Make objective
         ##############################
+
+        #  determine which time points to use as "spot checks" on resource margin. These are the points that will be used in the objective function for maximizing resource margin
+        timepoint_spacing = ceil(len(timepoint_indcs)/self.resource_margin_num_timepoints)
+        decimated_tp_indcs = timepoint_indcs[::timepoint_spacing]
+        rsrc_norm_f = len(decimated_tp_indcs) * len(model.sats)
+
         # import ipdb
         # ipdb.set_trace ()
         def obj_rule(model):
@@ -511,7 +516,7 @@ class GPActivityScheduling():
                 # model.par_obj_weight3 * 1/self.num_paths                  * sum(model.var_dlnk_path_occ[p,i,k]*model.par_dlnk_sf[i,k] for i,k in model.dlnk_subscripts for p in model.paths )
                 self.obj_weights['obs_dv'] * 1/model.par_total_obs_dv * sum(model.par_path_dv[p]*model.var_path_utilization[p] for p in model.paths) 
                 + self.obj_weights['route_latency'] * 1/len(model.obs_acts) * sum(path_latency_sf_by_path_indx[p]*model.var_path_utilization[p] for p in model.paths)
-                # sum(model.var_path_indic[p] for p in model.paths)
+                + self.obj_weights['energy_storage'] * 1/rsrc_norm_f * sum(model.var_sats_estore[sat_indx,tp_indx]/model.par_sats_estore_max[sat_indx] for tp_indx in decimated_tp_indcs for sat_indx in model.sats)
             )
         model.obj = pe.Objective( rule=obj_rule, sense=pe.maximize )
 
@@ -635,7 +640,7 @@ class GPActivityScheduling():
         # TODO: this code feels super inefficient somehow.  make it better?
         for sat_indx, sat in enumerate (self.model.sats):
             last_tp_indx = 0
-            for tp_indx, tp in enumerate (self.model.timepoints):
+            for tp_indx, tp in enumerate (self.model.timepoint_indcs):
 
                 if (tp_indx - last_tp_indx) < decimation_factor:
                     continue

@@ -146,6 +146,8 @@ class GlobalPlannerRunner:
         sats_tlm_update_hist = gp_netsim.get_all_sats_tlm_update_hist()
         aoi_sat_tlm_stats = gp_met.assess_aoi_sat_tlm(sats_tlm_update_hist,verbose = True)
 
+        resource_margin_stats = gp_met.assess_resource_margin(energy_usage,verbose = True)
+
 
         plot_outputs = {}
         plot_outputs['obs_aoi_curves_by_targID'] = aoi_targ_stats['aoi_curves_by_targID']
@@ -454,17 +456,17 @@ class GlobalPlannerRunner:
         #     fig_name='plots/test_data_volume.pdf'
         # )
 
-        # self.gp_plot.plot_energy_usage(
-        #     sats_to_include,
-        #     energy_usage,
-        #     ecl_winds,
-        #     self.as_inst_params['start_utc_dt'],
-        #     self.as_inst_params['end_utc_dt'],
-        #     plot_title = 'Energy Utilization',
-        #     plot_size_inches = (18,12),
-        #     show=  False,
-        #     fig_name='plots/test_energy.pdf'
-        # )
+        self.gp_plot.plot_energy_usage(
+            sats_to_include,
+            energy_usage,
+            ecl_winds,
+            self.as_inst_params['start_utc_dt'],
+            self.as_inst_params['end_utc_dt'],
+            plot_title = 'Energy Utilization',
+            plot_size_inches = (18,12),
+            show=  False,
+            fig_name='plots/test_energy.pdf'
+        )
 
         targs_to_include = [targ['id'] for targ in self.obs_params['targets']]
         # targs_to_include = [0,3,4,7,8]
@@ -662,6 +664,9 @@ class PipelineRunner:
             sat_id_order=orbit_prop_inputs['sat_params']['sat_id_order']
             sat_id_order = io_tools.make_and_validate_sat_id_order(sat_id_order,orbit_prop_inputs['sat_params']['num_sats'],all_sat_ids1)
             orbit_prop_inputs['sat_params']['sat_id_order'] = sat_id_order
+
+            orbit_prop_inputs['sat_params']['power_params_sorted'] = io_tools.sort_input_params_by_sat_indcs(orbit_prop_inputs['sat_params']['power_params'],sat_id_order)
+            orbit_prop_inputs['sat_params']['initial_state_sorted'] = io_tools.sort_input_params_by_sat_indcs(orbit_prop_inputs['sat_params']['initial_state'],sat_id_order)
         else:
             raise NotImplementedError
 
