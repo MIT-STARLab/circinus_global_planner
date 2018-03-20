@@ -21,7 +21,7 @@ class NetSimEntity():
         self.gs_update_hist = [UpdateHistory(t=[start],last_update_time=[start]) for i in range(num_gs)]
 
     @staticmethod
-    def merge_update_times(t_lut_zip_sorted,last_time):
+    def fix_update_times(t_lut_zip_sorted,last_time):
         """[summary]
         
         this algorithm is the same as that in gp_metrics.py, get_av_aoi_routing(). "last_update_time" is the most recent time that the originating entity updated itself (i.e.  it's a creation time) and "t" is the time at which this last update time was delivered to self (i.e. it's a delivery time). We're producing a delivery/creation matrix with this code
@@ -63,30 +63,24 @@ class NetSimEntity():
 
         return merged_t,merged_lut
 
-
-    def get_merged_gs_update_hist(self,num_gs,all_gs_IDs,gs_id_ignore_list):
-
+    @staticmethod
+    def  merge_update_histories ( update_hists, end_time_s):
         merged_t_dirty = []
-        # lut = last_update_time
+        # lut = last update time
         merged_lut_dirty = []
 
-        for gs_indx in  range (num_gs):
-            # if we're ignoring this ground station, then continue
-            if all_gs_IDs[gs_indx] in gs_id_ignore_list:
-                continue
-
-            merged_t_dirty += self.gs_update_hist[gs_indx].t
-            merged_lut_dirty += self.gs_update_hist[gs_indx].last_update_time
+        #  first merge the update time histories
+        for update_hist in update_hists:
+            merged_t_dirty += update_hist.t
+            merged_lut_dirty += update_hist.last_update_time
 
         # sort by t value
         zip_sorted = sorted(zip(merged_t_dirty,merged_lut_dirty),key= lambda z: z[0])
 
         #  there could still be duplicate t values, so let's get rid of those. Want to grab the best (most recent) lut value at each t
-        merged_t,merged_lut =  self.merge_update_times(zip_sorted, self.end_time_s)
+        merged_t,merged_lut =  NetSimEntity.fix_update_times(zip_sorted, end_time_s)
         
         return UpdateHistory(t=merged_t,last_update_time=merged_lut)
-
-
 
     def pull_update_times(self, current_time,other,option='sat_times'):
         if option =='sat_times':
@@ -148,6 +142,30 @@ class NetSimSat(NetSimEntity):
         self.sat_update_hist[self.sat_indx].last_update_time[0] = current_time
         super(). refresh_update_time(units,time_option)
 
+    def get_merged_cmd_update_hist(self,num_gs,all_gs_IDs,gs_id_ignore_list):
+        """ gets the merged command update history for this satellite
+        
+        Gets the update history for every ground station as seen by this satellite, and then merges these into a single update history. The update history for ground station gs_indx for this satellite  is a recording of when this satellite last heard from that ground station. By merging across all ground stations, we get a recording of when the satellite last heard from any ground station, which we assume is a good proxy for when ground commanding was last updated. ( note the underlying assumption that all ground stations have equal relevance for commanding the satellite)
+        :param all_gs_IDs: [description]
+        :type all_gs_IDs: [type]
+        :param gs_id_ignore_list: [description]
+        :type gs_id_ignore_list: [type]
+        :returns: [description]
+        :rtype: {[type]}
+        """
+
+        update_hists = []
+
+        # grab the update time histories from all the ground stations
+        for gs_indx in  range (num_gs):
+            # if we're ignoring this ground station, then continue
+            if all_gs_IDs[gs_indx] in gs_id_ignore_list:
+                continue
+
+            update_hists.append (self.gs_update_hist[gs_indx])
+
+        return self.merge_update_histories ( update_hists,self.end_time_s)
+
 class NetSimGS(NetSimEntity):
     def __init__(self,gs_indx,num_sats,num_gs,start_dt,end_dt):
         self.gs_indx = gs_indx
@@ -157,6 +175,21 @@ class NetSimGS(NetSimEntity):
         #  don't append to the update time list for self -  just replace the first element.  otherwise we'd have a list as long as the number of time elements
         self.gs_update_hist[self.gs_indx].last_update_time[0] = current_time
         super(). refresh_update_time(units,time_option)
+
+
+    def get_sat_tlm_update_hist(self,sat_indx):
+        """gets the telemetry update history for a single satellite
+        
+        Gets the update history for a single satellite as seen by this ground station. The update history for satellite sat_indx for this ground station is a recording of when this ground station last heard from that satellite. By merging the update history returned here across satellites, you can get the merged telemetry update history for a single satellite across the full ground station network
+        :param sat_indx: [description]
+        :type sat_indx: [type]
+        :returns: [description]
+        :rtype: {[type]}
+        """
+
+        return self.sat_update_hist[sat_indx]
+        
+        
 
 
 

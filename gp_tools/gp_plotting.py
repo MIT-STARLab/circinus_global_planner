@@ -46,6 +46,7 @@ class GPPlotting():
         self.energy_usage_plot_params=plot_params['energy_usage_plot_params']
         self.obs_aoi_metrics_plot_params=plot_params['obs_aoi_metrics_plot_params']
         self.cmd_aoi_metrics_plot_params=plot_params['cmd_aoi_metrics_plot_params']
+        self.tlm_aoi_metrics_plot_params=plot_params['tlm_aoi_metrics_plot_params']
 
         self.sat_id_order = sat_params['sat_id_order']
         self.all_targ_IDs = [targ['id'] for targ in self.obs_params['targets']]
@@ -953,16 +954,17 @@ class GPPlotting():
         else:
             savefig(fig_name,format=self.plot_fig_extension)
 
-    def plot_sat_cmd_aoi(
+    def plot_sat_tlm_cmd_aoi(
         self,
         sats_to_include,
         aoi_curves_by_sat_indx,
+        aoi_option,
         plot_start,
         plot_end,
-        plot_title = 'Satellite Command Uplink AoI', 
+        plot_title = 'Satellite TLM/CMD Down/Uplink AoI', 
         plot_size_inches = (12,12),
         show=False,
-        fig_name='plots/cmd_aoi_plot.pdf'):
+        fig_name='plots/sat_aoi_plot.pdf'):
 
         plot_labels = {
             "aoi": "aoi",
@@ -1011,8 +1013,12 @@ class GPPlotting():
             )
 
             # set axis length. Time starts at 0
-            vert_min = self.cmd_aoi_metrics_plot_params['plot_bound_min_aoi_h']
-            vert_max = self.cmd_aoi_metrics_plot_params['plot_bound_max_aoi_h']
+            if aoi_option == 'cmd':
+                vert_min = self.cmd_aoi_metrics_plot_params['plot_bound_min_aoi_h']
+                vert_max = self.cmd_aoi_metrics_plot_params['plot_bound_max_aoi_h']
+            elif aoi_option == 'tlm':
+                vert_min = self.tlm_aoi_metrics_plot_params['plot_bound_min_aoi_h']
+                vert_max = self.tlm_aoi_metrics_plot_params['plot_bound_max_aoi_h']
             plt.axis((0, time_to_end, vert_min, vert_max))
 
             current_axis = plt.gca()

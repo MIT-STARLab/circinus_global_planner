@@ -139,13 +139,18 @@ class GlobalPlannerRunner:
 
         gp_netsim = GPNetSim ( self.params, self.io_proc)
         gp_netsim.sim_tlm_cmd_routing(routes, verbose = True)
+        #  this is indexed by sat index
         sats_cmd_update_hist = gp_netsim.get_all_sats_cmd_update_hist()
         aoi_sat_cmd_stats = gp_met.assess_aoi_sat_cmd(sats_cmd_update_hist,verbose = True)
+        #  this is  indexed by ground station index
+        sats_tlm_update_hist = gp_netsim.get_all_sats_tlm_update_hist()
+        aoi_sat_tlm_stats = gp_met.assess_aoi_sat_tlm(sats_tlm_update_hist,verbose = True)
 
 
         plot_outputs = {}
         plot_outputs['obs_aoi_curves_by_targID'] = aoi_targ_stats['aoi_curves_by_targID']
         plot_outputs['cmd_aoi_curves_by_sat_indx'] = aoi_sat_cmd_stats['aoi_curves_by_sat_indx']
+        plot_outputs['tlm_aoi_curves_by_sat_indx'] = aoi_sat_tlm_stats['aoi_curves_by_sat_indx']
         return plot_outputs
 
     def run_route_selection(self,gp_ps,obs,dlnk_winds_flat,xlnk_winds,obj_weights,dr_uid):
@@ -405,8 +410,8 @@ class GlobalPlannerRunner:
         sched_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind = self.io_proc.extract_flat_windows (routes,copy_windows= False)
 
         # 
-        # sats_to_include =  [sat_p['sat_id'] for sat_p in self.sat_orbit_params]
-        sats_to_include = [20,21,29]
+        sats_to_include =  [sat_p['sat_id'] for sat_p in self.sat_orbit_params]
+        sats_to_include = [12,13,14,15,16]
 
         # sats_to_include =  range(20,30)
         # plot the selected down links and cross-links this
@@ -477,15 +482,30 @@ class GlobalPlannerRunner:
 
         # sats_to_include =  [sat_p['sat_id'] for sat_p in self.sat_orbit_params]
         # sats_to_include =  range(10)
-        self.gp_plot.plot_sat_cmd_aoi(
+        aoi_option = 'cmd'
+        self.gp_plot.plot_sat_tlm_cmd_aoi(
             sats_to_include,
             metrics_plot_inputs['cmd_aoi_curves_by_sat_indx'],
+            aoi_option,
             self.as_inst_params['start_utc_dt'],
             self.as_inst_params['end_utc_dt'],
             plot_title = 'Satellite Command Uplink AoI',
             plot_size_inches = (18,12),
             show=False,
             fig_name='plots/test_cmd_aoi_plot.pdf'
+        )
+
+        aoi_option = 'tlm'
+        self.gp_plot.plot_sat_tlm_cmd_aoi(
+            sats_to_include,
+            metrics_plot_inputs['tlm_aoi_curves_by_sat_indx'],
+            aoi_option,
+            self.as_inst_params['start_utc_dt'],
+            self.as_inst_params['end_utc_dt'],
+            plot_title = 'Satellite Telemetry Downlink AoI',
+            plot_size_inches = (18,12),
+            show=False,
+            fig_name='plots/test_tlm_aoi_plot.pdf'
         )
         
 

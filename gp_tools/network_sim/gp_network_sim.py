@@ -7,7 +7,7 @@ from datetime import datetime
 import numpy as np
 # import ipdb
 
-from .sim_entities import NetSimSat, NetSimGS, UpdateHistory
+from .sim_entities import NetSimEntity,NetSimSat, NetSimGS, UpdateHistory
 from gp_tools.custom_activity_window import DlnkWindow, XlnkWindow
 from gp_tools.schedule_objects import Dancecard
 
@@ -69,6 +69,7 @@ class GPNetSim():
         self.net_sim_gs = net_sim_gs
         for sat_indx in range (self.num_sats): 
             net_sim_sats.append (NetSimSat(sat_indx,self.num_sats, self.num_gs,self.sched_start_utc_dt,self.sched_end_utc_dt))
+        # note that though we are creating a simulation object for every ground station index, nothing will end up happening for any ignored ground stations because they should have no downlinks
         for gs_indx in range (self.num_gs): 
             net_sim_gs.append (NetSimGS(gs_indx,self.num_sats, self.num_gs,self.sched_start_utc_dt,self.sched_end_utc_dt))
 
@@ -117,18 +118,53 @@ class GPNetSim():
 
         
     def get_all_sats_cmd_update_hist(self):
+        """ get command update history for all satellites
+        
+        for each satellite, gets the merged command update history (over all ground stations) from the satellite simulation object
+        :returns: [description]
+        :rtype: {[type]}
+        """
 
         all_sats_update_hist = []
 
         for sat_indx in range(self.num_sats):
             sim_sat = self.net_sim_sats[sat_indx]
-            cmd_update_hist = sim_sat.get_merged_gs_update_hist(self.num_gs,self.all_gs_IDs,self.gs_id_ignore_list)
+            cmd_update_hist = sim_sat.get_merged_cmd_update_hist(self.num_gs,self.all_gs_IDs,self.gs_id_ignore_list)
             all_sats_update_hist.append (cmd_update_hist)
-
-        # ipdb.set_trace ()
 
         return all_sats_update_hist
 
+    def get_all_sats_tlm_update_hist(self):
+        """ get telemetry update history for all satellites
+        
+        for each satellite, gets the update histories for each ground station ( from the ground station simulation object), then merges them to form a single global telemetry update history for the full ground station network
+        :returns: [description]
+        :rtype: {[type]}
+        """
+
+        all_sats_update_hist = []
+
+        for sat_indx in range(self.num_sats):
+            update_hists = []
+            
+            sim_sat = self.net_sim_sats[sat_indx]
+            end_time_s = sim_sat.end_time_s
+
+            # grab the update time histories from all the ground stations, for this satellite
+            for gs_indx in  range ( self.num_gs):
+                # if we're ignoring this ground station, then continue
+                if self.all_gs_IDs[gs_indx] in self.gs_id_ignore_list:
+                    continue
+
+                sim_gs = self.net_sim_gs[gs_indx]
+
+                update_hists.append (sim_gs.get_sat_tlm_update_hist(sat_indx))
+
+            #  merge across all ground stations
+            #  By merging across all ground stations, we get a recording of when the full ground station network last heard from the satellite, which we assume is a good proxy for when satellite telemetry was last updated on the ground. ( note the underlying assumption that  telemetry arriving at any ground station is equally as valid as any other one)
+            all_sats_update_hist. append ( NetSimEntity.merge_update_histories ( update_hists,end_time_s))
+
+        return all_sats_update_hist
 
 
 
