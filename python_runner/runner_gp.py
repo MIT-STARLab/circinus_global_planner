@@ -54,6 +54,7 @@ class GlobalPlannerRunner:
         self.pickle_params = self.params['gp_general_params']['pickle_params']
         self.other_params = self.params['gp_other_params']
         self.plot_params = self.params['gp_general_params']['plot_params']
+        self.general_other_params = self.params['gp_general_params']['other_params']
         self.rs_params = self.params['gp_general_params']['route_selection_params']
         self.as_params = self.params['gp_general_params']['activity_scheduling_params']
         self.as_inst_params = self.params['gp_instance_params']['activity_scheduling_params']
@@ -236,10 +237,10 @@ class GlobalPlannerRunner:
 
                 obs_indx +=1
 
-            #     if obs_indx >= 2:
+            #     if obs_indx >= 1:
             #         break
 
-            # if obs_indx >= 2:
+            # if obs_indx >= 1:
             #     break
 
         return all_routes,all_routes_obs,all_stats,route_times_s,obs_indx
@@ -342,9 +343,11 @@ class GlobalPlannerRunner:
         weights_tups = zip(total_dv_weights,num_paths_sel_weights,latency_sf_weights)
         self.gp_plot.plot_route_latdv_pareto(all_routes,weights_tups,'plots/obs_winds_20_6_pareto.pdf')
 
-    def plot_route_selection_results ( self,obs_routes,dlnk_winds_flat,xlnk_winds_flat):
+    def plot_route_selection_results ( self,obs_routes,dlnk_winds_flat,xlnk_winds_flat,num_obs_to_plot):
 
         for rts_indx, routes in enumerate (obs_routes):
+            if rts_indx >= num_obs_to_plot:
+                break
 
             # TODO:  this stuff needs to be  changed
             sel_obs_winds_flat, sel_dlnk_winds_flat, \
@@ -363,6 +366,7 @@ class GlobalPlannerRunner:
             self.gp_plot.plot_winds(
                 sats_to_include,
                 sel_obs_winds_flat,
+                sel_obs_winds_flat,
                 dlnk_winds_flat,
                 sel_dlnk_winds_flat, 
                 xlnk_winds_flat,
@@ -375,9 +379,10 @@ class GlobalPlannerRunner:
                 # self.scenario_params['end_utc_dt']-timedelta(minutes=200),
                 plot_title = 'Route Plot', 
                 plot_size_inches = (18,12),
-                plot_include_labels = self.rs_params['plot_include_labels'],
+                plot_include_dlnk_labels = self.rs_params['plot_include_dlnk_labels'],
+                plot_include_xlnk_labels = self.rs_params['plot_include_xlnk_labels'],
                 show= False,
-                fig_name='plots/obs_winds_20_6_rts{0}.pdf'.format (rts_indx)
+                fig_name='plots/test_rs_{0}.pdf'.format (rts_indx)
             )
 
 
@@ -545,7 +550,7 @@ class GlobalPlannerRunner:
         #  parse inputs, if desired
         #################################
 
-        if not self.pickle_params['unpickle_pre_route_selection']:
+        if self.general_other_params['load_windows_from_file']:
             # parse the inputs into activity windows
             window_uid = 0
             obs_winds, window_uid =self.io_proc.import_obs_winds(window_uid)
@@ -585,8 +590,20 @@ class GlobalPlannerRunner:
             self.pickle_rtsel_stuff(obs_routes,all_routes_obs,all_stats,route_times_s,obs_indx,ecl_winds,window_uid)
         
         #################################
+        # route selection output stage
+        #################################
+        
+        print('route selection output stage')
+
+        if self.rs_params['plot_route_selection_results']:
+            self.plot_route_selection_results (obs_routes,dlnk_winds_flat,xlnk_winds_flat,num_obs_to_plot = 1)
+
+        #################################
         #  activity scheduling stage
         #################################
+
+        if not self.as_params['run_activity_scheduling']:
+            return None
 
         #  explicitly validate routes 
         # for routes in obs_routes:
@@ -606,13 +623,10 @@ class GlobalPlannerRunner:
         metrics_plot_inputs = self.calc_activity_scheduling_results (scheduled_routes, energy_usage)
 
         #################################
-        #   output stage
+        #  Activity scheduling output stage
         #################################
         
-        print('output stage')
-
-        if self.rs_params['plot_route_selection_results']:
-            self.plot_route_selection_results (obs_routes,dlnk_winds_flat,xlnk_winds_flat)
+        print('activity scheduling output stage')
 
         if self.as_params['plot_activity_scheduling_results']:
             self.plot_activity_scheduling_results(obs_routes,scheduled_routes,energy_usage,ecl_winds,metrics_plot_inputs)

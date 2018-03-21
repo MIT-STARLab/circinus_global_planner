@@ -132,7 +132,7 @@ class GPProcessorIO():
 
             for targ_indx, target_obs in enumerate(all_sat_obs):
 
-                if self.all_targ_IDs[targ_indx] in self.targ_ignore_list:
+                if self.all_targ_IDs[targ_indx] in self.targ_id_ignore_list:
                     continue
 
                 for obs_indx, obs in enumerate(target_obs):
@@ -208,7 +208,7 @@ class GPProcessorIO():
 
             for gs_indx, dlnk_list in enumerate(all_sat_dlnk):
 
-                if self.all_gs_IDs[gs_indx] in self.gs_ignore_list:
+                if self.all_gs_IDs[gs_indx] in self.gs_id_ignore_list:
                     continue
 
                 for dlnk_indx, dlnk in enumerate(dlnk_list):

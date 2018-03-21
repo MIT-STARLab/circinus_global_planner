@@ -68,7 +68,7 @@ class GPDataRouteSelection():
             raise NotImplementedError
 
         #   quick sanity check on M time value
-        total_duration =(self.end_utc_dt- self.start_utc_dt).total_seconds ()
+        total_duration =(self.sel_end_utc_dt- self.sel_start_utc_dt).total_seconds ()
         if  total_duration  > self.M_t_s:
             raise Exception ('big M value is too small for %f second scheduling window' % ( total_duration))
 
@@ -243,7 +243,7 @@ class GPDataRouteSelection():
                                         self.dlink_winds_flat,
                                         self.num_paths,
                                         self.num_sats,
-                                        self.start_utc_dt)
+                                        self.sel_start_utc_dt)
 
         dlnk_sfact_dict = self.get_downlink_score_factors(self.obs_wind,self.dlink_winds_flat,self.num_sats, self.latency_params)
 
@@ -256,7 +256,7 @@ class GPDataRouteSelection():
                                         self.xlink_winds,
                                         self.num_paths,
                                         self.num_sats,
-                                        self.start_utc_dt)
+                                        self.sel_start_utc_dt)
 
         # subscript for all sats i
         model.sats = pe.Set(initialize= range (self.num_sats))
@@ -285,7 +285,7 @@ class GPDataRouteSelection():
         #  start from 0  for our time system
         model.par_min_path_dv = pe.Param (initialize=self.min_path_dv)
         model.par_t_start = pe.Param (initialize=0)
-        model.par_t_end = pe.Param (initialize= (self.end_utc_dt - self.start_utc_dt).total_seconds ())
+        model.par_t_end = pe.Param (initialize= (self.sel_end_utc_dt - self.sel_start_utc_dt).total_seconds ())
 
         model.par_t_start_dlnk =pe.Param ( model.dlnk_subscripts,initialize =dlnk_t_start_dict)
         model.par_t_end_dlnk =pe.Param ( model.dlnk_subscripts,initialize =dlnk_t_end_dict)
@@ -294,7 +294,7 @@ class GPDataRouteSelection():
         model.par_t_start_xlnk =pe.Param ( model.xlnk_subscripts,initialize =xlnk_t_start_dict)
         model.par_t_end_xlnk =pe.Param ( model.xlnk_subscripts,initialize =xlnk_t_end_dict)
 
-        model.par_t_end_obs = pe.Param (initialize=(obs_wind.end - self.start_utc_dt).total_seconds ())
+        model.par_t_end_obs = pe.Param (initialize=(obs_wind.end - self.sel_start_utc_dt).total_seconds ())
         model.par_obs_occ = pe.Param(model.sats,initialize ={ i: int (obs_wind.sat_indx == i) for i in  model.sats})
 
         model.par_dlnk_dv = pe.Param (model.dlnk_subscripts,initialize =dlnk_dv_dict)
@@ -660,6 +660,6 @@ class GPDataRouteSelection():
 
         if verbose:
             for dr in selected_routes:
-                print(dr.get_route_string ( time_base = self.start_utc_dt) )
+                print(dr.get_route_string ( time_base = self.sel_start_utc_dt) )
 
         return selected_routes, dr_uid
