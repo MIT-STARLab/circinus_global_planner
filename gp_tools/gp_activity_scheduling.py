@@ -279,10 +279,10 @@ class GPActivityScheduling():
         # construct a set of dance cards for every satellite, 
         # each of which keeps track of all of the activities of satellite 
         # can possibly execute at any given time slice delta T. 
-        activity_dancecards = [Dancecard(self.sched_start_utc_dt,self.sched_end_utc_dt,self.resource_delta_t_s) for sat_indx in range (self.num_sats)]
+        act_dancecards = [Dancecard(self.sched_start_utc_dt,self.sched_end_utc_dt,self.resource_delta_t_s) for sat_indx in range (self.num_sats)]
         for sat_indx in range (self.num_sats): 
-            activity_dancecards[sat_indx].add_winds_to_dancecard(sat_acts[sat_indx])
-            activity_dancecards[sat_indx].add_winds_to_dancecard(ecl_winds[sat_indx])
+            act_dancecards[sat_indx].add_winds_to_dancecard(sat_acts[sat_indx])
+            act_dancecards[sat_indx].add_winds_to_dancecard(ecl_winds[sat_indx])
 
         self.all_acts_indcs = all_acts_indcs
         self.obs_act_indcs = obs_act_indcs
@@ -296,12 +296,11 @@ class GPActivityScheduling():
         #  subscript for each satellite
         model.sats = pe.Set(initialize=  range ( self.num_sats))
 
-        # timepoints is the indices, whereas timepoints_s is the time values in seconds
+        # timepoints is the indices, whereas timepoints_m is the time values in minutes
         #  NOTE: we assume the same time system for every satellite
-        timepoint_indcs = activity_dancecards[0].get_timepoint_indices ()
+        timepoint_indcs = act_dancecards[0].get_tp_indcs ()
         model.timepoint_indcs = pe.Set(initialize=  timepoint_indcs)
-        self.timepoints_s = activity_dancecards[0].get_timepoint_values(units='seconds')
-        self.timepoints_m = activity_dancecards[0].get_timepoint_values(units='minutes')
+        self.timepoints_m = act_dancecards[0].get_tp_values(out_units='minutes')
 
         #  unique indices for observation and link acts
         model.obs_acts = pe.Set(initialize= obs_act_indcs)
@@ -433,7 +432,7 @@ class GPActivityScheduling():
                 charging = True
                 activity_delta_e = 0 
                 #  get the activities that were active during the time step immediately preceding time point
-                activities = activity_dancecards[sat_indx].get_objects_pre_timepoint_indx(tp_indx)
+                activities = act_dancecards[sat_indx].get_objects_pre_tp_indx(tp_indx)
                 for act in activities:
                     #  if this is a "standard activity" that we can choose to perform or not
                     if type(act) in self.standard_activities:
