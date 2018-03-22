@@ -623,9 +623,14 @@ class GPActivityScheduling():
                 wind.scheduled_data_vol += dr.scheduled_dv
 
         # update the window beginning and end times based upon their amount of scheduled data volume
+        # keep track of which ones we've updated, because we should only update once
+        updated_winds = set()
         for dr in scheduled_routes_flat:
             for wind in dr.route:
-                wind.update_duration_from_scheduled_dv (min_duration_s=self.min_act_duration_s[type(wind)])
+                if not wind in updated_winds:
+                    # note that the line below seems like it may break the scheduled times for activities by specifying a minimum activity duration. however, this minimum activity duration is already accounted for in scheduling constraints
+                    wind.update_duration_from_scheduled_dv (min_duration_s=self.min_act_duration_s[type(wind)])
+                    updated_winds.add(wind)
 
         return scheduled_routes_flat
 

@@ -2,11 +2,12 @@ from copy import copy, deepcopy
 from datetime import timedelta
 
 class Dancecard(object):
-    def __init__(self, dancecard_start, dancecard_end, tstep_sec):
-        '''
-        An entity schedule object maintains a schedule data structure that keeps track of the activities that an entity (e.g. satellite, ground station) has committed to perform, and the start and stop times for those acts
+    def __init__(self, dancecard_start, dancecard_end, tstep_sec, item_init=list):
+        """ Maintains a time series of objects for use in scheduling problems
 
-        Note that N is equal to the total duration of the dance card divided by the time step in seconds. This is the number of TIMESTEPS, that is, time deltas. the number of distinct TIMEPOINTS in the dance card is time steps +1
+        Note that N is equal to the total duration of the dance card divided by 
+        the time step in seconds. This is the number of TIMESTEPS, that is, 
+        time deltas. the number of distinct TIMEPOINTS in the dance card is time steps +1
 
         Props to Emily Clements for the idea for the name of the data struct
 
@@ -14,21 +15,32 @@ class Dancecard(object):
         |  i=0    |  i=1    |  i=2    |  i=3    ...   |  i=N    |
         | tstep 0 | tstep 1 | tstep 2 | tstep 3 ...   | tstep N |
         ^         ^         ^         ^               ^         ^ 
-        t_pnt0    t_pnt1    t_pnt2    t_pnt3          t_pnt4    t_pnt(N+1)
+        tpnt0     tpnt1     tpnt2     tpnt3           tpnt4     tpnt(N+1)
         ^                             ^
         base_time                *    t    *
 
-        :param scheduling_start: the start of the scheduling window (generally same as scenario)
-        :param scheduling_end: the end of the scheduling window (generally same as scenario)
-        :param tstep_sec: time step in seconds in overall scenario
-        '''
+        :param dancecard_start:  start time for the dance card
+        :type dancecard_start: datetime
+        :param dancecard_end: end time for the dance card
+        :type dancecard_end: datetime
+        :param tstep_sec:  time step in seconds
+        :type tstep_sec:  float
+        :param item_init: how to initialize indices in card, defaults to list
+        :type item_init: {list,None}, optional
+        """
 
         self.total_duration = (dancecard_end - dancecard_start).total_seconds()
         # each index in dancecard represents a chunk of time, e.g. [1] is from start_time+tstep_sec*1 to start_time+tstep_sec*2
         num_timesteps = int(self.total_duration / tstep_sec)
 
-        # this "dancecard" stores the objects for a given index
-        self.dancecard = [[] for i in range(num_timesteps)]
+        if item_init == list:
+            # this "dancecard" stores a list of objects for a given index
+            self.dancecard = [[] for i in range(num_timesteps)]
+        elif item_init == None:
+            # this "dancecard" stores for a given index
+            self.dancecard = [None for i in range(num_timesteps)]
+        else:
+            raise NotImplementedError
 
         self.dancecard_start = dancecard_start
         self.dancecard_end = dancecard_end

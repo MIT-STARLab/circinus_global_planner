@@ -22,7 +22,7 @@ from circinus_tools  import time_tools as tt
 from circinus_tools  import io_tools
 from gp_tools.io_processing import GPProcessorIO
 from gp_tools.gp_plotting import GPPlotting
-from gp_tools.gp_route_selection import GPDataRouteSelection
+from gp_tools.gp_route_selection_v2 import GPDataRouteSelection
 from gp_tools.gp_activity_scheduling import GPActivityScheduling
 from gp_tools.gp_metrics import GPMetrics
 from gp_tools.network_sim.gp_network_sim import GPNetSim
@@ -55,7 +55,7 @@ class GlobalPlannerRunner:
         self.other_params = self.params['gp_other_params']
         self.plot_params = self.params['gp_general_params']['plot_params']
         self.general_other_params = self.params['gp_general_params']['other_params']
-        self.rs_params = self.params['gp_general_params']['route_selection_params']
+        self.rs_general_params = gp_params['gp_general_params']['route_selection_general_params']
         self.as_params = self.params['gp_general_params']['activity_scheduling_params']
         self.as_inst_params = self.params['gp_instance_params']['activity_scheduling_params']
         self.io_proc =GPProcessorIO(self.params)
@@ -182,7 +182,8 @@ class GlobalPlannerRunner:
         gp_ps.solve ()
         t_b = time.time()
         gp_ps.print_sol ()
-        routes,dr_uid = gp_ps. extract_routes ( dr_uid,verbose  = True)
+        adjust_opt = self.rs_general_params['adjust_window_timing_post_selection']
+        routes,dr_uid = gp_ps. extract_routes ( dr_uid,copy_windows= True,adjust_window_timing=adjust_opt,verbose  = True)
 
         time_elapsed = t_b-t_a
 
@@ -237,11 +238,11 @@ class GlobalPlannerRunner:
 
                 obs_indx +=1
 
-            #     if obs_indx >= 1:
-            #         break
+                if obs_indx >= 1:
+                    break
 
-            # if obs_indx >= 1:
-            #     break
+            if obs_indx >= 1:
+                break
 
         return all_routes,all_routes_obs,all_stats,route_times_s,obs_indx
 
@@ -373,14 +374,14 @@ class GlobalPlannerRunner:
                 sel_xlnk_winds_flat,
                 route_indcs_by_wind,
                 obs.start,
-                obs.start + timedelta( seconds= self.rs_params['wind_filter_duration_s']),
+                obs.start + timedelta( seconds= self.rs_general_params['wind_filter_duration_s']),
                 # self.scenario_params['start_utc_dt'],
-                # self.scenario_params['start_utc_dt'] + timedelta( seconds= self.rs_params['wind_filter_duration_s']),
+                # self.scenario_params['start_utc_dt'] + timedelta( seconds= self.rs_general_params['wind_filter_duration_s']),
                 # self.scenario_params['end_utc_dt']-timedelta(minutes=200),
                 plot_title = 'Route Plot', 
                 plot_size_inches = (18,12),
-                plot_include_dlnk_labels = self.rs_params['plot_include_dlnk_labels'],
-                plot_include_xlnk_labels = self.rs_params['plot_include_xlnk_labels'],
+                plot_include_dlnk_labels = self.rs_general_params['plot_include_dlnk_labels'],
+                plot_include_xlnk_labels = self.rs_general_params['plot_include_xlnk_labels'],
                 show= False,
                 fig_name='plots/test_rs_{0}.pdf'.format (rts_indx)
             )
@@ -432,7 +433,7 @@ class GlobalPlannerRunner:
             sched_xlnk_winds_flat,
             route_indcs_by_wind,
             self.as_inst_params['start_utc_dt'],
-            # self.as_inst_params['start_utc_dt'] + timedelta( seconds= self.rs_params['wind_filter_duration_s']),
+            # self.as_inst_params['start_utc_dt'] + timedelta( seconds= self.rs_general_params['wind_filter_duration_s']),
             self.as_inst_params['end_utc_dt'],
             plot_title = 'Scheduled Activities',
             plot_size_inches = (18,12),
@@ -452,7 +453,7 @@ class GlobalPlannerRunner:
         #     sched_xlnk_winds_flat,
         #     route_indcs_by_wind,
         #     self.as_inst_params['start_utc_dt'],
-        #     # self.as_inst_params['start_utc_dt'] + timedelta( seconds= self.rs_params['wind_filter_duration_s']),
+        #     # self.as_inst_params['start_utc_dt'] + timedelta( seconds= self.rs_general_params['wind_filter_duration_s']),
         #     self.as_inst_params['end_utc_dt'],
         #     plot_title = 'Activity Data Volumes',
         #     plot_size_inches = (18,12),
@@ -595,7 +596,7 @@ class GlobalPlannerRunner:
         
         print('route selection output stage')
 
-        if self.rs_params['plot_route_selection_results']:
+        if self.rs_general_params['plot_route_selection_results']:
             self.plot_route_selection_results (obs_routes,dlnk_winds_flat,xlnk_winds_flat,num_obs_to_plot = 1)
 
         #################################
@@ -646,6 +647,7 @@ class PipelineRunner:
         """
 
         orbit_prop_inputs = deepcopy( data['orbit_prop_inputs'])
+        orbit_link_inputs = data['orbit_link_inputs']
         gp_general_params_inputs = data['gp_general_params_inputs']
         gp_instance_params_inputs = data['gp_instance_params_inputs']
         data_rates_inputs = data['data_rates_inputs']
@@ -653,6 +655,7 @@ class PipelineRunner:
 
         gp_params = {}
         gp_orbit_prop_params = orbit_prop_inputs
+        gp_orbit_link_params = orbit_link_inputs
         gp_general_params = gp_general_params_inputs
         gp_instance_params = gp_instance_params_inputs
         gp_data_rates_params = data_rates_inputs
@@ -704,6 +707,7 @@ class PipelineRunner:
             raise NotImplementedError
 
         gp_params['gp_orbit_prop_params'] = gp_orbit_prop_params
+        gp_params['gp_orbit_link_params'] = gp_orbit_link_params
         gp_params['gp_general_params'] = gp_general_params
         gp_params['gp_instance_params'] = gp_instance_params
         gp_params['gp_data_rates_params'] = gp_data_rates_params
@@ -733,6 +737,11 @@ if __name__ == "__main__":
                     default='data_rates_output.json',
                     help='specify data rate outputs file from orbit link repo')
 
+    ap.add_argument('--link_inputs_file',
+                    type=str,
+                    default='orbit_link_inputs_ex.json',
+                    help='specify orbit link inputs file from orbit link repo')
+
     args = ap.parse_args()
 
     pr = PipelineRunner()
@@ -743,6 +752,9 @@ if __name__ == "__main__":
 
     with open(os.path.join(REPO_BASE,args.data_rates_file),'r') as f:
         data_rates_inputs = json.load(f)
+        
+    with open(os.path.join(REPO_BASE, args.link_inputs_file),'r') as f:
+        orbit_link_inputs = json.load(f)
 
     with open(os.path.join(REPO_BASE,'crux/config/examples/gp_general_params_inputs_ex.json'),'r') as f:
         gp_general_params_inputs = json.load(f)
@@ -753,6 +765,7 @@ if __name__ == "__main__":
     data = {
         # "orbit_prop_data": orbit_prop_data,
         "orbit_prop_inputs": orbit_prop_inputs,
+        "orbit_link_inputs": orbit_link_inputs,
         "gp_general_params_inputs": gp_general_params_inputs,
         "gp_instance_params_inputs": gp_instance_params_inputs,
         # "viz_params": viz_params,

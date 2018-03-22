@@ -1,16 +1,16 @@
-# Contains functionality for turning input data structures into the 
-# objects used by the global planner  scheduling module
+# Algorithm for creating a set of data routes for a given observation, later fed into the activity scheduling stage
 # 
+# This version uses a mixed integer linear programming formulation to optimize selected data routes
 # 
 # @author Kit Kennedy
 #
 #  note that a path is the same as a route. 
 
 from  datetime import timedelta
+from copy import  deepcopy
 
 from pyomo import environ  as pe
 from pyomo import opt  as po
-
 
 # for Birdseye use
 # from cmdline:
@@ -21,8 +21,6 @@ from pyomo import opt  as po
 # @eye
 # def yo_mama():
 # ...
-
-
 
 from .routing_objects import DataRoute
 from circinus_tools  import time_tools as tt
@@ -43,23 +41,24 @@ class GPDataRouteSelection():
 
         scenario_params = gp_params['gp_orbit_prop_params']['scenario_params']
         sat_params = gp_params['gp_orbit_prop_params']['sat_params']
-        rt_params = gp_params['gp_general_params']['route_selection_params']
+        rs_general_params = gp_params['gp_general_params']['route_selection_general_params']
+        rs_params = gp_params['gp_general_params']['route_selection_params_v1']
         gp_general_other_params = gp_params['gp_general_params']['other_params']
         gp_inst_params = gp_params['gp_instance_params']['route_selection_params']
 
         self.num_sats=sat_params['num_sats']
-        self.num_paths=rt_params['num_paths']
+        self.num_paths=rs_params['num_paths']
         self.sel_start_utc_dt  = tt.iso_string_to_dt (gp_inst_params['start_utc'])
         self.sel_end_utc_dt  = tt.iso_string_to_dt (gp_inst_params['end_utc'])
 
         # note: M values should be as low as possible to prevent numerical issues (see: https://orinanobworld.blogspot.com/2011/07/perils-of-big-m.html)
         self.M_t_s= 86400 # 1 day
         self.M_dv_Mb= 1000000 #  1000 gigabits
-        self.min_path_dv =rt_params['min_path_dv_Mb']
-        self.solver_max_runtime =rt_params['solver_max_runtime_s']
-        self.solver_name =rt_params['solver_name']
-        self.solver_run_remotely =rt_params['solver_run_remotely']
-        self.wind_filter_duration =  timedelta (seconds =rt_params['wind_filter_duration_s'])
+        self.min_path_dv =rs_params['min_path_dv_Mb']
+        self.solver_max_runtime =rs_params['solver_max_runtime_s']
+        self.solver_name =rs_params['solver_name']
+        self.solver_run_remotely =rs_params['solver_run_remotely']
+        self.wind_filter_duration =  timedelta (seconds =rs_general_params['wind_filter_duration_s'])
         self.latency_params =  gp_general_other_params['latency_calculation']
 
         if self.latency_params['obs'] not in ['start','end']:
@@ -590,12 +589,18 @@ class GPDataRouteSelection():
             #         val  = varobject[index].value
             #         print (" ",index, val)
 
-    def extract_routes( self,dr_uid,verbose = False):
+    def extract_routes( self,dr_uid,copy_windows= True,adjust_window_timing = False, verbose = False):
         #  note that routes are the same as paths
 
         selected_routes_by_index = {}
         route_dv_by_index = {}
         senses =  {}
+
+        def copy_choice(wind):
+            if copy_windows:
+                return deepcopy(wind)
+            else:
+                return wind
 
         try:
             # get the down links and index them by path
@@ -609,7 +614,7 @@ class GPDataRouteSelection():
                     dlnk_indx = dlnk_subscr[2]
                     dlnk_wind =  self.dlink_winds_flat[sat_indx][dlnk_indx]
                     senses[dlnk_wind] = dlnk_wind.sat_indx
-                    selected_routes_by_index[p].append(dlnk_wind)
+                    selected_routes_by_index[p].append(copy_choice (dlnk_wind))
 
             #  get the cross-links and index them by path
             for xlnk_subscr in self.model.xlnk_path_subscripts:
@@ -632,12 +637,12 @@ class GPDataRouteSelection():
                     xlnk_wind =  self.xlink_winds[access_sat_indx][access_other_sat_indx][xlnk_indx]
                     #store the satellite from which data is being moved on this cross-link
                     senses[xlnk_wind] = sat_indx
-                    selected_routes_by_index[p].append(xlnk_wind)
+                    selected_routes_by_index[p].append(copy_choice (xlnk_wind))
 
             #  add the observation
             for route in selected_routes_by_index. values ():
                 senses[self.obs_wind] = self.obs_wind.sat_indx
-                route.append (self.obs_wind)
+                route.append (copy_choice (self.obs_wind))
 
             for p in self.model.paths:
                 #  have to convert from pyomo  numeric type
@@ -657,6 +662,32 @@ class GPDataRouteSelection():
             )
             selected_routes.append(dr)
             dr_uid += 1
+
+        #  if so desired, mark the "scheduled" data volume for each window in each route. this is not technically the scheduled data volume, because nothing has been scheduled yet. But this is useful for plotting.
+        if adjust_window_timing:
+
+            #  mark zero data volume for every window, and set route schedule data volume
+            for dr in selected_routes:
+                dr.scheduled_dv = dr.data_vol
+                for wind in dr.route:
+                    wind.scheduled_data_vol = 0
+
+            #  now we want to mark the real scheduled data volume for every window. We need to do this separately because the model.var_act_indic continuous variables only give an upper bound on the data volume for an activity. we only actually need to use as much data volume as the data routes want to push through the window
+            #  add data volume for every route passing through every window
+            for dr in selected_routes:
+                for wind in dr.route:
+                    wind.scheduled_data_vol += dr.scheduled_dv
+
+            # update the window beginning and end times based upon their amount of scheduled data volume
+
+            #  keep track of which ones we've updated, because we should only update once
+            updated_winds = set()
+            for dr in selected_routes:
+                for wind in dr.route:
+                    if not wind in updated_winds:
+                        # it's a hack to use a zero second minimum duration. the durations output from here should not be totally trusted
+                        wind.update_duration_from_scheduled_dv (min_duration_s=0)
+                        updated_winds.add(wind)
 
         if verbose:
             for dr in selected_routes:

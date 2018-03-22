@@ -27,6 +27,9 @@ class ActivityWindow(object):
         self._center_cache = None
         self._ave_data_rate_cache = None
 
+        #  keeps track of if the start and end times of this window have been updated, for use as a safeguard
+        self.timing_updated = False
+
     def __hash__(self):
         return self.window_ID
 
@@ -51,9 +54,11 @@ class ActivityWindow(object):
         # TODO: remove this error checking later once all code solidified?
         try:
             if not self._ave_data_rate_cache:
+                if self.timing_updated: raise RuntimeWarning('Trying to calculate average data rate after window timing has been updated')
                 self._ave_data_rate_cache =  self.data_vol / ( self.end - self.start).total_seconds ()
             return self._ave_data_rate_cache
         except AttributeError:
+            if self.timing_updated: raise RuntimeWarning('Trying to calculate average data rate after window timing has been updated')
             self._ave_data_rate_cache = self.data_vol / ( self.end - self.start).total_seconds ()
             return self._ave_data_rate_cache
 
@@ -70,15 +75,17 @@ class ActivityWindow(object):
         if old_duration.total_seconds() < min_duration_s:
             raise RuntimeWarning('Original duration (%f) is less than minimum allowed duration (%f) for %s'%(old_duration.total_seconds(),min_duration_s,self))
 
-        center_time = self.start + old_duration/2
-
-        average_data_rate = self.data_vol/( self.end- self.start).total_seconds()
-
-        scheduled_time_s = self.scheduled_data_vol/average_data_rate
+        # note that accessing ave_data_rate below either uses the cached the original ave data rate, or caches it now
+        scheduled_time_s = self.scheduled_data_vol/self.ave_data_rate
         scheduled_time_s = max(scheduled_time_s,min_duration_s)
 
-        self.start = center_time - timedelta ( seconds = scheduled_time_s/2)
-        self.end = center_time + timedelta ( seconds = scheduled_time_s/2)
+        self.start = self.center - timedelta ( seconds = scheduled_time_s/2)
+        self.end = self.center + timedelta ( seconds = scheduled_time_s/2)
+        #  probably good to clear the cache here for consistency after a timing update, though not strictly necessary with the way the code is implemented right now (center time stays the same)
+        self._center_cache = None
+
+        # mark that timing has been updated
+        self.timing_updated = True
 
 
     def print_self(self):
