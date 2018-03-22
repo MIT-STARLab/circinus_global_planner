@@ -1,0 +1,98 @@
+{
+    "version": "0.1",
+    "other_params": {
+        "targ_id_ignore_list": [],
+        "gs_id_ignore_list": [],
+        "min_allowed_dv_xlnk_Mb" : 100,
+        "min_allowed_dv_dlnk_Mb" : 100,
+        "latency_calculation": {
+            "dlnk": "center",
+            "obs": "end"
+        },
+        "load_windows_from_file":  true
+    },
+    "metrics_params": {
+        "min_obs_dv_Mb": 100,
+        "aoi_units": "hours"
+    },
+    "route_selection_general_params": {
+        "wind_filter_duration_s" : 1800,
+        "plot_include_dlnk_labels":    false,
+        "plot_include_xlnk_labels":   true,
+        "plot_route_selection_results": true,
+        "adjust_window_timing_post_selection": true
+    },
+    "route_selection_params_v1": {
+        "num_paths" :  5,
+        "min_path_dv_Mb" :  100,
+        "solver_max_runtime_s" :  30,
+        "solver_name" :  "gurobi",
+        "solver_run_remotely" :   false
+    },
+    "route_selection_params_v2": {
+    },
+    "activity_scheduling_params": {
+        "min_path_dv_Mb" :  100,
+        "dv_epsilon_Mb" :  1,
+        "solver_max_runtime_s" :  60,
+        "solver_name" :  "gurobi",
+        "solver_optimality_gap" :  0.0001,
+        "solver_run_remotely" :   false,
+        "transition_time_s": {
+            "simple": 0
+        },
+        "min_duration_s": {
+            "obs": 3,
+            "dlnk": 60,
+            "xlnk": 30
+        },
+        "obj_weights": {
+            "obs_dv": 1.0,
+            "route_latency": 1.0,
+            "energy_storage": 1.0
+        },
+        "plot_include_dlnk_labels":    false,
+        "plot_include_xlnk_labels":   true,
+        "plot_activity_scheduling_results":   true,
+        "resource_delta_t_s": 10,
+        "resource_margin_num_timepoints": 30,
+        "run_activity_scheduling":  false
+    },
+    "pickle_params":  {
+        "unpickle_pre_route_selection":                    false,
+        "pickle_route_selection_results":               false,
+        "unpickle_pre_act_scheduling":                            false,
+        "pickle_act_scheduling_results":                            false,
+        "route_selection_pickle": "pickles/rs_walker30_all_obs_30smax_better.pkl",
+        "act_scheduling_pickle": "pickles/as_2018-03-19T20_35_17.004653.pkl"
+    },
+    "plot_params":  {
+        "plot_fig_extension":  "pdf",
+        "time_units":  "minutes",
+        "winds_plot_obs":  true,
+        "winds_plot_obs_choices":  true,
+        "winds_plot_dlnks":  true,
+        "winds_plot_dlnks_choices":   true,
+        "winds_plot_xlnks":  true,
+        "winds_plot_xlnks_choices":    true,
+        "energy_usage_plot_params": {
+            "plot_bound_e_min_Wh": 13,    
+            "plot_bound_e_max_Wh": 21,
+            "display_e_min_constraint": false,
+            "display_e_max_constraint": false,
+            "include_eclipse_windows": true
+        },
+        "obs_aoi_metrics_plot_params" : {
+            "plot_bound_min_aoi_h": 0,    
+            "plot_bound_max_aoi_h": 4
+        },
+        "cmd_aoi_metrics_plot_params" : {
+            "plot_bound_min_aoi_h": 0,    
+            "plot_bound_max_aoi_h": 1.5
+        },
+        "tlm_aoi_metrics_plot_params" : {
+            "plot_bound_min_aoi_h": 0,    
+            "plot_bound_max_aoi_h": 1.5
+        }
+    }
+}
