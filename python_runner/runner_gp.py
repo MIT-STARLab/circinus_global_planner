@@ -22,7 +22,8 @@ from circinus_tools  import time_tools as tt
 from circinus_tools  import io_tools
 from gp_tools.io_processing import GPProcessorIO
 from gp_tools.gp_plotting import GPPlotting
-from gp_tools.gp_route_selection_v2 import GPDataRouteSelection
+import gp_tools.gp_route_selection_v1 as gprsv1
+import gp_tools.gp_route_selection_v2 as gprsv2
 from gp_tools.gp_activity_scheduling import GPActivityScheduling
 from gp_tools.gp_metrics import GPMetrics
 from gp_tools.network_sim.gp_network_sim import GPNetSim
@@ -176,23 +177,14 @@ class GlobalPlannerRunner:
         :rtype: {[type]}
         """
 
-        gp_ps.make_model (obs,dlnk_winds_flat,xlnk_winds, obj_weights, verbose = True)
-        stats =gp_ps.get_stats (verbose = True)
-        t_a = time.time()
-        gp_ps.solve ()
-        t_b = time.time()
-        gp_ps.print_sol ()
-        adjust_opt = self.rs_general_params['adjust_window_timing_post_selection']
-        routes,dr_uid = gp_ps. extract_routes ( dr_uid,copy_windows= True,adjust_window_timing=adjust_opt,verbose  = True)
-
-        time_elapsed = t_b-t_a
+        
 
         return routes,obs,stats,time_elapsed,dr_uid
 
-    def run_nominal_route_selection( self,obs_winds,dlnk_winds_flat,xlnk_winds):
-        gp_ps = GPDataRouteSelection ( self.params)
+    def run_nominal_route_selection_v1( self,obs_winds,dlnk_winds_flat,xlnk_winds):
+        gp_ps = gprsv1.GPDataRouteSelection ( self.params)
 
-        print ('nominal route selection')
+        print ('nominal route selection v1')
 
         obj_weights = {
             "total_dv": 0.45,
@@ -218,7 +210,78 @@ class GlobalPlannerRunner:
                 print ("obs")
                 print ( index)
 
-                routes,obs,stats,time_elapsed,dr_uid = self.run_route_selection(gp_ps,obs,dlnk_winds_flat,xlnk_winds,obj_weights,dr_uid)
+                # routes,obs,stats,time_elapsed,dr_uid = self.run_route_selection(gp_ps,obs,dlnk_winds_flat,xlnk_winds,obj_weights,dr_uid)
+
+                # run the route selection algorithm
+                gp_ps.make_model (obs,dlnk_winds_flat,xlnk_winds, obj_weights, verbose = True)
+                stats =gp_ps.get_stats (verbose = True)
+                t_a = time.time()
+                gp_ps.solve ()
+                t_b = time.time()
+                gp_ps.print_sol ()
+                adjust_opt = self.rs_general_params['adjust_window_timing_post_selection']
+                routes,dr_uid = gp_ps. extract_routes ( dr_uid,copy_windows= True,adjust_window_timing=adjust_opt,verbose  = True)
+
+                time_elapsed = t_b-t_a
+                # end algorithm
+
+                print ('obs.data_vol, total dlnk dv, ratio')
+                print (obs.data_vol,sum(dr.data_vol for dr in routes),sum(dr.data_vol for dr in routes)/obs.data_vol)
+                print ('min latency, ave latency, max latency')
+                latencies = [(rt.route[-1].end - rt.route[0].end).total_seconds()/60 for rt in  routes]
+                if len(latencies) > 0: 
+                    print (np.min( latencies),np.mean( latencies),np.max( latencies))
+                else:
+                    print('no routes found')
+                print ('time_elapsed')
+                print (time_elapsed)
+
+                all_routes.append ( routes)
+                all_routes_obs.append ( obs)
+                all_stats.append ( stats)
+                route_times_s.append ( time_elapsed)
+
+                obs_indx +=1
+
+                if obs_indx >= 1:
+                    break
+
+            if obs_indx >= 1:
+                break
+
+        return all_routes,all_routes_obs,all_stats,route_times_s,obs_indx
+
+    def run_nominal_route_selection_v2( self,obs_winds,dlnk_winds_flat,xlnk_winds):
+        gp_rs = gprsv2.GPDataRouteSelection ( self.params)
+
+        print ('nominal route selection v2')
+
+        obs_indx =0
+        #  list of all routes, indexed by obs_indx ( important for pickling)
+        all_routes =[]
+        all_routes_obs =[]
+        all_stats =[]
+        route_times_s =[]
+
+        # this should be unique across all data routes
+        dr_uid = 0
+
+        for sat_indx in range( self.sat_params['num_sats']):
+            for  index, obs in  enumerate ( obs_winds[sat_indx]):
+
+                print ("sat_indx")
+                print (sat_indx)
+                print ("obs")
+                print ( index)
+
+                # run the route selection algorithm
+                t_a = time.time()
+                routes = gp_rs.run(obs,dlnk_winds_flat,xlnk_winds, dr_uid, verbose = False)
+                t_b = time.time()
+                stats = gp_rs.get_stats(verbose=True )
+
+                time_elapsed = t_b-t_a
+                # end algorithm
 
                 print ('obs.data_vol, total dlnk dv, ratio')
                 print (obs.data_vol,sum(dr.data_vol for dr in routes),sum(dr.data_vol for dr in routes)/obs.data_vol)
@@ -277,7 +340,7 @@ class GlobalPlannerRunner:
 
         
     def run_test_route_selection( self,obs_winds,dlnk_winds_flat,xlnk_winds):
-        gp_ps = GPDataRouteSelection ( self.params)
+        gp_rs = GPDataRouteSelection ( self.params)
 
         total_dv_weights = [0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9] 
         num_paths_sel_weights = [0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1] 
@@ -318,7 +381,7 @@ class GlobalPlannerRunner:
                     "latency_sf":   weights[2],
                 }
 
-                routes,obs,stats,time_elapsed = self.run_route_selection(gp_ps,obs,dlnk_winds_flat,xlnk_winds,obj_weights)
+                routes,obs,stats,time_elapsed = self.run_route_selection(gp_rs,obs,dlnk_winds_flat,xlnk_winds,obj_weights)
 
                 print ('obs.data_vol, total dlnk dv, ratio')
                 print (obs.data_vol,sum(dr.data_vol for dr in routes),sum(dr.data_vol for dr in routes)/obs.data_vol)
@@ -584,7 +647,7 @@ class GlobalPlannerRunner:
 
         #  otherwise run route selection
         else:
-            obs_routes,all_routes_obs,all_stats,route_times_s, obs_indx  =  self.run_nominal_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
+            obs_routes,all_routes_obs,all_stats,route_times_s, obs_indx  =  self.run_nominal_route_selection_v2(obs_winds,dlnk_winds_flat,xlnk_winds)
             # obs_routes,all_routes_obs,all_stats,route_times_s, obs_indx, weights_tups  =  self.run_test_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
 
         if self.pickle_params['pickle_route_selection_results']:

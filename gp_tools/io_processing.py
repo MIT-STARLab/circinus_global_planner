@@ -86,8 +86,8 @@ class GPProcessorIO():
             elif obs_end > self.scenario_end:
                 obs_end = self.scenario_end
 
-            obs_start_indx = dc_target_IDs.get_post_index_by_time(obs_start)
-            obs_end_indx = dc_target_IDs.get_post_index_by_time(obs_end) - 1 # -1 because last time slice is before wind.end
+            obs_start_indx = dc_target_IDs.get_post_ts_indx_from_t(obs_start)
+            obs_end_indx = dc_target_IDs.get_post_ts_indx_from_t(obs_end) - 1 # -1 because last time slice is before wind.end
 
             for indx in range(obs_start_indx,obs_end_indx+1):
                 dc_target_IDs.dancecard[indx] += obs.target_IDs
@@ -101,7 +101,7 @@ class GPProcessorIO():
             # check if lists have the all the same elements in each other (order not important)
             if not collections.Counter(target_ID_list) == collections.Counter(curr_id_list):
                 # obs_end = self.scenario_start + timedelta(seconds=(indx+1)*self.tstep_sec)
-                obs_end = dc_target_IDs.get_pre_time_by_index(indx+1)  # plus one on index because we're looking for abs time after last timestep
+                obs_end = dc_target_IDs.get_pre_tp_from_ts_indx(indx+1)  # plus one on index because we're looking for abs time after last timestep
 
                 # todo: it's should probably add filtering for minimum length observations here
 

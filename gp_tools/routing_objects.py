@@ -1,3 +1,9 @@
+# Data structures for use in routing planning code
+# 
+# @author Kit Kennedy
+
+from copy import copy
+
 from circinus_tools  import  constants as const
 from .custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow
 
@@ -13,7 +19,7 @@ class DataRoute(object):
         # the list storing all objects in the route; a list ObsWindow, XlnkWindow, XlnkWindow...DlnkWindow
         self.route =  route
 
-        # this keeps track, for each window along the route, of the satellite that the data was on at the beginning of the window. This is necessary because the window objects themselves are used across paths and do not store information about which sense they are used in
+        # this keeps track, for each window along the route, of the satellite (sat_indx) that the data was on at the beginning of the window. This is necessary because the window objects themselves are used across paths and do not store information about which sense they are used in
         #  dictionary with keys being the window objects themselves
         self.window_start_sats = window_start_sats
 
@@ -26,6 +32,17 @@ class DataRoute(object):
 
         #  check the timing and satellite indices along the route.  throws an exception if a problem is seen
         self.validate_route()
+
+    def __copy__(self):
+        newone = type(self)(self.ID)
+        #  make a shallow copy of these container objects -  we want to refer to the same nested objects within the containers, but want a new container in both cases
+        newone.route = copy(self.route)
+        newone.window_start_sats = copy(self.window_start_sats)
+        return newone
+
+    def append_wind_to_route( self,wind,window_start_sat_indx):
+        self.route.append(wind)
+        self.window_start_sats[wind] = window_start_sat_indx
 
     def get_obs( self):
         return self.route[0]
@@ -68,7 +85,8 @@ class DataRoute(object):
                 start_str =  "%.0fs" % ( wind.start-time_base).total_seconds() if  time_base else  wind.start.isoformat()
                 end_str =  "%.0fs" % ( wind.end-time_base).total_seconds() if  time_base else  wind.end.isoformat()
                 sat_indx=self.window_start_sats[wind]
-                xsat_indx=wind.xsat_indx  if self.window_start_sats[wind] == wind.sat_indx else wind.sat_indx
+                # xsat_indx=wind.xsat_indx  if self.window_start_sats[wind] == wind.sat_indx else wind.sat_indx
+                xsat_indx=wind.get_xlnk_partner(self.window_start_sats[wind])
                 out_string  +=  " -> x %d,%d; %s,%s" % (sat_indx, xsat_indx,start_str,end_str)
             elif type (wind)  == DlnkWindow:
                 start_str =  "%.0fs" % ( wind.start-time_base).total_seconds() if  time_base else  wind.start.isoformat()
@@ -91,6 +109,9 @@ class DataRoute(object):
         :raises: Exception, Exception, Exception
         """
 
+        if len( self.route) == 0:
+            return
+
         obs = self.route[0]
         if not type (obs) is ObsWindow:
             raise Exception('First window on route was not an ObsWindow instance. Route string: %s'%( self.get_route_string()))
@@ -111,9 +132,34 @@ class DataRoute(object):
             #  note that we manually trace the satellite index through cross-link window here. This is a bit redundant with the functionality of window_start_sats,  but adds a little bit more of a warm, happy, comfortable feeling in the area checking
             if type (wind) is XlnkWindow:
                 curr_sat_indx = next_sat_indx
-                next_sat_indx = wind.xsat_indx if not wind.xsat_indx == curr_sat_indx else wind.sat_indx
+                next_sat_indx=wind.get_xlnk_partner(curr_sat_indx)
+                # next_sat_indx = wind.xsat_indx if not wind.xsat_indx == curr_sat_indx else wind.sat_indx
 
             last_time = wind.end
+
+    def get_split(self,other):
+        """ return the last window in common with other data route
+        
+        iterate through the windows in both routes in temporal order and return the last window that is the same for the two routes
+        :param other:  another data route
+        :type other: DataRoute
+        :returns:  last common window
+        :rtype: {ActivityWindow}
+        """
+
+        #  route should always start the same place, the initial observation window
+        assert self.route[0] == other.route[0]
+
+        split_wind = None
+        for windex,wind in enumerate(self.route):
+            if windex == 0:
+                continue
+
+            #  note that this tests the window ID for equality
+            if wind != other.route[windex]:
+                split_wind = self.route[windex-1]
+
+        return split_wind
 
 
 

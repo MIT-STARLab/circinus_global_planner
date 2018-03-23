@@ -1,8 +1,15 @@
+# Data structure for representing time series data
+# 
+# Note: maybe this could be done better with Pandas... works for now though
+# 
+# @author Kit Kennedy
+
 from copy import copy, deepcopy
 from datetime import timedelta
+from math import floor
 
 class Dancecard(object):
-    def __init__(self, dancecard_start_dt, dancecard_end_dt, tstep_sec, item_init=list):
+    def __init__(self, dancecard_start_dt, dancecard_end_dt, tstep_sec, item_init=list,mode='timestep'):
         """ Maintains a time series of objects for use in scheduling problems
 
         Note that N is equal to the total duration of the dance card divided by 
@@ -11,13 +18,27 @@ class Dancecard(object):
 
         Props to Emily Clements for the idea for the name of the data struct
 
-        Dancecard structure:
+        There are two different modes. default is "timestep" mode.
+        - in "timestep" mode, each time step or delta has a distinct index in the internal dancecard list and can store data. This mode is meant to represent activities that have durations
+        - in "timepoint" mode, each absolute time has a distinct index in the internal dancecard list and can store data. This mode is meant to represent states that are valid at a certain point in time.
+
+        DANCECARD STRUCTURE
+
+        Timestep mode:
         |  i=0    |  i=1    |  i=2    |  i=3    ...   |  i=N    |
         | tstep 0 | tstep 1 | tstep 2 | tstep 3 ...   | tstep N |
         ^         ^         ^         ^               ^         ^ 
         tpnt0     tpnt1     tpnt2     tpnt3           tpnt4     tpnt(N+1)
-        ^                             ^
-        base_time                *    t    *
+        ^ 
+        base_time
+
+        Timepoint mode:
+        |  i=0    |  i=1    |  i=2    |  i=3    ...   |  i=N+1   |
+        | tpnt 0  | tpnt 1  | tpnt 2  | tpnt 3  ...   | tpnt N+1 |
+                  ^         ^         ^               ^          
+                  tstep1    tstep2    tstep3          tstep N
+            ^
+            base_time
 
         :param dancecard_start_dt:  start time for the dance card
         :type dancecard_start_dt: datetime
@@ -32,22 +53,44 @@ class Dancecard(object):
         self.total_duration = (dancecard_end_dt - dancecard_start_dt).total_seconds()
         # each index in dancecard represents a chunk of time, e.g. [1] is from start_time+tstep_sec*1 to start_time+tstep_sec*2
         num_timesteps = int(self.total_duration / tstep_sec)
+        num_timepoints = num_timesteps+1
 
-        if item_init == list:
-            # this "dancecard" stores a list of objects for a given index
-            self.dancecard = [[] for i in range(num_timesteps)]
-        elif item_init == None:
-            # this "dancecard" stores for a given index
-            self.dancecard = [None for i in range(num_timesteps)]
+        if mode == 'timestep':
+            if item_init == list:
+                # this "dancecard" stores a list of objects for a given index
+                self.dancecard = [[] for i in range(num_timesteps)]
+            elif item_init == None:
+                # this "dancecard" stores for a given index
+                self.dancecard = [None for i in range(num_timesteps)]
+            else:
+                raise NotImplementedError
+        elif mode == 'timepoint':
+            if item_init == list:
+                # this "dancecard" stores a list of objects for a given index
+                self.dancecard = [[] for i in range(num_timepoints)]
+            elif item_init == None:
+                # this "dancecard" stores for a given index
+                self.dancecard = [None for i in range(num_timepoints)]
+            else:
+                raise NotImplementedError
         else:
             raise NotImplementedError
 
         self.dancecard_start_dt = dancecard_start_dt
-        self.dancecard_end_dt = dance_dtcard_end
+        self.dancecard_end_dt = dancecard_end_dt
         self.tstep_sec = tstep_sec
         self.tstep_td = timedelta(seconds=tstep_sec)
         self.num_timesteps = num_timesteps
-        self.num_timepoints = num_timesteps+1
+        self.num_timepoints = num_timepoints
+        self.mode = mode
+
+    def __setitem__(self, key, value):
+        """ setter for internal dancecard by index"""
+        self.dancecard[key] = value
+
+    def __getitem__(self, key):
+        """ getter for internal dancecard by index"""
+        return self.dancecard[key]
 
     def get_ts_indcs ( self):
         """ return time step indices in this dance card
@@ -87,9 +130,9 @@ class Dancecard(object):
 
         t_vals_s = [self.tstep_sec*tp_indx for tp_indx in range(self.num_timepoints)]
 
-        if units == 'seconds':
+        if out_units == 'seconds':
             return t_vals_s
-        elif units == 'minutes':
+        elif out_units == 'minutes':
             # convert like this to minimize the chance of error buildup
             return [t_val/60.0 for t_val in t_vals_s]
         else:
@@ -108,11 +151,11 @@ class Dancecard(object):
         :raises: NotImplementedError
         """
 
-        if units == 'seconds':
+        if out_units == 'seconds':
             return self.tstep_sec*tp_indx 
-        elif units == 'minutes':
+        elif out_units == 'minutes':
             return self.tstep_sec*tp_indx/60.0
-        elif units == 'datetime':
+        elif out_units == 'datetime':
             return self.dancecard_start_dt + timedelta(seconds= self.tstep_sec*tp_indx)
         else:
             raise NotImplementedError
@@ -130,7 +173,7 @@ class Dancecard(object):
         :raises: NotImplementedError
         """
 
-        if units == 'datetime':
+        if in_units == 'datetime':
             return floor((t - self.dancecard_start_dt).total_seconds() / self.tstep_sec)
         else:
             raise NotImplementedError
@@ -149,6 +192,9 @@ class Dancecard(object):
         if tp_indx == 0:
             raise ValueError('Cannot get proceeding timestep for timepoint index 0')
 
+        if self.mode == 'timepoint':
+            raise RuntimeError("this method can't be used in timepoint mode")
+
         return self.dancecard[tp_indx-1]
 
     def get_objects_at_ts_indx(self,ts_indx):
@@ -160,6 +206,9 @@ class Dancecard(object):
         :returns: objects at index
         :rtype: {list}
         """
+
+        if self.mode == 'timepoint':
+            raise RuntimeError("this method can't be used in timepoint mode")
 
         return self.dancecard[ts_indx]
 
@@ -232,6 +281,9 @@ class Dancecard(object):
         :param winds: list of windows to add. Can be a list with a single element, of course
         :return:
         '''
+        if self.mode == 'timepoint':
+            raise RuntimeError("this method can't be used in timepoint mode")
+
         dancecard_last_indx = len(self.dancecard) - 1
 
         for wind in winds:
@@ -252,6 +304,9 @@ class Dancecard(object):
         :param bool unmodified_yes: set to true if you want to remove everything from the initially created start to end time (unmodded by search process)
         :return:
         '''
+        if self.mode == 'timepoint':
+            raise RuntimeError("this method can't be used in timepoint mode")
+
         dancecard_last_indx = len(self.dancecard) - 1
 
         for wind in winds:
@@ -285,6 +340,8 @@ class Dancecard(object):
         :param bool unmodified_yes: set to true if you want to remove everything from the initially created start to end time (unmodded by search process)
         :return:
         '''
+        if self.mode == 'timepoint':
+            raise RuntimeError("this method can't be used in timepoint mode")
 
         dancecard_last_indx = len(self.dancecard) - 1
 

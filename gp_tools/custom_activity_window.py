@@ -272,6 +272,19 @@ class XlnkWindow(CommWindow):
     def __repr__(self):
         return  "(XlnkWindow id %d; %d,%d; %s,%s)" % (self.window_ID,self.sat_indx, self.xsat_indx,self.start.isoformat (),self.end.isoformat())
 
+    def get_xlnk_partner(self,sat_indx):
+        """return indx of the cross-linked partner
+        
+        a cross-link Windows stores the indices for both satellites involved (sat_indx and xsat_indx) but assumes the window is bidirectional, i.e. data could travel either direction between the two satellites.  this method tells us, from sat_indx's perspective, who its cross-link partner is
+        :param sat_indx: a satellite index contained in either self.sat_indx or self.xsat_indx
+        :type sat_indx: int
+        :returns: the index of the crosslink partner satellite
+        :rtype: {int}
+        """
+
+        xsat_indx= self.xsat_indx  if sat_indx == self.sat_indx else self.sat_indx
+        return xsat_indx
+
 class UrgentWindow(ActivityWindow):
     def __init__(self, target_ID, start, end):
         '''

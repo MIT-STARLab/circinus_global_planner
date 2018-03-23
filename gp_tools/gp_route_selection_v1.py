@@ -72,7 +72,7 @@ class GPDataRouteSelection():
             raise Exception ('big M value is too small for %f second scheduling window' % ( total_duration))
 
     @staticmethod
-    def get_crosslink_model_objects(xlink_winds,num_paths,num_sats,start_utc_dt):
+    def get_crosslink_model_objects(xlnk_winds,num_paths,num_sats,start_utc_dt):
         tuple_list =[]
         #  start and end times of cross-links, indexed by xlnk i,j,k tuple
         t_start_dict_by_tuple =  {}
@@ -83,7 +83,7 @@ class GPDataRouteSelection():
         # explicitly indexing by num_sats just to include a bit of error checking
         for sat_indx in  range (num_sats):
             for xsat_indx in  range (sat_indx+1,num_sats):
-                for xlnk_indx in  range (len (xlink_winds[sat_indx][xsat_indx])):
+                for xlnk_indx in  range (len (xlnk_winds[sat_indx][xsat_indx])):
                     # i -> j (i,j,k)
                     tup = (sat_indx, xsat_indx,xlnk_indx)
                     tuple_list.append (tup)
@@ -91,7 +91,7 @@ class GPDataRouteSelection():
                     tup_sym = (xsat_indx, sat_indx,xlnk_indx)
                     tuple_list.append (tup_sym)
 
-                    wind = xlink_winds[sat_indx][xsat_indx][xlnk_indx]
+                    wind = xlnk_winds[sat_indx][xsat_indx][xlnk_indx]
 
                     t_start_dict_by_tuple[tup] =  (wind.start - start_utc_dt).total_seconds ()
                     t_end_dict_by_tuple[tup] = (wind.end - start_utc_dt).total_seconds ()
@@ -107,7 +107,7 @@ class GPDataRouteSelection():
         for path_indx in  range (num_paths):
             for sat_indx in  range (num_sats):
                 for xsat_indx in  range (sat_indx+1,num_sats):
-                    for xlnk_indx in  range (len (xlink_winds[sat_indx][xsat_indx])): 
+                    for xlnk_indx in  range (len (xlnk_winds[sat_indx][xsat_indx])): 
                         # i -> j (p,i,j,k)
                         tuple_list_paths.append ((path_indx,sat_indx, xsat_indx,xlnk_indx))
                         # j -> i (p,j,i,k)
@@ -116,7 +116,7 @@ class GPDataRouteSelection():
         return tuple_list, tuple_list_paths, t_start_dict_by_tuple, t_end_dict_by_tuple, dv_dict_by_tuple
 
     @staticmethod
-    def get_downlink_model_objects(dlink_winds_flat,num_paths,num_sats,start_utc_dt):
+    def get_downlink_model_objects(dlnk_winds_flat,num_paths,num_sats,start_utc_dt):
         tuple_list =[]
         #  start and end times of links, indexed by dlnk i,k tuple
         t_start_dict_by_tuple =  {}
@@ -127,10 +127,10 @@ class GPDataRouteSelection():
         # explicitly indexing by num_sats just to include a bit of error checking
         for sat_indx in  range (num_sats):
 
-            for dlnk_indx in  range (len (dlink_winds_flat[sat_indx])):
+            for dlnk_indx in  range (len (dlnk_winds_flat[sat_indx])):
                 tup = (sat_indx,dlnk_indx)
                 tuple_list.append (tup)
-                wind = dlink_winds_flat[sat_indx][dlnk_indx]
+                wind = dlnk_winds_flat[sat_indx][dlnk_indx]
                 t_start_dict_by_tuple[tup] =  (wind.start - start_utc_dt).total_seconds ()
                 t_end_dict_by_tuple[tup] = (wind.end - start_utc_dt).total_seconds ()
                 dv_dict_by_tuple[tup] = wind.data_vol
@@ -141,13 +141,13 @@ class GPDataRouteSelection():
         for path_indx in  range (num_paths):
             for sat_indx in  range (num_sats):
 
-                    for dlnk_indx in  range (len (dlink_winds_flat[sat_indx])):
+                    for dlnk_indx in  range (len (dlnk_winds_flat[sat_indx])):
                         tuple_list_paths.append ((path_indx,sat_indx,dlnk_indx))
 
         return tuple_list, tuple_list_paths, t_start_dict_by_tuple, t_end_dict_by_tuple, dv_dict_by_tuple
 
     @staticmethod
-    def get_downlink_score_factors(obs_wind,dlink_winds_flat,num_sats,latency_params):
+    def get_downlink_score_factors(obs_wind,dlnk_winds_flat,num_sats,latency_params):
         tuple_list =[]
         #  start and end times of links, indexed by dlnk i,k tuple
         t_start_o_dict_by_tuple =  {}
@@ -166,9 +166,9 @@ class GPDataRouteSelection():
         # explicitly indexing by num_sats just to include a bit of error checking
         for sat_indx in  range (num_sats):
 
-            for dlnk_indx in  range (len (dlink_winds_flat[sat_indx])):
+            for dlnk_indx in  range (len (dlnk_winds_flat[sat_indx])):
                 tup = (sat_indx,dlnk_indx)
-                wind = dlink_winds_flat[sat_indx][dlnk_indx]
+                wind = dlnk_winds_flat[sat_indx][dlnk_indx]
 
                 #  only store the calculation we're interested in, as a pathetic attempt to reduce calculation time in this already gigantic runtime
                 if latency_params['dlnk'] == 'start':
@@ -204,30 +204,30 @@ class GPDataRouteSelection():
 
 
     @staticmethod
-    def  filter_windows(obs_wind,dlink_winds_flat,xlink_winds,num_sats,end_utc_dt,wind_filter_duration):
+    def  filter_windows(obs_wind,dlnk_winds_flat,xlnk_winds,num_sats,end_utc_dt,wind_filter_duration):
         first =  obs_wind.end
         last =  min ( end_utc_dt, first +  wind_filter_duration)
 
-        dlink_winds_flat_filtered = [[] for sat_indx in  range (num_sats)]
-        xlink_winds_flat_filtered = [[[] for xsat_indx in  range ( num_sats)] for sat_indx in  range (num_sats)]
+        dlnk_winds_flat_filtered = [[] for sat_indx in  range (num_sats)]
+        xlnk_winds_flat_filtered = [[[] for xsat_indx in  range ( num_sats)] for sat_indx in  range (num_sats)]
 
         for sat_indx in  range (num_sats):
             for xsat_indx in  range ( num_sats):
-                for wind in xlink_winds[sat_indx][xsat_indx]:
+                for wind in xlnk_winds[sat_indx][xsat_indx]:
                     if  wind.start > first  and  wind.end  <last:
-                        xlink_winds_flat_filtered[sat_indx][xsat_indx]. append ( wind)
+                        xlnk_winds_flat_filtered[sat_indx][xsat_indx]. append ( wind)
 
-            for wind in dlink_winds_flat[sat_indx]:
+            for wind in dlnk_winds_flat[sat_indx]:
                 if  wind.start > first  and  wind.end  <last:
-                    dlink_winds_flat_filtered[sat_indx]. append ( wind)
+                    dlnk_winds_flat_filtered[sat_indx]. append ( wind)
 
-        return dlink_winds_flat_filtered, xlink_winds_flat_filtered
+        return dlnk_winds_flat_filtered, xlnk_winds_flat_filtered
 
-    def make_model ( self,obs_wind,dlink_winds_flat,xlink_winds, obj_weights, verbose = True):
+    def make_model ( self,obs_wind,dlnk_winds_flat,xlnk_winds, obj_weights, verbose = True):
         model = pe.ConcreteModel()
 
         self.obs_wind = obs_wind
-        self.dlink_winds_flat,self.xlink_winds =  self.filter_windows (obs_wind,dlink_winds_flat,xlink_winds, self.num_sats, self.sel_end_utc_dt, self.wind_filter_duration)
+        self.dlnk_winds_flat,self.xlnk_winds =  self.filter_windows (obs_wind,dlnk_winds_flat,xlnk_winds, self.num_sats, self.sel_end_utc_dt, self.wind_filter_duration)
 
         ##############################
         #  Make indices/ subscripts
@@ -239,12 +239,12 @@ class GPDataRouteSelection():
             dlnk_t_start_dict, 
             dlnk_t_end_dict,
             dlnk_dv_dict)  = self.get_downlink_model_objects(
-                                        self.dlink_winds_flat,
+                                        self.dlnk_winds_flat,
                                         self.num_paths,
                                         self.num_sats,
                                         self.sel_start_utc_dt)
 
-        dlnk_sfact_dict = self.get_downlink_score_factors(self.obs_wind,self.dlink_winds_flat,self.num_sats, self.latency_params)
+        dlnk_sfact_dict = self.get_downlink_score_factors(self.obs_wind,self.dlnk_winds_flat,self.num_sats, self.latency_params)
 
         # get lists of indices ( as tuples) and start and end times for  crosslinks
         (xlnk_subscripts, 
@@ -252,7 +252,7 @@ class GPDataRouteSelection():
             xlnk_t_start_dict, 
             xlnk_t_end_dict,
             xlnk_dv_dict)  = self.get_crosslink_model_objects(
-                                        self.xlink_winds,
+                                        self.xlnk_winds,
                                         self.num_paths,
                                         self.num_sats,
                                         self.sel_start_utc_dt)
@@ -411,7 +411,7 @@ class GPDataRouteSelection():
                 j_terms_depart = []
 
                 #  could have been a list comprehension but whatever
-                for k_d in range(len (self.dlink_winds_flat[j])):
+                for k_d in range(len (self.dlnk_winds_flat[j])):
                     j_terms_depart.append (model.var_dlnk_path_occ[p,j,k_d] )
 
                 for i in model.sats:
@@ -419,7 +419,7 @@ class GPDataRouteSelection():
                         continue
 
                     #  use this to account for the fact that the cross-link Windows matrix is upper triangular
-                    num_i_j_xlnks = max(len(self.xlink_winds[i][j]),len(self.xlink_winds[j][i]))
+                    num_i_j_xlnks = max(len(self.xlnk_winds[i][j]),len(self.xlnk_winds[j][i]))
 
                     j_terms_arrive += [
                         model.var_xlnk_path_occ[p,i,j,k] 
@@ -468,8 +468,8 @@ class GPDataRouteSelection():
 
     def get_stats(self,verbose=True):
         stats = {}
-        stats['num_dlnk_windows'] = sum([len (self.dlink_winds_flat[sat_indx]) for sat_indx in range (self.num_sats)])
-        stats['num_xlnk_windows'] = sum([len (self.xlink_winds[sat_indx][xsat_indx]) for xsat_indx in range (self.num_sats) for sat_indx in range (self.num_sats)])
+        stats['num_dlnk_windows'] = sum([len (self.dlnk_winds_flat[sat_indx]) for sat_indx in range (self.num_sats)])
+        stats['num_xlnk_windows'] = sum([len (self.xlnk_winds[sat_indx][xsat_indx]) for xsat_indx in range (self.num_sats) for sat_indx in range (self.num_sats)])
         stats['num_variables'] = self.model.nvariables ()
         stats['num_nobjectives'] = self.model.nobjectives ()
         stats['num_nconstraints'] = self.model.nconstraints ()
@@ -612,7 +612,7 @@ class GPDataRouteSelection():
                         selected_routes_by_index[p] = []
                     sat_indx = dlnk_subscr[1]
                     dlnk_indx = dlnk_subscr[2]
-                    dlnk_wind =  self.dlink_winds_flat[sat_indx][dlnk_indx]
+                    dlnk_wind =  self.dlnk_winds_flat[sat_indx][dlnk_indx]
                     senses[dlnk_wind] = dlnk_wind.sat_indx
                     selected_routes_by_index[p].append(copy_choice (dlnk_wind))
 
@@ -629,12 +629,12 @@ class GPDataRouteSelection():
 
                     access_sat_indx = sat_indx
                     access_other_sat_indx = other_sat_indx
-                    # remember that xlink_winds is upper triangular,  because it  would be symmetric across the diagonal. swap indexing to account for that
+                    # remember that xlnk_winds is upper triangular,  because it  would be symmetric across the diagonal. swap indexing to account for that
                     if sat_indx >other_sat_indx:
                         access_sat_indx=other_sat_indx
                         access_other_sat_indx = sat_indx
 
-                    xlnk_wind =  self.xlink_winds[access_sat_indx][access_other_sat_indx][xlnk_indx]
+                    xlnk_wind =  self.xlnk_winds[access_sat_indx][access_other_sat_indx][xlnk_indx]
                     #store the satellite from which data is being moved on this cross-link
                     senses[xlnk_wind] = sat_indx
                     selected_routes_by_index[p].append(copy_choice (xlnk_wind))

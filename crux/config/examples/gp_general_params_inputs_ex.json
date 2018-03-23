@@ -20,11 +20,11 @@
         "plot_include_dlnk_labels":    false,
         "plot_include_xlnk_labels":   true,
         "plot_route_selection_results": true,
-        "adjust_window_timing_post_selection": true
+        "adjust_window_timing_post_selection": true,
+        "min_path_dv_Mb" :  100
     },
     "route_selection_params_v1": {
         "num_paths" :  5,
-        "min_path_dv_Mb" :  100,
         "solver_max_runtime_s" :  30,
         "solver_name" :  "gurobi",
         "solver_run_remotely" :   false

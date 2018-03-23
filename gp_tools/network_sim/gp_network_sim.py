@@ -61,7 +61,7 @@ class GPNetSim():
         # get the time points that we will iterate through to step through the simulation
         # timepoints is the indices, whereas timepoints_s is the time values in seconds
         #  NOTE: we assume the same time system for every satellite
-        timepoints_s = merged_activity_dancecard.get_timepoint_values(units='seconds', time_option ='relative_to_start')
+        timepoints_s = merged_activity_dancecard.get_tp_values(units='seconds', time_option ='relative_to_start')
 
         net_sim_sats = []
         net_sim_gs = []
@@ -85,7 +85,7 @@ class GPNetSim():
                 continue
 
             # these are the activities we performed right before the current time point
-            activities = merged_activity_dancecard.get_objects_pre_timepoint_indx(tp_indx)
+            activities = merged_activity_dancecard.get_objects_pre_tp_indx(tp_indx)
 
             # need to update the  update times on each of the entities involved in these activities.  this means that any exchange that happens after this takes account of the latest time that each entity updated its information
             # note that none of this will happen for ignored ground stations/satellites, because they should not be present in any of the activity windows
