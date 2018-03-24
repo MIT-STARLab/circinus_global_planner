@@ -24,8 +24,15 @@ from circinus_tools  import time_tools as tt
 from .routing_objects import DataRoute
 from .schedule_objects import Dancecard
 from .custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
-from .routing_objects import DataRoute
 
+class DeconflictedRoute():
+    """docstring for RouteRecord"""
+    def __init__(self,dr,available_dv):
+        self.dr = dr
+        self.available_dv = available_dv
+
+    def __repr__( self):
+        return 'DeconflictedRoute(%s,%s)'%( self.dr, self.available_dv)
 
 class RouteRecord():
     """docstring for RouteRecord"""
@@ -41,7 +48,8 @@ class RouteRecord():
         self.dv = dv
         self.routes = routes
 
-    DeconflictedRoute = namedtuple('DeconflictedRoute', 'dr available_dv')
+    def __repr__( self):
+        return 'RouteRecord(%s,%s)'%( self.dv, self.routes)
 
     def get_deconflicted_routes(self,rr_other,min_dv=0):
 
@@ -52,7 +60,7 @@ class RouteRecord():
             for dr_1 in self.routes:
                 for dr_2 in rr_other.routes:
                     #  get the last window the routes had in common
-                    split_wind = dr1.get_split(dr_2)
+                    split_wind = dr_1.get_split(dr_2)
                     available_dv = split_wind.data_vol - dr_1.data_vol
 
                     if available_dv >= min_dv: 
@@ -63,7 +71,7 @@ class RouteRecord():
             for dr_2 in rr_other.routes:
                 available_dv = dr_2.data_vol
                 if available_dv >= min_dv: 
-                    DeconflictedRoutected_routes.append(DeconflictedRoute(dr=dr_2,available_dv=available_dv)) 
+                    deconflicted_routes.append(DeconflictedRoute(dr=dr_2,available_dv=available_dv)) 
 
         return deconflicted_routes
 
@@ -90,17 +98,18 @@ class GPDataRouteSelection():
         rs_params = gp_params['gp_general_params']['route_selection_params_v2']
         gp_general_other_params = gp_params['gp_general_params']['other_params']
         link_params = gp_params['gp_orbit_link_params']['link_params']
-        gp_inst_params = gp_params['gp_instance_params']['route_selection_params']
+        gp_as_inst_params = gp_params['gp_instance_params']['activity_scheduling_params']
 
         self.num_sats=sat_params['num_sats']
         #  these times indicate the (largest) window over which we are considering routes
-        self.sel_start_utc_dt  = tt.iso_string_to_dt (gp_inst_params['start_utc'])
-        self.sel_end_utc_dt  = tt.iso_string_to_dt (gp_inst_params['end_utc'])
+        self.sel_latest_end_dt  = tt.iso_string_to_dt (gp_as_inst_params['end_utc'])
 
         # get the smallest time step used in orbit link. this is the smallest time step we need to worry about in data route selection
         self.act_timestep = min(link_params['xlnk_max_len_s'],link_params['dlnk_max_len_s'])
 
         self.min_path_dv =rs_general_params['min_path_dv_Mb']
+        #  the "effectively zero" number. defining in terms of the minimum path data volume for future proofing
+        self.dv_epsilon = self.min_path_dv / 1000
         self.wind_filter_duration =  timedelta (seconds =rs_general_params['wind_filter_duration_s'])
         self.latency_params =  gp_general_other_params['latency_calculation']
 
@@ -134,15 +143,23 @@ class GPDataRouteSelection():
         #  note that a potential source of slowness in the code below is the creation of new RouteRecord objects for every sat at every time step 
         # TODO: figure out if there's a more efficient way to do this -  for example, we shouldn't have to preserve these objects when they're more than a certain number of time steps in the past
 
+
+        start_dt = obs_wind.end
+        end_dt = min(self.sel_latest_end_dt,start_dt + self.wind_filter_duration)
+
+
+        print ('Running route selection for obs: %s'%(obs_wind))
+        print ('from %s to %s'%(start_dt, end_dt))
+
         # construct a set of dance cards for every satellite, 
         # each of which keeps track of all of the activities of satellite 
         # can possibly execute at any given time slice delta T. 
         #  start the dance card from the end of the observation window, because we are only selecting routes after the observation
-        act_dancecards = [Dancecard(obs_wind.end,self.sel_end_utc_dt,self.act_timestep,mode='timestep') for sat_indx in range (self.num_sats)]
+        act_dancecards = [Dancecard(start_dt,end_dt,self.act_timestep,mode='timestep') for sat_indx in range (self.num_sats)]
         
         #  make another set of dance cards that keep track of the route record data structures at a given time point
         #  note that even though these dance cards are in different modes, they share the same time points and time steps (both values and indices)
-        rr_dancecards = [Dancecard(obs_wind.end,self.sel_end_utc_dt,self.act_timestep,item_init=None,mode='timepoint') for sat_indx in range (self.num_sats)]
+        rr_dancecards = [Dancecard(start_dt,end_dt,self.act_timestep,item_init=None,mode='timepoint') for sat_indx in range (self.num_sats)]
 
         obs_dv = obs_wind.data_vol
 
@@ -151,11 +168,13 @@ class GPDataRouteSelection():
             #  cross-link Windows matrix is symmetric ( and upper triangular)
             for xsat_indx in  range (sat_indx+1, self.num_sats):
                 act_dancecards[sat_indx].add_winds_to_dancecard(xlnk_winds[sat_indx][xsat_indx])
+                act_dancecards[xsat_indx].add_winds_to_dancecard(xlnk_winds[sat_indx][xsat_indx])
             #  first point for every non-observing satellite has a zero data volume, no path object
             rr_dancecards[sat_indx][0] = RouteRecord(dv=0,routes=[])
 
         #  observing sat starts with an initial data route that includes only the observation window
         first_dr = DataRoute(dr_uid, route =[obs_wind], window_start_sats={obs_wind: obs_wind.sat_indx},dv=obs_dv)
+        dr_uid += 1
         #  put this initial data route on the first route record for the observing satellite
         rr_dancecards[obs_wind.sat_indx][0] = RouteRecord(dv=obs_dv,routes=[first_dr])
 
@@ -180,9 +199,13 @@ class GPDataRouteSelection():
 
         #  the main loop for the dynamic programming algorithm
         for tp_indx in timepoint_indcs:
+            if tp_indx % 10 == 0:
+                print(('tp_indx: %d/%d')%(tp_indx,len(timepoint_indcs)-1))
+
             #  nothing happens at the first time point index, because that's right at the end of the observation window
             if tp_indx == 0:
                 continue
+
 
             # get time point values
             tp_last_dt = tp_dt
@@ -190,7 +213,7 @@ class GPDataRouteSelection():
 
             for sat_indx in range (self.num_sats):
                 #  get the activities that were active during the time step immediately preceding time point
-                acts = act_dancecards[sat_indx].get_objects_pre_tp_indx(tp_indx)
+                acts = act_dancecards[sat_indx].get_objects_at_ts_pre_tp_indx(tp_indx)
 
                 #  get last route record
                 rr_last = rr_dancecards[sat_indx][tp_indx-1]
@@ -208,23 +231,40 @@ class GPDataRouteSelection():
 
                         #  if the last route record actually shows some data volume arriving at this satellite, AND we have a downlink, then we have found an optimal route to the downlink. Create a final route record and save for later.
                         if rr_last.dv > 0 and time_within(tp_last_dt,tp_dt,act.start):
+                            # rr_dlnk = copy(rr_last)
+                            rr_dlnk = RouteRecord(dv=rr_last.dv,routes=[])
                             # import ipdb
                             # ipdb.set_trace()
-                            rr_dlnk = copy(rr_last)
                             # available data volume is limited by how much we had at the last route record (sum of all data routes ending at that route record) and the downlink data volume
                             available_dv = min(rr_last.dv,act.data_vol)
                             rr_dlnk.dv = available_dv
 
                             #  now we need to update the routes within the route record to include the downlink window
-                            for dr in rr_dlnk.routes:
+                            for dr in rr_last.routes:
                                 dv_slice = min(dr.data_vol,available_dv)
                                 # we copied the data route objects with the copy call above, so this is not dangerous
-                                dr.data_vol = dv_slice
-                                dr.ID = dr_uid
-                                dr.append_wind_to_route(act,window_start_sat_indx=sat_indx)
+                                # if dv_slice < 1:
+                                #     import ipdb
+                                #     ipdb.set_trace()
+
+                                new_dr = copy(dr)
+                                new_dr.data_vol = dv_slice
+                                new_dr.ID = dr_uid
+                                new_dr.append_wind_to_route(act,window_start_sat_indx=sat_indx)
+                                rr_dlnk.routes.append(new_dr)
 
                                 dr_uid +=1
                                 available_dv -= dv_slice
+
+                                #  we run out of available data volume so no more routes can be grabbed
+                                if available_dv < self.dv_epsilon:
+                                    break
+
+                            # available data volume should be 0
+                            assert(available_dv < self.dv_epsilon)
+
+                            #  sanity check: also make sure that data volume for the route record is equal to the sum of the sum of the data volumes from all of the routes within it
+                            assert(abs(rr_dlnk.dv - sum(dr.data_vol for dr in rr_dlnk.routes)) < self.dv_epsilon)
 
                             final_route_records.append(rr_dlnk)
                             visited_act_set.add(act)
@@ -232,19 +272,47 @@ class GPDataRouteSelection():
                     if type(act) == XlnkWindow:
                         if time_within(tp_last_dt,tp_dt,act.end):
                             xlnk_options.append(act)
-                            visited_act_set.add(act)
+                            # visited_act_set.add(act)
 
                 ################
                 #  determine for every cross-link option how much data volume the cross-link can deliver to  satellite sat_indx.
+
+                # if sat_indx == 23:
+                #     import ipdb
+                #     ipdb.set_trace()
+
+
+                # def get_best_rr(t,sat_indx,tp_indx):
+                #     if tp_indx == 0:
+                #         raise RuntimeError('Should not be called with tp_indx = 0')
+
+                #  each xlnk_candidate is a single xlnk window. For each of these candidates, there's a set of de-conflicted routes that move up to xlnk.data_vol amount of data volume through that xlnk window
                 xlnk_candidates = []
+                best_dv_seen = 0
                 for xlnk in xlnk_options:
+                    #  remove redundant calculations: if we've already found a cross-link option that can transport more data volume than  the maximum possible for the current cross-link, skip the current cross-link
+                    if xlnk.data_vol <= best_dv_seen:
+                        continue
+
+                    # if sat_indx != 0 and (xlnk.sat_indx == 0 or xlnk.xsat_indx==0) :
+                    #     import ipdb
+                    #     ipdb.set_trace()
                     #  figure out which route record corresponded to the time right before this cross-link started. we can't assume it's only one time point in the past, because the cross-link could stretch across multiple timesteps
-                    tp_indx_pre_xlnk = time_getter_dc.get_tp_indx_pre_t(xlnk.start,in_units='datetime')
+                    try:
+                        tp_indx_pre_xlnk = time_getter_dc.get_tp_indx_pre_t(xlnk.start,in_units='datetime')
+                    except ValueError:
+                        # Cross-link start is before start of dance card
+                        continue
+
                     rr_last_xlnk = rr_dancecards[sat_indx][tp_indx_pre_xlnk]
                     
                     #  get the route record for the corresponding crosslink partner satellite
                     xsat_indx=xlnk.get_xlnk_partner(sat_indx)
                     rr_xsat = rr_dancecards[xsat_indx][tp_indx_pre_xlnk]
+
+                    #  remove redundant calculations: if the other satellite has less data volume at this time point than we do, then we can't get any more data volume from them, and it's pointless to consider it
+                    if rr_last_xlnk.dv > rr_xsat.dv:
+                        continue
 
                     #  need to figure out what data on the other satellite is data that we have not yet received on sat_indx. this returns a set of de-conflicted routes that all send valid, non-duplicated data to sat_indx
                     deconf_rts = rr_last_xlnk.get_deconflicted_routes(rr_xsat,min_dv=self.min_path_dv)
@@ -252,15 +320,27 @@ class GPDataRouteSelection():
                     #  now we need to figure out how many of these routes we can use, based upon the available crosslink bandwidth
                     xlnk_dv = xlnk.data_vol
                     xlnk_candidate_rts = []
+                    # Cumulative data volume used on the crosslink by the route candidates. must be less than the available crosslink data volume
                     x_cum_dv = 0
                     # deconf_rt is a DeconflictedRoute namedtuple, from above
                     for deconf_rt in deconf_rts:
+                        # if we're less than the total crosslink data volume
                         if x_cum_dv + deconf_rt.available_dv <= xlnk_dv:
                             xlnk_candidate_rts.append(deconf_rt)
                             x_cum_dv += deconf_rt.available_dv
+                        # also handle the case where we don't have enough available data volume to fulfill all of the potential for route, but we can still grab enough data volume for that route ( greater than specified minimum) to use it
+                        else:
+                            available_dv = xlnk_dv - x_cum_dv 
+                            #  check if greater than specified minimum
+                            if available_dv >= self.min_path_dv:
+                                deconf_rt.available_dv = available_dv
+                                xlnk_candidate_rts.append(deconf_rt)
+                                x_cum_dv += available_dv
+
 
                     #  make a new candidate entry with a record of the new data volume that we'll have if we choose that candidate.  also bring along some other relevant objects for bookkeeping
                     new_dv = rr_last_xlnk.dv + x_cum_dv
+                    best_dv_seen = max(best_dv_seen,x_cum_dv)
                     # XLNK_CANDIDATES:       0         1            2                3
                     xlnk_candidates.append((new_dv,rr_last_xlnk,xlnk_candidate_rts,xlnk))
 
@@ -278,14 +358,16 @@ class GPDataRouteSelection():
                 #  now, for the best cross-link candidate (if there is one),  make a new route record
                 if found_candidates and best_xlnk_cand[0] > rr_last.dv:
                     # Note: the indices called out below correspond to the fields labeled in XLNK_CANDIDATES line above
-                    #  need to make a copy here because the last route record may be visited again, and needs to be left as is
+                    #  need to make a copy here because the last route record may be visited again, and the object needs to be left as is
                     rr_new = copy(best_xlnk_cand[1])
                     rr_new.dv = best_xlnk_cand[0]
                     xlnk_candidate_rts = best_xlnk_cand[2]
                     xlnk_wind = best_xlnk_cand[3]
+
                     
                     # deconf_rt is a DeconflictedRoute namedtuple, from above
                     for deconf_rt in xlnk_candidate_rts:
+                        #  again, make a copy because the existing data routes need to be left as is for future consideration and the algorithm
                         new_dr = copy(deconf_rt.dr)
                         #  we did not append the cross-link window to the route before ( for sake of efficiency), so now we need to do it. The second argument below records the fact that the cross-link started on the cross-link partner,  not on satellite sat_indx
                         new_dr.data_vol = deconf_rt.available_dv
@@ -314,7 +396,7 @@ class GPDataRouteSelection():
 
         if verbose:
             for rr_indx, rr in  enumerate (self.final_route_records):
-                print ('route record %d, %d routes'%(rr_indx,len(rr.routes)))
+                print ('route record %d, %d routes, sum rts/ dlnk dv: %f/%f Mb '%(rr_indx,len(rr.routes),sum(dr.data_vol for dr in rr.routes),rr.routes[0].get_dlnk().data_vol))
                 for dr_indx, dr in  enumerate (rr.routes):
                     print('  %d %s'%(dr_indx,dr))
 

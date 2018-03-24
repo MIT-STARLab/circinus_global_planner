@@ -10,6 +10,17 @@ from circinus_tools  import time_tools as tt
 from circinus_tools  import  constants as const
 from circinus_tools.activity_window import ActivityWindow
 
+DATE_STRING_FORMAT = 'short'
+# DATE_STRING_FORMAT = 'iso'
+
+def short_date_string(dt):
+    return dt.strftime("%H:%M:%S")
+
+def date_string(dt):
+    if DATE_STRING_FORMAT == 'iso':
+        return dt.isoformat()
+    if DATE_STRING_FORMAT == 'short':
+        return  short_date_string(dt)
 
 class ObsWindow(ActivityWindow):
     def __init__(self, window_ID, sat_indx, target_IDs, sat_target_indx, is_urgent, start, end):
@@ -55,10 +66,10 @@ class ObsWindow(ActivityWindow):
         self.unmodified_data_vol = self.data_vol
 
     def __str__(self):
-        return  "(ObsWindow id %d; %d, targs %s; %s,%s)" % ( self.window_ID, self.sat_indx, str(self.target_IDs),self.start.isoformat (),self.end.isoformat())
+        return  "(ObsWindow id %d; sat %d; dv %f; targs %s; %s,%s)" % ( self.window_ID, self.sat_indx,  self.data_vol,str(self.target_IDs),date_string(self.start),date_string(self.end))
 
     def __repr__(self):
-        return  "(ObsWindow id %d; %d, targs %s; %s,%s)" % (self.window_ID,self.sat_indx, str(self.target_IDs),self.start.isoformat (),self.end.isoformat())
+        return  "(ObsWindow id %d; sat %d; dv %f; targs %s; %s,%s)" % (self.window_ID,self.sat_indx,  self.data_vol,str(self.target_IDs),date_string(self.start),date_string(self.end))
 
 
 class CommWindow(ActivityWindow):
@@ -217,10 +228,10 @@ class DlnkWindow(CommWindow):
         print('......')
 
     def __str__(self):
-        return  "(DlnkWindow id %d; %d, gs %d; %s,%s)" % (self.window_ID,self.sat_indx, self.gs_indx,self.start.isoformat (),self.end.isoformat())
+        return  "(DlnkWindow id %d; sat %d; dv %f; gs %d; %s,%s)" % (self.window_ID,self.sat_indx,  self.data_vol, self.gs_indx,date_string(self.start),date_string(self.end))
 
     def __repr__(self):
-        return  "(DlnkWindow id %d; %d, gs %d; %s,%s)" % (self.window_ID,self.sat_indx, self.gs_indx,self.start.isoformat (),self.end.isoformat())
+        return  "(DlnkWindow id %d; sat %d; dv %f; gs %d; %s,%s)" % (self.window_ID,self.sat_indx,  self.data_vol, self.gs_indx,date_string(self.start),date_string(self.end))
 
 class XlnkWindow(CommWindow):
     def __init__(self, window_ID, sat_indx, xsat_indx, sat_xsat_indx, start, end):
@@ -267,10 +278,10 @@ class XlnkWindow(CommWindow):
         return sum(self.routed_data_vol_to_sat_indx[key] for key in self.routed_data_vol_to_sat_indx.keys())
 
     def __str__(self):
-        return  "(XlnkWindow id %d; %d,%d; %s,%s)" % (self.window_ID,self.sat_indx, self.xsat_indx,self.start.isoformat (),self.end.isoformat())
+        return  "(XlnkWindow id %d; sats %d,%d; dv %f; %s,%s)" % (self.window_ID,self.sat_indx, self.xsat_indx,self.data_vol, date_string(self.start),date_string(self.end))
 
     def __repr__(self):
-        return  "(XlnkWindow id %d; %d,%d; %s,%s)" % (self.window_ID,self.sat_indx, self.xsat_indx,self.start.isoformat (),self.end.isoformat())
+        return  "(XlnkWindow id %d; sats %d,%d; dv %f; %s,%s)" % (self.window_ID,self.sat_indx, self.xsat_indx,self.data_vol, date_string(self.start),date_string(self.end))
 
     def get_xlnk_partner(self,sat_indx):
         """return indx of the cross-linked partner
@@ -312,7 +323,7 @@ class EclipseWindow(ActivityWindow):
         super(EclipseWindow, self).__init__(start, end, window_ID)
 
     def __str__(self):
-        return  "(EclipseWindow id %d; %s,%s)" % ( self.window_ID,self.start.isoformat (),self.end.isoformat())
+        return  "(EclipseWindow id %d; %s,%s)" % ( self.window_ID,date_string(self.start),date_string(self.end))
 
     def __repr__(self):
-        return  "(EclipseWindow id %d; %s,%s)" % ( self.window_ID,self.start.isoformat (),self.end.isoformat())
+        return  "(EclipseWindow id %d; %s,%s)" % ( self.window_ID,date_string(self.start),date_string(self.end))

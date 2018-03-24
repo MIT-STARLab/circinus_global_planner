@@ -86,10 +86,10 @@ class GPProcessorIO():
             elif obs_end > self.scenario_end:
                 obs_end = self.scenario_end
 
-            obs_start_indx = dc_target_IDs.get_post_ts_indx_from_t(obs_start)
-            obs_end_indx = dc_target_IDs.get_post_ts_indx_from_t(obs_end) - 1 # -1 because last time slice is before wind.end
+            obs_start_indx = dc_target_IDs.get_ts_indx_from_t(obs_start)
+            obs_end_indx = dc_target_IDs.get_ts_indx_from_t(obs_end)
 
-            for indx in range(obs_start_indx,obs_end_indx+1):
+            for indx in range(obs_start_indx,obs_end_indx+1): #  make sure to include end index
                 dc_target_IDs.dancecard[indx] += obs.target_IDs
 
         curr_id_list = dc_target_IDs.dancecard[0]
@@ -103,7 +103,7 @@ class GPProcessorIO():
                 # obs_end = self.scenario_start + timedelta(seconds=(indx+1)*self.tstep_sec)
                 obs_end = dc_target_IDs.get_pre_tp_from_ts_indx(indx+1)  # plus one on index because we're looking for abs time after last timestep
 
-                # todo: it's should probably add filtering for minimum length observations here
+                # todo: should probably add filtering for minimum length observations here
 
                 if len(curr_id_list) > 0:  # if it's not empty
                     # create a new observation based on the previous set of targets

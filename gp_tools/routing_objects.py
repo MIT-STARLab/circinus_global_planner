@@ -7,6 +7,18 @@ from copy import copy
 from circinus_tools  import  constants as const
 from .custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow
 
+DATE_STRING_FORMAT = 'short'
+# DATE_STRING_FORMAT = 'iso'
+
+def short_date_string(dt):
+    return dt.strftime("%H:%M:%S")
+
+def date_string(dt):
+    if DATE_STRING_FORMAT == 'iso':
+        return dt.isoformat()
+    if DATE_STRING_FORMAT == 'short':
+        return  short_date_string(dt)
+
 class DataRoute(object):
     '''
     Contains all the relevant information about the path taken by a single data packet traveling through the satellite network
@@ -34,7 +46,7 @@ class DataRoute(object):
         self.validate_route()
 
     def __copy__(self):
-        newone = type(self)(self.ID)
+        newone = type(self)(self.ID,dv=self.data_vol)
         #  make a shallow copy of these container objects -  we want to refer to the same nested objects within the containers, but want a new container in both cases
         newone.route = copy(self.route)
         newone.window_start_sats = copy(self.window_start_sats)
@@ -78,21 +90,21 @@ class DataRoute(object):
         for wind in self.route:
 
             if type (wind)  == ObsWindow:
-                start_str =  "%.0fs" % ( wind.start-time_base).total_seconds() if  time_base else  wind.start.isoformat()
-                end_str =  "%.0fs" % ( wind.end-time_base).total_seconds() if  time_base else  wind.end.isoformat()
-                out_string  +=  "o %d; %s,%s" % (wind.sat_indx,start_str,end_str)
+                start_str =  "%.0fs" % ( wind.start-time_base).total_seconds() if  time_base else  date_string(wind.start)
+                end_str =  "%.0fs" % ( wind.end-time_base).total_seconds() if  time_base else  date_string(wind.end)
+                out_string  +=  "o %d; dv %.0f; %s,%s" % (wind.sat_indx, wind.data_vol,start_str,end_str)
             elif type (wind)  == XlnkWindow:
-                start_str =  "%.0fs" % ( wind.start-time_base).total_seconds() if  time_base else  wind.start.isoformat()
-                end_str =  "%.0fs" % ( wind.end-time_base).total_seconds() if  time_base else  wind.end.isoformat()
+                start_str =  "%.0fs" % ( wind.start-time_base).total_seconds() if  time_base else  date_string(wind.start)
+                end_str =  "%.0fs" % ( wind.end-time_base).total_seconds() if  time_base else  date_string(wind.end)
                 sat_indx=self.window_start_sats[wind]
                 # xsat_indx=wind.xsat_indx  if self.window_start_sats[wind] == wind.sat_indx else wind.sat_indx
                 xsat_indx=wind.get_xlnk_partner(self.window_start_sats[wind])
-                out_string  +=  " -> x %d,%d; %s,%s" % (sat_indx, xsat_indx,start_str,end_str)
+                out_string  +=  " -> x %d,%d; dv %.0f; %s,%s" % (sat_indx, xsat_indx, wind.data_vol,start_str,end_str)
             elif type (wind)  == DlnkWindow:
-                start_str =  "%.0fs" % ( wind.start-time_base).total_seconds() if  time_base else  wind.start.isoformat()
-                end_str =  "%.0fs" % ( wind.end-time_base).total_seconds() if  time_base else  wind.end.isoformat()
+                start_str =  "%.0fs" % ( wind.start-time_base).total_seconds() if  time_base else  date_string(wind.start)
+                end_str =  "%.0fs" % ( wind.end-time_base).total_seconds() if  time_base else  date_string(wind.end)
                 sat_indx= wind.sat_indx
-                out_string  +=  " -> d %d; %s,%s" % (sat_indx,start_str,end_str)
+                out_string  +=  " -> d %d; dv %.0f; %s,%s" % (sat_indx, wind.data_vol,start_str,end_str)
         
         return out_string
 
@@ -100,7 +112,14 @@ class DataRoute(object):
         if not self.scheduled_dv:
             return  '('+self.get_route_string()+')'
         else:
-            return  '('+self.get_route_string()+'; sched dv: %.0f/%.0f Mb'%( self.scheduled_dv, self.data_vol)+')'
+            if self.scheduled_dv == const.UNASSIGNED:
+                return  '('+self.get_route_string()+'; sched dv: %s/%.0f Mb'%( 'none', self.data_vol)+')'
+            else:
+                return  '('+self.get_route_string()+'; sched dv: %.0f/%.0f Mb'%( self.scheduled_dv, self.data_vol)+')'
+
+    def __getitem__(self, key):
+        """ getter for internal route by index"""
+        return self.route[key]
 
     def validate_route (self):
         """ validates timing and ordering of route
@@ -150,16 +169,22 @@ class DataRoute(object):
         #  route should always start the same place, the initial observation window
         assert self.route[0] == other.route[0]
 
-        split_wind = None
+        len_other = len(other.route)
+
+        split_windex = 0
         for windex,wind in enumerate(self.route):
+            # skip because we have already asserted this
             if windex == 0:
                 continue
 
+            if windex+1 > len_other:
+                break
+
             #  note that this tests the window ID for equality
             if wind != other.route[windex]:
-                split_wind = self.route[windex-1]
+                split_windex = windex-1
 
-        return split_wind
+        return self.route[split_windex]
 
 
 

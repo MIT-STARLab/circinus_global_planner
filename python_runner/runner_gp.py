@@ -283,6 +283,8 @@ class GlobalPlannerRunner:
                 time_elapsed = t_b-t_a
                 # end algorithm
 
+                print ('len(routes)')
+                print (len(routes))
                 print ('obs.data_vol, total dlnk dv, ratio')
                 print (obs.data_vol,sum(dr.data_vol for dr in routes),sum(dr.data_vol for dr in routes)/obs.data_vol)
                 print ('min latency, ave latency, max latency')
@@ -432,11 +434,14 @@ class GlobalPlannerRunner:
                 sel_obs_winds_flat,
                 sel_obs_winds_flat,
                 dlnk_winds_flat,
-                sel_dlnk_winds_flat, 
+                # sel_dlnk_winds_flat, 
+                [],
                 xlnk_winds_flat,
-                sel_xlnk_winds_flat,
+                # sel_xlnk_winds_flat,
+                [],
                 route_indcs_by_wind,
-                obs.start,
+                self.scenario_params['start_utc_dt'],
+                # obs.start,
                 obs.start + timedelta( seconds= self.rs_general_params['wind_filter_duration_s']),
                 # self.scenario_params['start_utc_dt'],
                 # self.scenario_params['start_utc_dt'] + timedelta( seconds= self.rs_general_params['wind_filter_duration_s']),
@@ -756,10 +761,10 @@ class PipelineRunner:
 
         #  check that it's the right version
         if gp_instance_params['version'] == "0.1": 
-            gp_instance_params['route_selection_params']['start_utc_dt'] = tt.iso_string_to_dt ( gp_instance_params['route_selection_params']['start_utc'])
+            # gp_instance_params['route_selection_params']['start_utc_dt'] = tt.iso_string_to_dt ( gp_instance_params['route_selection_params']['start_utc'])
             gp_instance_params['activity_scheduling_params']['start_utc_dt'] = tt.iso_string_to_dt ( gp_instance_params['activity_scheduling_params']['start_utc'])
             gp_instance_params['metrics_params']['start_utc_dt'] = tt.iso_string_to_dt ( gp_instance_params['metrics_params']['start_utc'])
-            gp_instance_params['route_selection_params']['end_utc_dt'] = tt.iso_string_to_dt ( gp_instance_params['route_selection_params']['end_utc'])
+            # gp_instance_params['route_selection_params']['end_utc_dt'] = tt.iso_string_to_dt ( gp_instance_params['route_selection_params']['end_utc'])
             gp_instance_params['activity_scheduling_params']['end_utc_dt'] = tt.iso_string_to_dt ( gp_instance_params['activity_scheduling_params']['end_utc'])
             gp_instance_params['metrics_params']['end_utc_dt'] = tt.iso_string_to_dt ( gp_instance_params['metrics_params']['end_utc'])
         else:

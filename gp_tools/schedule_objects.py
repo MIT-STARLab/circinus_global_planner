@@ -174,11 +174,14 @@ class Dancecard(object):
         """
 
         if in_units == 'datetime':
+            if t < self.dancecard_start_dt:
+                raise ValueError('t (%s) is before dancecard start (%s)'%(t.isoformat(),self.dancecard_start_dt.isoformat()))
+
             return floor((t - self.dancecard_start_dt).total_seconds() / self.tstep_sec)
         else:
             raise NotImplementedError
 
-    def get_objects_pre_tp_indx(self,tp_indx):
+    def get_objects_at_ts_pre_tp_indx(self,tp_indx):
         """ get objects for timestep preceding timepoint index tp_indx
         
         Gets the objects stored in the dance card during the timestep immediately preceding the timepoint represented by tp_indx
@@ -237,10 +240,37 @@ class Dancecard(object):
 
         return indx
 
-    def get_post_ts_indx_from_t(self, t, in_units='datetime'):
-        """get index of time step following the time point closest to t
+    @staticmethod
+    def get_ts_indx(toi, base_time, tstep_sec):
+        '''
+        Get the index of the timestep (of duration tstep_sec) in which toi of interest falls
+
+        e.g.
+        Dancecard structure:
+        |  i=0    |  i=1    |  i=2    |  i=3    ...   |  i=N    |
+        | tstep 0 | tstep 1 | tstep 2 | tstep 3 ...   | tstep N |
+                       ^
+                  *   toi  * (toi anywhere btwn *) --> returns 1
+        ^
+        base_time
+
+        Uses a floor function, so if toi equals timepoint before timestep, the immediately following timestep index is returned. If toi is almost, but not quite, at the timepoint at the end of a timestep, still returns index of current ts.
+
+        :param datetime toi: time of interest
+        :param datetime base_time: first timepoint of dancecard
+        :param float tstep_sec: the size of timestep in the dancecard
+        :return: the index of timestep containing toi (inclusive of first timepoint, exclusive of trailing tp)
+        '''
+
+        toi_sec = (toi - base_time).total_seconds()
+        indx = int(floor(toi_sec / tstep_sec))
+
+        return indx
+
+    def get_ts_indx_from_t(self, t, in_units='datetime'):
+        """get index of time step containing time t
         
-        Get the index of the slice of time (of duration tstep_sec) immediately after input time of interest (t), using the base time for this dancecard. Will first round t to the nearest timepoint based on tstep_sec.
+        Get the index of timestep in which input time of interest (t) is contained, using the base time for this dancecard.
 
         :param t:  the time of interest
         :type t: [specified by in_units]
@@ -252,7 +282,7 @@ class Dancecard(object):
         """
 
         if in_units == 'datetime':
-            return Dancecard.get_post_ts_indx(t, self.dancecard_start_dt, self.tstep_sec)
+            return Dancecard.get_ts_indx(t, self.dancecard_start_dt, self.tstep_sec)
         else:
             raise NotImplementedError
 
@@ -284,16 +314,16 @@ class Dancecard(object):
         if self.mode == 'timepoint':
             raise RuntimeError("this method can't be used in timepoint mode")
 
-        dancecard_last_indx = len(self.dancecard) - 1
+        dancecard_last_indx = self.num_timesteps - 1
 
         for wind in winds:
-            act_start_indx = Dancecard.get_post_ts_indx(wind.start, self.dancecard_start_dt, self.tstep_sec)
-            act_end_indx = Dancecard.get_post_ts_indx(wind.end, self.dancecard_start_dt, self.tstep_sec) - 1 # -1 because last time slice is before wind.end
+            act_start_indx = Dancecard.get_ts_indx(wind.start, self.dancecard_start_dt, self.tstep_sec)
+            act_end_indx = Dancecard.get_ts_indx(wind.end, self.dancecard_start_dt, self.tstep_sec)
 
             act_start_indx = max(0, act_start_indx)
             act_end_indx = min(dancecard_last_indx, act_end_indx)
 
-            for indx in range(act_start_indx, act_end_indx + 1): # go all the way up to end indx
+            for indx in range(act_start_indx, act_end_indx + 1): # Make sure to include end index
                 self.dancecard[indx].append(wind)  # add object to schedule. Note this is not a deepcopy!
 
     def remove_winds_from_dancecard(self, winds, unmodified_yes = False):
@@ -301,62 +331,23 @@ class Dancecard(object):
         Remove a set of windows from the dancecard according to their start and stop times. Remove only the objects corresponding to the winds from the dancecard
 
         :param winds: list of windows to remove. Can be a list with a single element, of course
-        :param bool unmodified_yes: set to true if you want to remove everything from the initially created start to end time (unmodded by search process)
         :return:
         '''
         if self.mode == 'timepoint':
             raise RuntimeError("this method can't be used in timepoint mode")
 
-        dancecard_last_indx = len(self.dancecard) - 1
+        dancecard_last_indx = self.num_timesteps - 1
 
         for wind in winds:
-            wind_start = wind.start
-            wind_end = wind.end
-            if unmodified_yes:
-                wind_start = wind.unmodified_start
-                wind_end = wind.unmodified_end
-
-            act_start_indx = Dancecard.get_post_ts_indx(wind_start, self.dancecard_start_dt, self.tstep_sec)
-            act_end_indx = Dancecard.get_post_ts_indx(wind_end, self.dancecard_start_dt, self.tstep_sec) - 1 # -1 because last time slice is before wind.end
+            act_start_indx = Dancecard.get_ts_indx(wind.start, self.dancecard_start_dt, self.tstep_sec)
+            act_end_indx = Dancecard.get_ts_indx(wind.end, self.dancecard_start_dt, self.tstep_sec)
 
             act_start_indx = max(0, act_start_indx)
             act_end_indx = min(dancecard_last_indx, act_end_indx)
 
-            for indx in xrange(act_start_indx, act_end_indx + 1): # go all the way up to end indx
+            for indx in range(act_start_indx, act_end_indx + 1): #  make sure to include end index
 
-                # todo: this is super hacky, shouldn't use try...catch as a shortcut for normal operations
                 try:
                     self.dancecard[indx].remove(wind)  # remove object
                 except ValueError:
                     pass  #already been removed
-
-    def remove_wind_durations_from_dancecard(self, winds, unmodified_yes = False):
-        '''
-        Remove a set of windows as well as all potentially overlapping windows from the dancecard according to their start and stop times. Removes not only the objects from winds, but also everything else in the dancecard for the durations of the winds.
-
-        Note that this function is dangerous to call on a dancecard if you don't know what you're doing. For example, crosslink objects appear in the dancecards for both crosslinking sats. Could leave one sat thinking there's still xlnk availability when there's not
-
-        :param winds: list of windows to remove. Can be a list with a single element, of course
-        :param bool unmodified_yes: set to true if you want to remove everything from the initially created start to end time (unmodded by search process)
-        :return:
-        '''
-        if self.mode == 'timepoint':
-            raise RuntimeError("this method can't be used in timepoint mode")
-
-        dancecard_last_indx = len(self.dancecard) - 1
-
-        for wind in winds:
-            wind_start = wind.start
-            wind_end = wind.end
-            if unmodified_yes:
-                wind_start = wind.unmodified_start
-                wind_end = wind.unmodified_end
-
-            act_start_indx = Dancecard.get_post_ts_indx(wind_start, self.dancecard_start_dt, self.tstep_sec)
-            act_end_indx = Dancecard.get_post_ts_indx(wind_end, self.dancecard_start_dt, self.tstep_sec) - 1 # -1 because last time slice is before wind.end
-
-            act_start_indx = max(0, act_start_indx)
-            act_end_indx = min(dancecard_last_indx, act_end_indx)
-
-            for indx in range(act_start_indx, act_end_indx + 1): # go all the way up to end indx
-                self.dancecard[indx] = [] # clear all objects from the dancecard here.
