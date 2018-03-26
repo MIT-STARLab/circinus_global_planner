@@ -14,6 +14,7 @@ import argparse
 import pickle
 import numpy as np
 from copy import deepcopy
+from collections import OrderedDict
 
 
 #  local repo includes. todo:  make this less hackey
@@ -411,48 +412,61 @@ class GlobalPlannerRunner:
 
     def plot_route_selection_results ( self,obs_routes,dlnk_winds_flat,xlnk_winds_flat,num_obs_to_plot):
 
+        num_dlnks_to_plot = 100
         for rts_indx, routes in enumerate (obs_routes):
             if rts_indx >= num_obs_to_plot:
                 break
 
-            # TODO:  this stuff needs to be  changed
-            sel_obs_winds_flat, sel_dlnk_winds_flat, \
-            sel_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind = self.io_proc.extract_flat_windows (routes)
+            rts_by_dlnk = OrderedDict()
 
-            obs = None
-            for sat_indx in  range (self.sat_params['num_sats']):
-                for obs in sel_obs_winds_flat[sat_indx]:
-                    if obs:
-                        break
+            for dr in routes:
+                dlnk = dr.get_dlnk()
+                rts_by_dlnk.setdefault(dlnk,[]).append(dr)
 
-            sats_to_include =  range (self.sat_params['num_sats'])
-            # sats_to_include = [0,9,21,22,23]
+            for dlnk_indx, dlnk in enumerate (rts_by_dlnk.keys()):
+                if dlnk_indx >= num_dlnks_to_plot:
+                    break
 
-            #  plot the selected down links and cross-links
-            self.gp_plot.plot_winds(
-                sats_to_include,
-                sel_obs_winds_flat,
-                sel_obs_winds_flat,
-                dlnk_winds_flat,
-                # sel_dlnk_winds_flat, 
-                [],
-                xlnk_winds_flat,
-                # sel_xlnk_winds_flat,
-                [],
-                route_indcs_by_wind,
-                self.scenario_params['start_utc_dt'],
-                # obs.start,
-                obs.start + timedelta( seconds= self.rs_general_params['wind_filter_duration_s']),
-                # self.scenario_params['start_utc_dt'],
-                # self.scenario_params['start_utc_dt'] + timedelta( seconds= self.rs_general_params['wind_filter_duration_s']),
-                # self.scenario_params['end_utc_dt']-timedelta(minutes=200),
-                plot_title = 'Route Plot', 
-                plot_size_inches = (18,12),
-                plot_include_dlnk_labels = self.rs_general_params['plot_include_dlnk_labels'],
-                plot_include_xlnk_labels = self.rs_general_params['plot_include_xlnk_labels'],
-                show= False,
-                fig_name='plots/test_rs_{0}.pdf'.format (rts_indx)
-            )
+                rts = rts_by_dlnk[dlnk]
+
+                # TODO:  this stuff needs to be  changed
+                # (sel_obs_winds_flat, sel_dlnk_winds_flat, sel_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind) = self.io_proc.extract_flat_windows (routes)
+                (sel_obs_winds_flat, sel_dlnk_winds_flat, sel_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind) = self.io_proc.extract_flat_windows (rts)
+
+                obs = rts[0].get_obs()
+                # for sat_indx in  range (self.sat_params['num_sats']):
+                #     for obs in sel_obs_winds_flat[sat_indx]:
+                #         if obs:
+                #             break
+
+                sats_to_include =  range (self.sat_params['num_sats'])
+                # sats_to_include = [0,9,21,22,23]
+
+                #  plot the selected down links and cross-links
+                self.gp_plot.plot_winds(
+                    sats_to_include,
+                    sel_obs_winds_flat,
+                    sel_obs_winds_flat,
+                    dlnk_winds_flat,
+                    sel_dlnk_winds_flat, 
+                    # [],
+                    xlnk_winds_flat,
+                    sel_xlnk_winds_flat,
+                    # [],
+                    route_indcs_by_wind,
+                    self.scenario_params['start_utc_dt'],
+                    # obs.start,
+                    obs.start + timedelta( seconds= self.rs_general_params['wind_filter_duration_s']),
+                    # self.scenario_params['start_utc_dt'],
+                    # self.scenario_params['start_utc_dt'] + timedelta( seconds= self.rs_general_params['wind_filter_duration_s']),
+                    # self.scenario_params['end_utc_dt']-timedelta(minutes=200),
+                    plot_title = 'Route Plot', 
+                    plot_size_inches = (18,12),
+                    plot_include_dlnk_labels = self.rs_general_params['plot_include_dlnk_labels'],
+                    plot_include_xlnk_labels = self.rs_general_params['plot_include_xlnk_labels'],
+                    show= False,
+                    fig_name='plots/test_rs_o{0}_d{1}.pdf'.format (rts_indx,dlnk_indx)
+                )
 
 
     def  plot_activity_scheduling_results ( self,obs_routes,routes,energy_usage,ecl_winds,metrics_plot_inputs):
@@ -665,7 +679,7 @@ class GlobalPlannerRunner:
         print('route selection output stage')
 
         if self.rs_general_params['plot_route_selection_results']:
-            self.plot_route_selection_results (obs_routes,dlnk_winds_flat,xlnk_winds_flat,num_obs_to_plot = 1)
+            self.plot_route_selection_results (obs_routes,dlnk_winds_flat,xlnk_winds_flat,num_obs_to_plot = 5)
 
         #################################
         #  activity scheduling stage
@@ -737,7 +751,7 @@ class PipelineRunner:
             orbit_prop_inputs['sat_params']['num_sats'] = orbit_prop_inputs['sat_params']['num_satellites']
             orbit_prop_inputs['gs_params']['num_gs'] = orbit_prop_inputs['gs_params']['num_stations']
             orbit_prop_inputs['sat_params']['pl_data_rate'] = orbit_prop_inputs['sat_params']['payload_data_rate_Mbps']
-            orbit_prop_inputs['sat_orbit_params'], dummy = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_orbit_params'],force_duplicate =  True)
+            # orbit_prop_inputs['sat_orbit_params'], dummy = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_orbit_params'],force_duplicate =  True)
             orbit_prop_inputs['sat_params']['power_params'], all_sat_ids1 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['power_params'])
             orbit_prop_inputs['sat_params']['initial_state'], all_sat_ids2 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['initial_state'])
 
@@ -747,6 +761,7 @@ class PipelineRunner:
 
             #  grab the list for satellite ID order.  if it's "default", we will create it and save it for future use here
             sat_id_order=orbit_prop_inputs['sat_params']['sat_id_order']
+            #  make the satellite ID order. if the input ID order is default, then will assume that the order is the same as all of the IDs found in the power parameters
             sat_id_order = io_tools.make_and_validate_sat_id_order(sat_id_order,orbit_prop_inputs['sat_params']['num_sats'],all_sat_ids1)
             orbit_prop_inputs['sat_params']['sat_id_order'] = sat_id_order
 

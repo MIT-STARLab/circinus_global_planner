@@ -92,19 +92,19 @@ class DataRoute(object):
             if type (wind)  == ObsWindow:
                 start_str =  "%.0fs" % ( wind.start-time_base).total_seconds() if  time_base else  date_string(wind.start)
                 end_str =  "%.0fs" % ( wind.end-time_base).total_seconds() if  time_base else  date_string(wind.end)
-                out_string  +=  "o %d; dv %.0f; %s,%s" % (wind.sat_indx, wind.data_vol,start_str,end_str)
+                out_string  +=  "o %d dv %.0f %s,%s" % (wind.sat_indx, wind.data_vol,start_str,end_str)
             elif type (wind)  == XlnkWindow:
                 start_str =  "%.0fs" % ( wind.start-time_base).total_seconds() if  time_base else  date_string(wind.start)
                 end_str =  "%.0fs" % ( wind.end-time_base).total_seconds() if  time_base else  date_string(wind.end)
                 sat_indx=self.window_start_sats[wind]
                 # xsat_indx=wind.xsat_indx  if self.window_start_sats[wind] == wind.sat_indx else wind.sat_indx
                 xsat_indx=wind.get_xlnk_partner(self.window_start_sats[wind])
-                out_string  +=  " -> x %d,%d; dv %.0f; %s,%s" % (sat_indx, xsat_indx, wind.data_vol,start_str,end_str)
+                out_string  +=  " -> x %d,%d dv %.0f %s,%s" % (sat_indx, xsat_indx, wind.data_vol,start_str,end_str)
             elif type (wind)  == DlnkWindow:
                 start_str =  "%.0fs" % ( wind.start-time_base).total_seconds() if  time_base else  date_string(wind.start)
                 end_str =  "%.0fs" % ( wind.end-time_base).total_seconds() if  time_base else  date_string(wind.end)
                 sat_indx= wind.sat_indx
-                out_string  +=  " -> d %d; dv %.0f; %s,%s" % (sat_indx, wind.data_vol,start_str,end_str)
+                out_string  +=  " -> d %d dv %.0f %s,%s" % (sat_indx, wind.data_vol,start_str,end_str)
         
         return out_string
 
@@ -171,18 +171,21 @@ class DataRoute(object):
 
         len_other = len(other.route)
 
-        split_windex = 0
+        #  this will record the index of the last common window of the two routes
+        #  increment every time a window is proven to be contained in both routes
+        split_windex = -1
         for windex,wind in enumerate(self.route):
-            # skip because we have already asserted this
-            if windex == 0:
-                continue
 
+            #  if we reached a window in self that is longer than the route for other
             if windex+1 > len_other:
                 break
 
             #  note that this tests the window ID for equality
             if wind != other.route[windex]:
-                split_windex = windex-1
+                break
+
+            #  if we've made it here, then both of the data routes must have this window in common
+            split_windex += 1
 
         return self.route[split_windex]
 

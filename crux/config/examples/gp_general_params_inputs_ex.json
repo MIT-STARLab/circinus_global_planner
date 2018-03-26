@@ -16,12 +16,12 @@
         "aoi_units": "hours"
     },
     "route_selection_general_params": {
-        "wind_filter_duration_s" : 1800,
+        "wind_filter_duration_s" : 3600,
         "plot_include_dlnk_labels":    false,
         "plot_include_xlnk_labels":   true,
-        "plot_route_selection_results":   false,
+        "plot_route_selection_results":   true,
         "adjust_window_timing_post_selection": true,
-        "min_path_dv_Mb" :  1
+        "min_path_dv_Mb" :  1 
     },
     "route_selection_params_v1": {
         "num_paths" :  5,
