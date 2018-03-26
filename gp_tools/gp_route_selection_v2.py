@@ -10,6 +10,8 @@ from  datetime import timedelta
 from copy import copy
 from collections import namedtuple
 
+from scipy.optimize import linprog
+
 # for Birdseye use
 # from cmdline:
 # $ birdseye
@@ -92,20 +94,114 @@ class RouteRecord():
     def __repr__( self):
         return 'RouteRecord(%s,%s,%s)'%( self.dv, date_string(self.release_time),self.routes)
 
-    def get_deconflicted_routes(self,rr_other,min_dv=0):
+    def get_deconflicted_routes(self,rr_other,min_dv=0,verbose = False):
+        """ determines which routes from other route record can be extended to self route record
+        
+        determines from the set of routes contained in self which routes in rr_other are able to be extended to the satellite and time point for the self route record. determines this by figuring out what data volume is still available in windows to run routes through, and optimally selecting which routes from rr_other are allocated that data volume. optimal here means the allocation that maximizes the data volume available in the de-conflicted routes returned
+        :param rr_other:  the other route record, containing a set of data routes possible to extend to self
+        :type rr_other: RouteRecord
+        :param min_dv:  minimum data volume allowable for a route to be selectable, defaults to 0
+        :type min_dv: number, optional
+        :param verbose: output verbosity, defaults to False
+        :type verbose: bool, optional
+        :returns:  a set of de-conflicted routes with data volume allocations that, if all selected together, would violate no constraints on window data volume capacities across all routes in self
+        :rtype: {list[DeconflictedRoute]}
+        """
 
         deconflicted_routes = []
 
         #  if self has routes, then it's possible that these routes share some of the same data from the routes in the other route record ( on the other satellite). this could come up because the routes share some of the same initial windows. we need to determine where the routes split, and use that to determine how much data volume is actually unique ( hasn't already arrived on self), and available to receive
         if len(self.routes) > 0:
-            for dr_1 in self.routes:
-                for dr_2 in rr_other.routes:
-                    #  get the last window the routes had in common
-                    split_wind = dr_1.get_split(dr_2)
-                    available_dv = split_wind.data_vol - dr_1.data_vol
 
-                    if available_dv >= min_dv and no_route_conflict(dr_1,dr_2): 
-                        deconflicted_routes.append(DeconflictedRoute(dr=dr_2,available_dv=available_dv))
+            # figure out window data volume availability per the currently selected routes in self
+            avail_dv_by_wind = {}
+            for dr_1 in self.routes:
+                for wind in dr_1:
+                    # subtract off the routes data volume usage from the window's capacity
+                    avail_dv_by_wind.setdefault(wind,wind.data_vol)
+                    avail_dv_by_wind[wind] -= dr_1.data_vol
+
+            #  record any new windows in the other routes, and record which routes use which windows
+            other_rts_by_wind = {}
+            dr_2_indcs_keep = []
+            for dr_2_indx, dr_2 in enumerate (rr_other.routes):
+                keep_this_indx = True
+                for wind in dr_2:
+                    #  if we didn't yet encounter this window in any of the routes in self
+                    avail_check = avail_dv_by_wind.setdefault(wind,wind.data_vol)
+
+                    #  this dictionary is used for constraints in the optimization. only want to make a constraint from the window if there's actually sufficient data volume left in the window to select a route through it
+                    if avail_check >= min_dv:
+                        # record the fact that this window is contained in dr_2
+                        other_rts_by_wind.setdefault(wind,[]).append(dr_2_indx)
+                    else:
+                        keep_this_indx = False
+
+                #  if every window in the row has sufficient data volume ( to meet minimum requirement) this route is possible to select
+                if keep_this_indx:
+                    dr_2_indcs_keep.append(dr_2_indx)
+
+            #  if it turns out no more routes can be selected...
+            if len(dr_2_indcs_keep) == 0:
+                return []
+
+            # construct the data structures for linear program solution
+            #  - decision variables are how much data volume to allocate to each route
+            #  -- bounds on decision variables, constrained by minimum required route volume
+            #  - objective function, cost :  sum of data volumes across all routes ( equally weighted for all routes)
+            #  - constraints, A_ub and b_ub:  constrain the sum of the data volumes for all routes going through a given window to be less than or equal to the available data volume for that window
+            
+            b_ub = [0 for i in range(len(other_rts_by_wind.keys()))]
+            A_ub = [[0 for j in range(len (rr_other.routes))] for i in range(len (other_rts_by_wind.keys()))]
+
+            #  construct cost and bounds
+            cost = []
+            bounds = []
+            for dr_2_indx in range(len(rr_other.routes)):
+                if dr_2_indx in dr_2_indcs_keep:
+                    #  negative one because the sense of linprog is minimization
+                    cost.append(-1)
+                    #  bound on minimum data volume, no upper bound, that's handled by the constraints
+                    bounds.append((min_dv,None))
+                else:
+                    #  if not considering this index, ignore cost and bounds
+                    cost.append(0)
+                    bounds.append((None,None))
+
+            #  construct constraints from every window included on selectable routes
+            for windex, (wind,dr_2_indcs) in  enumerate (other_rts_by_wind.items()):
+
+                #  constraint imposed by data volume availability from a single window
+                b_ub[windex] = avail_dv_by_wind[wind]
+
+                #  only factor in those data routes that cross through this window
+                for dr_2_indx in dr_2_indcs:
+                    if dr_2_indx in dr_2_indcs_keep: 
+                        A_ub[windex][dr_2_indx] = 1
+
+            #  run the solver to figure out the best allocation of data volume to the route possibilities
+            res = linprog(cost, A_ub=A_ub, b_ub=b_ub, bounds = bounds,method='simplex')
+
+            if verbose:
+                print('get_deconflicted_routes()')
+                print('  status %d'%(res['status']))
+                print('  num simplex iters %d'%(res['nit']))
+                print('  num other routes %d'%(len(rr_other.routes)))
+                print('  num routes selected %d'%(len(dr_2_indcs_keep)))
+
+                if res['status'] == 2:
+                    import ipdb
+                    ipdb.set_trace()
+
+            #  we were not able to find a solution -  either number of iterations ran up, or there is not enough availability to have any de-conflicted routes
+            if not res['status'] == 0:
+                return []
+
+            #  extract the selected solutions as de-conflicted routes
+            dr_2_dv_avails = res['x']
+            for dr_2_indx, dr_2 in enumerate (rr_other.routes):
+                if dr_2_indx in dr_2_indcs_keep: 
+                    deconflicted_routes.append(DeconflictedRoute(dr=dr_2,available_dv=dr_2_dv_avails[dr_2_indx]))
 
         #  if self has no routes ( it hasn't yet received data from anywhere), then every route in  the other route record (on the other satellite) is valid
         else:
@@ -322,7 +418,7 @@ class GPDataRouteSelection():
                         continue
 
                     #  need to figure out what data on the other satellite is data that we have not yet received on sat_indx. this returns a set of de-conflicted routes that all send valid, non-duplicated data to sat_indx
-                    deconf_rts = rr_last_xlnk.get_deconflicted_routes(rr_xsat,min_dv=self.min_path_dv)
+                    deconf_rts = rr_last_xlnk.get_deconflicted_routes(rr_xsat,min_dv=self.min_path_dv,verbose= True)
 
                     #  now we need to figure out how many of these routes we can use, based upon the available crosslink bandwidth
                     xlnk_dv = xlnk.data_vol
@@ -384,9 +480,10 @@ class GPDataRouteSelection():
                     for deconf_rt in xlnk_candidate_rts:
                         #  again, make a copy because the existing data routes need to be left as is for future consideration and the algorithm
                         new_dr = copy(deconf_rt.dr)
-                        #  we did not append the cross-link window to the route before ( for sake of efficiency), so now we need to do it. The second argument below records the fact that the cross-link started on the cross-link partner,  not on satellite sat_indx
+                        #  the available data volume is simply that of the de-conflicted route, because we already made sure above that the sum of the available data volume from all de-conflicted routes is less than or equal to the throughput of the cross-link, and none of that data volume conflicts  with data volume already present in rr_new
                         new_dr.data_vol = deconf_rt.available_dv
                         new_dr.ID = dr_uid
+                        #  we did not append the cross-link window to the route before ( for sake of efficiency), so now we need to do it. The second argument below records the fact that the cross-link started on the cross-link partner,  not on satellite sat_indx
                         new_dr.append_wind_to_route(xlnk_wind,window_start_sat_indx=xlnk_wind.get_xlnk_partner(sat_indx))
                         
                         rr_new.routes.append(new_dr)

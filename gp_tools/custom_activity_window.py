@@ -66,10 +66,10 @@ class ObsWindow(ActivityWindow):
         self.unmodified_data_vol = self.data_vol
 
     def __str__(self):
-        return  "(ObsWindow id %d; sat %d; dv %f; targs %s; %s,%s)" % ( self.window_ID, self.sat_indx,  self.data_vol,str(self.target_IDs),date_string(self.start),date_string(self.end))
+        return  "(ObsWindow id %d sat %d dv %f targs %s %s,%s)" % ( self.window_ID, self.sat_indx,  self.data_vol,str(self.target_IDs),date_string(self.start),date_string(self.end))
 
     def __repr__(self):
-        return  "(ObsWindow id %d; sat %d; dv %f; targs %s; %s,%s)" % (self.window_ID,self.sat_indx,  self.data_vol,str(self.target_IDs),date_string(self.start),date_string(self.end))
+        return  "(ObsWindow id %d sat %d dv %f targs %s %s,%s)" % (self.window_ID,self.sat_indx,  self.data_vol,str(self.target_IDs),date_string(self.start),date_string(self.end))
 
 
 class CommWindow(ActivityWindow):
@@ -228,10 +228,10 @@ class DlnkWindow(CommWindow):
         print('......')
 
     def __str__(self):
-        return  "(DlnkWindow id %d; sat %d; dv %f; gs %d; %s,%s)" % (self.window_ID,self.sat_indx,  self.data_vol, self.gs_indx,date_string(self.start),date_string(self.end))
+        return  "(DlnkWindow id %d sat %d dv %f gs %d %s,%s)" % (self.window_ID,self.sat_indx,  self.data_vol, self.gs_indx,date_string(self.start),date_string(self.end))
 
     def __repr__(self):
-        return  "(DlnkWindow id %d; sat %d; dv %f; gs %d; %s,%s)" % (self.window_ID,self.sat_indx,  self.data_vol, self.gs_indx,date_string(self.start),date_string(self.end))
+        return  "(DlnkWindow id %d sat %d dv %f gs %d %s,%s)" % (self.window_ID,self.sat_indx,  self.data_vol, self.gs_indx,date_string(self.start),date_string(self.end))
 
 class XlnkWindow(CommWindow):
     def __init__(self, window_ID, sat_indx, xsat_indx, sat_xsat_indx, start, end):
@@ -278,10 +278,10 @@ class XlnkWindow(CommWindow):
         return sum(self.routed_data_vol_to_sat_indx[key] for key in self.routed_data_vol_to_sat_indx.keys())
 
     def __str__(self):
-        return  "(XlnkWindow id %d; sats %d,%d; dv %f; %s,%s)" % (self.window_ID,self.sat_indx, self.xsat_indx,self.data_vol, date_string(self.start),date_string(self.end))
+        return  "(XlnkWindow id %d sats %d,%d dv %f %s,%s)" % (self.window_ID,self.sat_indx, self.xsat_indx,self.data_vol, date_string(self.start),date_string(self.end))
 
     def __repr__(self):
-        return  "(XlnkWindow id %d; sats %d,%d; dv %f; %s,%s)" % (self.window_ID,self.sat_indx, self.xsat_indx,self.data_vol, date_string(self.start),date_string(self.end))
+        return  "(XlnkWindow id %d sats %d,%d dv %f %s,%s)" % (self.window_ID,self.sat_indx, self.xsat_indx,self.data_vol, date_string(self.start),date_string(self.end))
 
     def get_xlnk_partner(self,sat_indx):
         """return indx of the cross-linked partner
@@ -323,7 +323,7 @@ class EclipseWindow(ActivityWindow):
         super(EclipseWindow, self).__init__(start, end, window_ID)
 
     def __str__(self):
-        return  "(EclipseWindow id %d; %s,%s)" % ( self.window_ID,date_string(self.start),date_string(self.end))
+        return  "(EclipseWindow id %d %s,%s)" % ( self.window_ID,date_string(self.start),date_string(self.end))
 
     def __repr__(self):
-        return  "(EclipseWindow id %d; %s,%s)" % ( self.window_ID,date_string(self.start),date_string(self.end))
+        return  "(EclipseWindow id %d %s,%s)" % ( self.window_ID,date_string(self.start),date_string(self.end))

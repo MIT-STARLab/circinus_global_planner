@@ -427,6 +427,9 @@ class GlobalPlannerRunner:
                 if dlnk_indx >= num_dlnks_to_plot:
                     break
 
+                if dlnk_indx != 33:
+                    continue
+
                 rts = rts_by_dlnk[dlnk]
 
                 # TODO:  this stuff needs to be  changed
@@ -465,7 +468,7 @@ class GlobalPlannerRunner:
                     plot_include_dlnk_labels = self.rs_general_params['plot_include_dlnk_labels'],
                     plot_include_xlnk_labels = self.rs_general_params['plot_include_xlnk_labels'],
                     show= False,
-                    fig_name='plots/test_rs_o{0}_d{1}.pdf'.format (rts_indx,dlnk_indx)
+                    fig_name='plots/test_rs_o{0}_d{1}_2.pdf'.format (rts_indx,dlnk_indx)
                 )
 
 

@@ -21,7 +21,7 @@
         "plot_include_xlnk_labels":   true,
         "plot_route_selection_results":   true,
         "adjust_window_timing_post_selection": true,
-        "min_path_dv_Mb" :  1 
+        "min_path_dv_Mb" :  100 
     },
     "route_selection_params_v1": {
         "num_paths" :  5,
