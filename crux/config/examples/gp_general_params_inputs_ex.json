@@ -17,11 +17,12 @@
     },
     "route_selection_general_params": {
         "wind_filter_duration_s" : 3600,
+        "wind_filter_duration_obs_sat_s" : 7200,
         "plot_include_dlnk_labels":    false,
         "plot_include_xlnk_labels":   true,
-        "plot_route_selection_results":      false,
+        "plot_route_selection_results":      true,
         "adjust_window_timing_post_selection": true,
-        "min_path_dv_Mb" :  100 
+        "min_simple_route_dv_Mb" :  50 
     },
     "route_selection_params_v1": {
         "num_paths" :  5,
@@ -32,7 +33,7 @@
     "route_selection_params_v2": {
     },
     "activity_scheduling_params": {
-        "min_path_dv_Mb" :  100,
+        "min_route_dv_Mb" :  100,
         "dv_epsilon_Mb" :  1,
         "solver_max_runtime_s" :  60,
         "solver_name" :  "gurobi",

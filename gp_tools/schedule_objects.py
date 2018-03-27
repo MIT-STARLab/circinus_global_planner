@@ -95,46 +95,44 @@ class Dancecard(object):
     def get_ts_indcs ( self):
         """ return time step indices in this dance card
         
-        returns a list of time step indices for this dance card. These can be used directly for accessing the objects stored in a time step. each time step falls between two time points on either side
-        :returns:  list of all time indcs in dance card
-        :rtype: {[list of int]}
+        returns a generator for time step indices for this dance card. These can be used directly for accessing the objects stored in a time step. each time step falls between two time points on either side
+        :returns:  generator for all time indcs in dance card
+        :rtype: {[int generator]}
         :raises: NotImplementedError
         """
 
-        return  range (self.num_timesteps)
+        return (ts_indx for ts_indx in range (self.num_timesteps))
 
     def get_tp_indcs ( self):
         """ return time point indices in this dance card
         
-        returns a list of time point indices for this dance card. these are indices that correspond exactly to the time point values in the dance card. they cannot be used directly for accessing the objects stored in a time step, but they tell you the bounds of each time step, and can be used for accessing the objects either before or after a given time point. This is useful for doing other operations that need to refer to the same times as this dance card
-        :returns:  list of all time indcs in dance card
-        :rtype: {[list of int]}
+        returns a generator of time point indices for this dance card. these are indices that correspond exactly to the time point values in the dance card. they cannot be used directly for accessing the objects stored in a time step, but they tell you the bounds of each time step, and can be used for accessing the objects either before or after a given time point. This is useful for doing other operations that need to refer to the same times as this dance card
+        :returns:  generator for all time indcs in dance card
+        :rtype: {[int generator]}
         :raises: NotImplementedError
         """
 
-        # TODO: this method should probably be a generator
-
-        return  range (self.num_timepoints)
+        return (tp_indx for tp_indx in range(self.num_timepoints))
 
     def get_tp_values ( self,out_units='seconds'):
         """ return time points in this dance card
         
-        returns a list of time points for this dance card. this is useful for doing other operations that need to refer to the same times as this dance card
-        :returns:  list of all time points in dance card
-        :rtype: {[list, element type specified by out_units]}
+        returns a generator of time points for this dance card. this is useful for doing other operations that need to refer to the same times as this dance card
+        :returns:  generator for all time points in dance card
+        :rtype: {[generator, element type specified by out_units]}
         :raises: NotImplementedError
         """
 
         # TODO: this method should probably be a generator
 
 
-        t_vals_s = [self.tstep_sec*tp_indx for tp_indx in range(self.num_timepoints)]
+        t_vals_s = (self.tstep_sec*tp_indx for tp_indx in range(self.num_timepoints))
 
         if out_units == 'seconds':
             return t_vals_s
         elif out_units == 'minutes':
             # convert like this to minimize the chance of error buildup
-            return [t_val/60.0 for t_val in t_vals_s]
+            return (t_val/60.0 for t_val in t_vals_s)
         else:
             raise NotImplementedError
 

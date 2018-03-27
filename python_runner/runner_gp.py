@@ -282,7 +282,7 @@ class GlobalPlannerRunner:
 
                 # run the route selection algorithm
                 t_a = time.time()
-                routes = gp_rs.run(obs,dlnk_winds_flat,xlnk_winds, dr_uid, verbose = False)
+                routes = gp_rs.run_stage1(obs,dlnk_winds_flat,xlnk_winds, dr_uid, verbose = False)
                 t_b = time.time()
                 stats = gp_rs.get_stats(verbose=True )
 
@@ -421,7 +421,8 @@ class GlobalPlannerRunner:
 
     def plot_route_selection_results ( self,obs_routes,dlnk_winds_flat,xlnk_winds_flat,num_obs_to_plot):
 
-        num_dlnks_to_plot = 15
+        first_dlnk_indx = 10
+        num_dlnks_to_plot = 20
         for rts_indx, routes in enumerate (obs_routes):
             if rts_indx >= num_obs_to_plot:
                 break
@@ -435,6 +436,8 @@ class GlobalPlannerRunner:
             for dlnk_indx, dlnk in enumerate (rts_by_dlnk.keys()):
                 if dlnk_indx >= num_dlnks_to_plot:
                     break
+                if dlnk_indx < first_dlnk_indx:
+                    continue
 
                 # if dlnk_indx != 33:
                 #     continue
@@ -454,6 +457,8 @@ class GlobalPlannerRunner:
                 sats_to_include =  range (self.sat_params['num_sats'])
                 # sats_to_include = [1,2,3]
 
+                plot_len = max(self.rs_general_params['wind_filter_duration_s'],self.rs_general_params['wind_filter_duration_obs_sat_s'])
+
                 #  plot the selected down links and cross-links
                 self.gp_plot.plot_winds(
                     sats_to_include,
@@ -468,7 +473,7 @@ class GlobalPlannerRunner:
                     route_indcs_by_wind,
                     self.scenario_params['start_utc_dt'],
                     # obs.start,
-                    obs.start + timedelta( seconds= self.rs_general_params['wind_filter_duration_s']),
+                    obs.start + timedelta( seconds= plot_len),
                     # self.scenario_params['start_utc_dt'],
                     # self.scenario_params['start_utc_dt'] + timedelta( seconds= self.rs_general_params['wind_filter_duration_s']),
                     # self.scenario_params['end_utc_dt']-timedelta(minutes=200),

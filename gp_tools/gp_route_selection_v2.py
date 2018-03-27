@@ -275,10 +275,13 @@ class GPDataRouteSelection():
         # get the smallest time step used in orbit link. this is the smallest time step we need to worry about in data route selection
         self.act_timestep = min(link_params['xlnk_max_len_s'],link_params['dlnk_max_len_s'])
 
-        self.min_path_dv =rs_general_params['min_path_dv_Mb']
+        #  minimum simple route data volume -  the minimum data volume a route may have to be considered as a candidate for moving data volume from an observation to a downlink
+        self.min_s_route_dv =rs_general_params['min_simple_route_dv_Mb']
+        
         #  the "effectively zero" number. defining in terms of the minimum path data volume for future proofing
-        self.dv_epsilon = self.min_path_dv / 1000
+        self.dv_epsilon = self.min_s_route_dv / 1000
         self.wind_filter_duration =  timedelta (seconds =rs_general_params['wind_filter_duration_s'])
+        self.wind_filter_duration_obs_sat =  timedelta (seconds =rs_general_params['wind_filter_duration_obs_sat_s'])
         self.latency_params =  gp_general_other_params['latency_calculation']
 
         if self.latency_params['obs'] not in ['start','end']:
@@ -288,9 +291,7 @@ class GPDataRouteSelection():
 
 
     @staticmethod
-    def  filter_windows(obs_wind,dlnk_winds_flat,xlnk_winds,num_sats,end_utc_dt,wind_filter_duration):
-        first =  obs_wind.end
-        last =  min ( end_utc_dt, first +  wind_filter_duration)
+    def  filter_windows(dlnk_winds_flat,xlnk_winds,num_sats,start,end_dt_by_sat_indx):
 
         dlink_winds_flat_filtered = [[] for sat_indx in  range (num_sats)]
         xlink_winds_flat_filtered = [[[] for xsat_indx in  range ( num_sats)] for sat_indx in  range (num_sats)]
@@ -298,37 +299,43 @@ class GPDataRouteSelection():
         for sat_indx in  range (num_sats):
             for xsat_indx in  range ( num_sats):
                 for wind in xlnk_winds[sat_indx][xsat_indx]:
-                    if  wind.start > first  and  wind.end  <last:
+                    min_end = min(end_dt_by_sat_indx[sat_indx],end_dt_by_sat_indx[xsat_indx])
+                    if  wind.start > start  and  wind.end  < min_end:
                         xlink_winds_flat_filtered[sat_indx][xsat_indx]. append ( wind)
 
             for wind in dlnk_winds_flat[sat_indx]:
-                if  wind.start > first  and  wind.end  <last:
+                if  wind.start > start  and  wind.end  < end_dt_by_sat_indx[sat_indx]:
                     dlink_winds_flat_filtered[sat_indx]. append ( wind)
 
         return dlink_winds_flat_filtered, xlink_winds_flat_filtered
 
-    def run ( self,obs_wind,dlnk_winds_flat,xlnk_winds, dr_uid, verbose = False):
+    def run_stage1 ( self,obs_wind,dlnk_winds_flat,xlnk_winds, dr_uid, verbose = False):
         #  note that a potential source of slowness in the code below is the creation of new RouteRecord objects for every sat at every time step 
         # TODO: figure out if there's a more efficient way to do this -  for example, we shouldn't have to preserve these objects when they're more than a certain number of time steps in the past
 
 
         start_dt = obs_wind.end
         end_dt = min(self.sel_latest_end_dt,start_dt + self.wind_filter_duration)
+        end_obs_sat_dt = min(self.sel_latest_end_dt,start_dt + self.wind_filter_duration_obs_sat)
 
-        dlnk_winds_flat_filt,xlnk_winds_filt =  self.filter_windows (obs_wind,dlnk_winds_flat,xlnk_winds, self.num_sats, self.sel_latest_end_dt, self.wind_filter_duration)
+        # crazy looking line, but it's easy... dictionary of end times by sat_indx - end_dt if not observing sat, else end_obs_sat_dt
+        end_dt_by_sat_indx = {sat_indx: end_dt if sat_indx != obs_wind.sat_indx else end_obs_sat_dt for sat_indx in range (self.num_sats)}
+        
+        dlnk_winds_flat_filt,xlnk_winds_filt =  self.filter_windows (dlnk_winds_flat,xlnk_winds, self.num_sats, obs_wind.end, end_dt_by_sat_indx )
 
         print ('Running route selection for obs: %s'%(obs_wind))
         print ('from %s to %s'%(start_dt, end_dt))
+
 
         # construct a set of dance cards for every satellite, 
         # each of which keeps track of all of the activities of satellite 
         # can possibly execute at any given time slice delta T. 
         #  start the dance card from the end of the observation window, because we are only selecting routes after the observation
-        act_dancecards = [Dancecard(start_dt,end_dt,self.act_timestep,mode='timestep') for sat_indx in range (self.num_sats)]
+        act_dancecards = [Dancecard(start_dt,end_dt_by_sat_indx[sat_indx],self.act_timestep,mode='timestep') for sat_indx in range (self.num_sats)]
         
         #  make another set of dance cards that keep track of the route record data structures at a given time point
         #  note that even though these dance cards are in different modes, they share the same time points and time steps (both values and indices)
-        rr_dancecards = [Dancecard(start_dt,end_dt,self.act_timestep,item_init=None,mode='timepoint') for sat_indx in range (self.num_sats)]
+        rr_dancecards = [Dancecard(start_dt,end_dt_by_sat_indx[sat_indx],self.act_timestep,item_init=None,mode='timepoint') for sat_indx in range (self.num_sats)]
 
         obs_dv = obs_wind.data_vol
 
@@ -347,8 +354,8 @@ class GPDataRouteSelection():
         #  put this initial data route on the first route record for the observing satellite
         rr_dancecards[obs_wind.sat_indx][0] = RouteRecord(dv=obs_dv,release_time = start_dt,routes=[first_dr])
 
-        #  all dancecards here share the same time point indices
-        time_getter_dc = act_dancecards[0]
+        #  all dancecards here share the same intial timepoint indices (including for sat_indx, though it's longer)
+        time_getter_dc = act_dancecards[obs_wind.sat_indx]
         timepoint_indcs = time_getter_dc.get_tp_indcs ()
 
         def time_within(t1,t2,toi):
@@ -382,7 +389,7 @@ class GPDataRouteSelection():
         #  the main loop for the dynamic programming algorithm
         for tp_indx in timepoint_indcs:
             if tp_indx % 10 == 0:
-                print(('tp_indx: %d/%d')%(tp_indx,len(timepoint_indcs)-1))
+                print(('tp_indx: %d/%d')%(tp_indx,time_getter_dc.num_timepoints-1))
 
             #  nothing happens at the first time point index, because that's right at the end of the observation window
             if tp_indx == 0:
@@ -393,7 +400,12 @@ class GPDataRouteSelection():
             tp_last_dt = tp_dt
             tp_dt = time_getter_dc.get_tp_from_tp_indx(tp_indx,out_units='datetime')
 
+
             for sat_indx in range (self.num_sats):
+                #  if we reach the end of time for this sat index, go to next satellite (i.e. were only looking for down links from observing sat at this point)
+                if tp_dt > end_dt_by_sat_indx[sat_indx]:
+                    continue
+
                 #  get the activities that were active during the time step immediately preceding time point
                 acts = act_dancecards[sat_indx].get_objects_at_ts_pre_tp_indx(tp_indx)
 
@@ -449,7 +461,7 @@ class GPDataRouteSelection():
                         continue
 
                     #  need to figure out what data on the other satellite is data that we have not yet received on sat_indx. this returns a set of de-conflicted routes that all send valid, non-duplicated data to sat_indx
-                    deconf_rts = rr_last_xlnk.get_deconflicted_routes(rr_xsat,min_dv=self.min_path_dv,verbose= False)
+                    deconf_rts = rr_last_xlnk.get_deconflicted_routes(rr_xsat,min_dv=self.min_s_route_dv,verbose= False)
 
                     #todo: hmm, do we also want to consider other direction, where rr_sat is incumbent and rr_last_xlnk are the routes to deconflict?
 
@@ -468,7 +480,7 @@ class GPDataRouteSelection():
                         else:
                             available_dv = xlnk_dv - x_cum_dv 
                             #  check if greater than specified minimum
-                            if available_dv >= self.min_path_dv:
+                            if available_dv >= self.min_s_route_dv:
                                 deconf_rt.available_dv = available_dv
                                 xlnk_candidate_rts.append(deconf_rt)
                                 x_cum_dv += available_dv
@@ -609,7 +621,7 @@ class GPDataRouteSelection():
                 for dr_indx, dr in  enumerate (rr.routes):
                     pass
                     # print('  dr %d %s'%(dr_indx,dr))
-                    # print('  dr %d %s'%(dr_indx,dr.get_dlnk ()))
+                    print('  dr %d %s'%(dr_indx,dr.get_dlnk ()))
 
             # print ( "Obs dv: %f" % ( self.obs_wind.data_vol))
             # print ( "Considering %d downlink windows" % (stats['num_dlnk_windows']))
