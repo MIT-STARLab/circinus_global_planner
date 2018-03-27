@@ -270,6 +270,8 @@ class GlobalPlannerRunner:
         for sat_indx in range( self.sat_params['num_sats']):
             for  index, obs in  enumerate ( obs_winds[sat_indx]):
 
+                # obs.data_vol = 40000
+
                 print ("sat_indx")
                 print (sat_indx)
                 print ("obs")

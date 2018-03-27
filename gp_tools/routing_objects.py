@@ -143,10 +143,14 @@ class DataRoute(object):
         for windex, wind in  enumerate(self.route):
             if self.window_start_sats[wind] != next_sat_indx:
                 string = 'routing_objects.py: Found the incorrect sat indx at window indx %d in route. Route string: %s'%( windex, self.get_route_string())
-                raise Exception(string)
+                raise RuntimeError(string)
             if not wind.start >= last_time or not wind.end >= last_time:
                 string ='routing_objects.py: Found a bad start time at window indx %d in route. Route string: %s'%( windex, self.get_route_string())
-                raise Exception( string)
+                raise RuntimeError( string)
+
+            if not self.data_vol <= wind.data_vol:
+                string ='routing_objects.py: Found bad dv at window indx %d in route. Route string: %s'%( windex, self.get_route_string())
+                raise RuntimeError( string)
 
             #  note that we manually trace the satellite index through cross-link window here. This is a bit redundant with the functionality of window_start_sats,  but adds a little bit more of a warm, happy, comfortable feeling in the area checking
             if type (wind) is XlnkWindow:

@@ -223,7 +223,9 @@ class RouteRecord():
 
             #  we were not able to find a solution -  either number of iterations ran up, or there is not enough availability to have any de-conflicted routes
             if not res['status'] == 0:
-                return []
+                # for time being, error out...
+                raise RuntimeWarning('LP not solved successfully')
+                # return []
 
             #  extract the selected solutions as de-conflicted routes
             dr_2_dv_avails = res['x']
@@ -447,7 +449,7 @@ class GPDataRouteSelection():
                         continue
 
                     #  need to figure out what data on the other satellite is data that we have not yet received on sat_indx. this returns a set of de-conflicted routes that all send valid, non-duplicated data to sat_indx
-                    deconf_rts = rr_last_xlnk.get_deconflicted_routes(rr_xsat,min_dv=self.min_path_dv,verbose= True)
+                    deconf_rts = rr_last_xlnk.get_deconflicted_routes(rr_xsat,min_dv=self.min_path_dv,verbose= False)
 
                     #todo: hmm, do we also want to consider other direction, where rr_sat is incumbent and rr_last_xlnk are the routes to deconflict?
 
@@ -590,6 +592,9 @@ class GPDataRouteSelection():
         self.final_route_records = final_route_records
 
         all_routes = [dr for rr in final_route_records for dr in rr.routes]
+        for dr in all_routes:
+            dr.validate_route()
+
         return all_routes
 
 
@@ -601,8 +606,8 @@ class GPDataRouteSelection():
         if verbose:
             for rr_indx, rr in  enumerate (self.final_route_records):
                 print ('route record %d, %d routes, sum rts/ dlnk dv: %f/%f Mb '%(rr_indx,len(rr.routes),sum(dr.data_vol for dr in rr.routes),rr.routes[0].get_dlnk().data_vol))
-                for dr_indx, dr in  enumerate (rr.routes):
-                    print('  %d %s'%(dr_indx,dr))
+                # for dr_indx, dr in  enumerate (rr.routes):
+                #     print('  %d %s'%(dr_indx,dr))
 
             # print ( "Obs dv: %f" % ( self.obs_wind.data_vol))
             # print ( "Considering %d downlink windows" % (stats['num_dlnk_windows']))
