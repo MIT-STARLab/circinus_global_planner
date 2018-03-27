@@ -272,6 +272,9 @@ class GlobalPlannerRunner:
 
                 # obs.data_vol = 40000
 
+                # if not (index == 0 and sat_indx == 2):
+                #     continue
+
                 print ("sat_indx")
                 print (sat_indx)
                 print ("obs")
@@ -414,7 +417,7 @@ class GlobalPlannerRunner:
 
     def plot_route_selection_results ( self,obs_routes,dlnk_winds_flat,xlnk_winds_flat,num_obs_to_plot):
 
-        num_dlnks_to_plot = 100
+        num_dlnks_to_plot = 15
         for rts_indx, routes in enumerate (obs_routes):
             if rts_indx >= num_obs_to_plot:
                 break
@@ -429,8 +432,8 @@ class GlobalPlannerRunner:
                 if dlnk_indx >= num_dlnks_to_plot:
                     break
 
-                if dlnk_indx != 33:
-                    continue
+                # if dlnk_indx != 33:
+                #     continue
 
                 rts = rts_by_dlnk[dlnk]
 
@@ -445,7 +448,7 @@ class GlobalPlannerRunner:
                 #             break
 
                 sats_to_include =  range (self.sat_params['num_sats'])
-                # sats_to_include = [0,9,21,22,23]
+                # sats_to_include = [1,2,3]
 
                 #  plot the selected down links and cross-links
                 self.gp_plot.plot_winds(
@@ -470,7 +473,7 @@ class GlobalPlannerRunner:
                     plot_include_dlnk_labels = self.rs_general_params['plot_include_dlnk_labels'],
                     plot_include_xlnk_labels = self.rs_general_params['plot_include_xlnk_labels'],
                     show= False,
-                    fig_name='plots/test_rs_o{0}_d{1}_2.pdf'.format (rts_indx,dlnk_indx)
+                    fig_name='plots/test_rs_o{0}_d{1}_6sat.pdf'.format (rts_indx,dlnk_indx)
                 )
 
 
@@ -605,32 +608,32 @@ class GlobalPlannerRunner:
         
 
     def validate_unique_windows( self,obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds):
-        all_wind_ids = []
+        all_wind_ids = set()
 
         for indx in range(len(obs_winds)):
             for wind in obs_winds[indx]:
                 if wind.window_ID in all_wind_ids:
                     raise Exception('Found a duplicate unique window ID where it should not have been possible')
-                all_wind_ids.append(wind.window_ID)
+                all_wind_ids.add(wind.window_ID)
 
         for indx in range(len(dlnk_winds_flat)):
             for wind in dlnk_winds_flat[indx]:
                 if wind.window_ID in all_wind_ids:
                     raise Exception('Found a duplicate unique window ID where it should not have been possible')
-                all_wind_ids.append(wind.window_ID)
+                all_wind_ids.add(wind.window_ID)
 
         for indx in range(len(xlnk_winds)):
             for indx_2 in range(len(xlnk_winds[indx])):
                 for wind in xlnk_winds[indx][indx_2]:
                     if wind.window_ID in all_wind_ids:
                         raise Exception('Found a duplicate unique window ID where it should not have been possible')
-                    all_wind_ids.append(wind.window_ID)
+                    all_wind_ids.add(wind.window_ID)
 
         for indx in range(len(ecl_winds)):
             for wind in ecl_winds[indx]:
                 if wind.window_ID in all_wind_ids:
                     raise Exception('Found a duplicate unique window ID where it should not have been possible')
-                all_wind_ids.append(wind.window_ID)
+                all_wind_ids.add(wind.window_ID)
 
     def run( self):
 
@@ -639,17 +642,24 @@ class GlobalPlannerRunner:
         #################################
 
         if self.general_other_params['load_windows_from_file']:
+            print('Load files')
+
             # parse the inputs into activity windows
             window_uid = 0
+            print('Load obs')
             obs_winds, window_uid =self.io_proc.import_obs_winds(window_uid)
+            print('Load dlnks')
             dlnk_winds, dlnk_winds_flat, window_uid =self.io_proc.import_dlnk_winds(window_uid)
+            print('Load xlnks')
             xlnk_winds, xlnk_winds_flat, window_uid =self.io_proc.import_xlnk_winds(window_uid)
+            print('Load ecl')
             ecl_winds, window_uid =self.io_proc.import_eclipse_winds(window_uid)
 
             # with open('temp.pkl','wb') as f:
             #     pickle.dump( {'params': self.params},f)
 
             # important to check this because window unique IDs are used as hashes in dictionaries in the scheduling code
+            print('Validate windows')
             self.validate_unique_windows(obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds)
 
             # todo:  probably ought to delete the input times and rates matrices to free up space

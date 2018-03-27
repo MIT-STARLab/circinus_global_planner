@@ -150,10 +150,11 @@ class GPProcessorIO():
             obs_winds.append(sat_obs_winds)
 
         for sat_indx in range(self.num_sats):
-             new_windows,next_window_uid = self.merge_sat_obs_windows(obs_winds[sat_indx],next_window_uid)
-             for wind in new_windows:
-                 wind.calc_data_vol(self.pl_data_rate)
-             obs_winds[sat_indx] = new_windows
+            if obs_winds[sat_indx]:
+                new_windows,next_window_uid = self.merge_sat_obs_windows(obs_winds[sat_indx],next_window_uid)
+                for wind in new_windows:
+                    wind.calc_data_vol(self.pl_data_rate)
+                obs_winds[sat_indx] = new_windows
 
         return obs_winds, next_window_uid
 

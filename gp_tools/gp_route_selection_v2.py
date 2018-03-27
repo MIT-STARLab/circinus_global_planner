@@ -605,9 +605,11 @@ class GPDataRouteSelection():
 
         if verbose:
             for rr_indx, rr in  enumerate (self.final_route_records):
-                print ('route record %d, %d routes, sum rts/ dlnk dv: %f/%f Mb '%(rr_indx,len(rr.routes),sum(dr.data_vol for dr in rr.routes),rr.routes[0].get_dlnk().data_vol))
-                # for dr_indx, dr in  enumerate (rr.routes):
-                #     print('  %d %s'%(dr_indx,dr))
+                print ('route record %d, %d routes, sum rts/ dlnk dv: %.0f/%.0f Mb (%.2f%%)'%(rr_indx,len(rr.routes),sum(dr.data_vol for dr in rr.routes),rr.routes[0].get_dlnk().data_vol,100*sum(dr.data_vol for dr in rr.routes)/rr.routes[0].get_dlnk().data_vol))
+                for dr_indx, dr in  enumerate (rr.routes):
+                    pass
+                    # print('  dr %d %s'%(dr_indx,dr))
+                    # print('  dr %d %s'%(dr_indx,dr.get_dlnk ()))
 
             # print ( "Obs dv: %f" % ( self.obs_wind.data_vol))
             # print ( "Considering %d downlink windows" % (stats['num_dlnk_windows']))
