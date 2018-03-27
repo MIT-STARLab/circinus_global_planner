@@ -193,6 +193,24 @@ class DataRoute(object):
 
         return self.route[split_windex]
 
+    def count_overlap(self,other):
+
+
+        overlap_count = 0
+        for wind1 in self.route:
+            if type(wind1) != XlnkWindow:
+                continue
+
+            for wind2 in  other.route:
+                if type(wind2) != XlnkWindow:
+                    continue
+
+                if wind1 == wind2:
+                    overlap_count += 1
+
+
+        return overlap_count
+
 
 
 class LinkInfo(object):

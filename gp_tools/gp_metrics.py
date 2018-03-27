@@ -703,3 +703,23 @@ class GPMetrics():
             #     print("sat_indx %d: max e margin %f"%(sat_indx,e_margin_by_sat_indx[sat_indx]['max']))
 
         return stats
+
+    def assess_route_overlap(  self,routes,verbose=False):
+        overlap_cnt_by_route = {}
+        for dr_1 in routes:
+            overlap_cnt = 0
+            for dr_2 in routes:
+                overlap_cnt += dr_1.count_overlap (dr_2)
+
+            overlap_cnt_by_route[dr_1] = overlap_cnt
+
+        stats =  {}
+        stats['total_num_overlaps'] = sum(cnt for cnt in overlap_cnt_by_route.values())
+
+        if verbose:
+            print('Route overlap statistics')
+            print("%s: %f"%('total_num_overlaps',stats['total_num_overlaps']))
+            for dr_indx,(dr,cnt) in  enumerate (overlap_cnt_by_route.items()):
+                print("%2d, dv %06.2f: overlap %d"%(dr_indx,dr.data_vol,cnt))
+
+

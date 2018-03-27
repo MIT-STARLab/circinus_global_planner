@@ -315,6 +315,10 @@ class GlobalPlannerRunner:
             if obs_indx >= 1:
                 break
 
+
+        gp_met = GPMetrics(self.params)
+        gp_met.assess_route_overlap( routes,verbose=True)
+
         return all_routes,all_routes_obs,all_stats,route_times_s,obs_indx
 
     def  setup_test( self,obs_winds,dlnk_winds_flat,xlnk_winds):
@@ -686,6 +690,7 @@ class GlobalPlannerRunner:
 
         if self.pickle_params['pickle_route_selection_results']:
             self.pickle_rtsel_stuff(obs_routes,all_routes_obs,all_stats,route_times_s,obs_indx,ecl_winds,window_uid)
+
         
         #################################
         # route selection output stage
