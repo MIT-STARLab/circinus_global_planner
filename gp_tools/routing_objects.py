@@ -206,7 +206,9 @@ class DataRoute(object):
                     continue
 
                 if wind1 == wind2:
-                    overlap_count += 1
+                    #  only count true overlaps, meaning there's not enough space in the window for both routes
+                    if self.data_vol + other.data_vol > wind1.data_vol: 
+                        overlap_count += 1
 
 
         return overlap_count
