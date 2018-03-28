@@ -26,6 +26,7 @@ class GPMetrics():
         gp_general_other_params = gp_params['gp_general_params']['other_params']
         metrics_params = gp_params['gp_general_params']['metrics_params']
         plot_params = gp_params['gp_general_params']['plot_params']
+        as_params = gp_params['gp_general_params']['activity_scheduling_params']
 
         self.latency_params = gp_params['gp_general_params']['other_params']['latency_calculation']
         self.met_start_utc_dt  = tt.iso_string_to_dt (gp_inst_params['start_utc'])
@@ -35,7 +36,7 @@ class GPMetrics():
         self.all_targ_IDs = [targ['id'] for targ in obs_params['targets']]
         self.targ_id_ignore_list = gp_general_other_params['targ_id_ignore_list']
 
-        self.min_obs_dv = metrics_params['min_obs_dv_Mb']
+        self.min_as_route_dv = as_params['min_forked_route_dv_Mb']
         self.aoi_units = metrics_params['aoi_units']
         self.aoi_plot_t_units=plot_params['time_units']
 
@@ -43,8 +44,8 @@ class GPMetrics():
         self.sats_emin_Wh = [p_params['battery_storage_Wh']['e_min'][p_params['battery_option']] for p_params in self.power_params]
         self.sats_emax_Wh = [p_params['battery_storage_Wh']['e_max'][p_params['battery_option']] for p_params in self.power_params]
 
-        # the amount by which the minimum data volume is allowed to be lower than self.min_obs_dv
-        self.min_obs_dv_slop = self.min_obs_dv*0.01
+        # the amount by which the minimum data volume is allowed to be lower than self.min_as_route_dv
+        self.min_as_obs_dv_slop = self.min_as_route_dv*0.01
 
         # if two downlink times are within this number of seconds, then they are counted as being at the same time for the purposes of AoI calculation
         self.dlnk_same_time_slop_s = scenario_params['timestep_s'] - 1
@@ -89,7 +90,7 @@ class GPMetrics():
 
         return rts_by_obs
 
-    def assess_dv_by_obs(self, routes, verbose=False):
+    def assess_dv_by_obs(self, rs_routes_by_obs, sched_routes, verbose=False):
         """ assess data volume down linked as grouped by observation
         
         pretty straightforward, we figure out all the data routes for each observation, and calculate statistics on data volumes for each observation
@@ -103,29 +104,55 @@ class GPMetrics():
 
         stats = {}
 
-        rts_by_obs = self.get_routes_by_obs (routes)
+        sched_rts_by_obs = self.get_routes_by_obs (sched_routes)
 
-        dvs_by_obs =  {}
-        for obs, rts in rts_by_obs.items ():
-            dvs_by_obs[obs] = sum (rt.scheduled_dv for rt in rts)
+        rs_dvs_by_obs =  {}
+        sched_dvs_by_obs =  {}
+        num_sched_obs = 0
+        for obs in rs_routes_by_obs.keys ():
+            rs_dvs_by_obs[obs] = min(obs.data_vol,sum (rt.data_vol for rt in rs_routes_by_obs[obs]))
+            if obs in sched_rts_by_obs.keys():
+                sched_dvs_by_obs[obs] = sum (rt.scheduled_dv for rt in sched_rts_by_obs[obs])
+                num_sched_obs +=1
+            else:
+                sched_dvs_by_obs[obs] = 0
 
-        dvs = [dv for dv in dvs_by_obs. values ()]
+
+        rs_dvs = [dv for dv in rs_dvs_by_obs. values ()]
+        sched_dvs = [dv for dv in sched_dvs_by_obs. values ()]
         
-        valid = len(dvs) > 0
+        valid = len(rs_dvs) > 0
 
-        stats['total_dv'] = sum(dvs) if valid else 0
-        stats['ave_obs_dv'] = np.mean(dvs) if valid else 0
-        stats['min_obs_dv'] = np.min(dvs) if valid else 0
-        stats['max_obs_dv'] = np.max(dvs) if valid else 0
+        stats['num_obs_rs'] = len(rs_dvs)
+        stats['num_obs_sched'] = num_sched_obs
+        stats['total_collectible_dv'] = sum(rs_dvs) if valid else 0
+        stats['total_sched_dv'] = sum(sched_dvs) if valid else 0
+        stats['ave_obs_dv_rs'] = np.mean(rs_dvs) if valid else 0
+        stats['ave_obs_dv_sched'] = np.mean(sched_dvs) if valid else 0
+        stats['std_obs_dv_rs'] = np.std(rs_dvs) if valid else 0
+        stats['std_obs_dv_sched'] = np.std(sched_dvs) if valid else 0
+        stats['min_obs_dv_rs'] = np.min(rs_dvs) if valid else 0
+        stats['min_obs_dv_sched'] = np.min(sched_dvs) if valid else 0
+        stats['max_obs_dv_rs'] = np.max(rs_dvs) if valid else 0
+        stats['max_obs_dv_sched'] = np.max(sched_dvs) if valid else 0
 
-        stats['dvs_by_obs'] = dvs_by_obs
+        stats['rs_dvs_by_obs'] = rs_dvs_by_obs
 
         if verbose:
+            print('------------------------------')
             print('data volume by observation')
-            print("%s: %f"%('total_dv',stats['total_dv']))
-            print("%s: %f"%('ave_obs_dv',stats['ave_obs_dv']))
-            print("%s: %f"%('min_obs_dv',stats['min_obs_dv']))
-            print("%s: %f"%('max_obs_dv',stats['max_obs_dv']))
+            print("%s: \t\t\t\t %f"%('num_obs_rs',stats['num_obs_rs']))
+            print("%s: \t\t\t\t %f"%('num_obs_sched',stats['num_obs_sched']))
+            print("%s: \t\t\t %f"%('total_collectible_dv',stats['total_collectible_dv']))
+            print("%s: \t\t\t %f"%('total_sched_dv',stats['total_sched_dv']))
+            print("%s: %f"%('ave_obs_dv_rs',stats['ave_obs_dv_rs']))
+            print("%s: %f"%('std_obs_dv_rs',stats['std_obs_dv_rs']))
+            print("%s: %f"%('min_obs_dv_rs',stats['min_obs_dv_rs']))
+            print("%s: %f"%('max_obs_dv_rs',stats['max_obs_dv_rs']))
+            print("%s: %f"%('ave_obs_dv_sched',stats['ave_obs_dv_sched']))
+            print("%s: %f"%('std_obs_dv_sched',stats['std_obs_dv_sched']))
+            print("%s: %f"%('min_obs_dv_sched',stats['min_obs_dv_sched']))
+            print("%s: %f"%('max_obs_dv_sched',stats['max_obs_dv_sched']))
 
             # for obs, dv in dvs_by_obs.items ():
             #     print("%s: %f"%(obs,dv))
@@ -162,6 +189,7 @@ class GPMetrics():
         stats['max_lat_mins'] = np.max(latencies) if valid else None
 
         if verbose and valid:
+            print('------------------------------')
             print('latency for routes')
             print("%s: %f"%('ave_lat_mins',stats['ave_lat_mins']))
             print("%s: %f"%('min_lat_mins',stats['min_lat_mins']))
@@ -170,12 +198,12 @@ class GPMetrics():
 
         return stats
 
-    def assess_latency_by_obs(self, routes, verbose=False):
+    def assess_latency_by_obs(self, rs_routes_by_obs,sched_routes, verbose=False):
         """ assess downlink latency as grouped by observation
         
         less straightforward than latency by route. First we group by observation,  then we find out how long it took to downlink the first minimum desired amount of data for each observation. based on how long this took we determin the latency of downlink for the observation.
-        :param routes: [description]
-        :type routes: [type]
+        :param sched_routes: [description]
+        :type sched_routes: [type]
         :param verbose: [description], defaults to False
         :type verbose: bool, optional
         :returns: [description]
@@ -184,11 +212,9 @@ class GPMetrics():
 
         stats = {}
 
-        rts_by_obs = self.get_routes_by_obs (routes)
-
-        intial_lat_by_obs =  {}
-        final_lat_by_obs =  {}
-        for obs, rts in rts_by_obs.items ():
+        #  for selected routes
+        intial_lat_by_obs_rs =  {}
+        for obs, rts in rs_routes_by_obs.items ():
             # start, center, end...whichever we're using for the latency calculation
             time_option = self.latency_params['dlnk']
 
@@ -196,14 +222,15 @@ class GPMetrics():
             rts.sort (key=lambda rt: getattr(rt.get_dlnk(),time_option))
 
             #  figure out the latency for the initial minimum DV downlink
+            #  have to accumulate data volume because route selection minimum data volume might be less than that for activity scheduling
             cum_dv = 0
             for dr in rts:
-                cum_dv += dr.scheduled_dv
+                cum_dv += dr.data_vol
                 
                 #  if we have reached our minimum required data volume amount to deem the observation downlinked for the purposes of latency calculation...
-                if cum_dv >= self.min_obs_dv - self.min_obs_dv_slop :
+                if cum_dv >= self.min_as_route_dv - self.min_as_obs_dv_slop :
 
-                    intial_lat_by_obs[obs] = dr.get_latency(
+                    intial_lat_by_obs_rs[obs] = dr.get_latency(
                         'minutes',
                         obs_option = self.latency_params['obs'], 
                         dlnk_option = self.latency_params['dlnk']
@@ -212,6 +239,26 @@ class GPMetrics():
                     #  break so that we don't continue considering the rest of the data volume
                     break
 
+        #  for scheduled routes
+        sched_rts_by_obs = self.get_routes_by_obs (sched_routes)
+        intial_lat_by_obs =  {}
+        final_lat_by_obs =  {}
+        for obs, rts in sched_rts_by_obs.items ():
+            # start, center, end...whichever we're using for the latency calculation
+            time_option = self.latency_params['dlnk']
+
+            #  want to sort these by earliest time so that we favor earlier downlinks
+            rts.sort (key=lambda rt: getattr(rt.get_dlnk(),time_option))
+
+            #  figure out the latency for the first route that got downlinked.
+            # sanity check that its scheduled data volume meets the minimum requirement
+            assert(rts[0].scheduled_dv >= self.min_as_route_dv - self.min_as_obs_dv_slop)
+            intial_lat_by_obs[obs] = rts[0].get_latency(
+                'minutes',
+                obs_option = self.latency_params['obs'], 
+                dlnk_option = self.latency_params['dlnk']
+            )
+
             # figure out the latency for downlink of all observation data that we chose to downlink
             final_lat_by_obs[obs] = rts[-1].get_latency(
                 'minutes',
@@ -219,25 +266,38 @@ class GPMetrics():
                 dlnk_option = self.latency_params['dlnk']
             )
 
+        i_lats_rs = [lat for lat in intial_lat_by_obs_rs. values ()]
         i_lats = [lat for lat in intial_lat_by_obs. values ()]
         f_lats = [lat for lat in final_lat_by_obs. values ()]
         
         i_valid = len(i_lats) > 0
         f_valid = len(f_lats) > 0
 
+        stats['ave_obs_initial_lat_rs'] = np.mean(i_lats_rs) if i_valid else 0
+        stats['std_obs_initial_lat_rs'] = np.std(i_lats_rs) if i_valid else 0
+        stats['min_obs_initial_lat_rs'] = np.min(i_lats_rs) if i_valid else 0
+        stats['max_obs_initial_lat_rs'] = np.max(i_lats_rs) if i_valid else 0
         stats['ave_obs_initial_lat'] = np.mean(i_lats) if i_valid else 0
+        stats['std_obs_initial_lat'] = np.std(i_lats) if i_valid else 0
         stats['min_obs_initial_lat'] = np.min(i_lats) if i_valid else 0
         stats['max_obs_initial_lat'] = np.max(i_lats) if i_valid else 0
         stats['ave_obs_final_lat'] = np.mean(f_lats) if f_valid else 0
         stats['min_obs_final_lat'] = np.min(f_lats) if f_valid else 0
         stats['max_obs_final_lat'] = np.max(f_lats) if f_valid else 0
 
+        stats['intial_lat_by_obs_rs'] = intial_lat_by_obs_rs
         stats['intial_lat_by_obs'] = intial_lat_by_obs
         stats['final_lat_by_obs'] = final_lat_by_obs
 
         if verbose:
+            print('------------------------------')
             print('latencies by observation')
-            print("%s: %f"%('ave_obs_initial_lat',stats['ave_obs_initial_lat']))
+            print("%s: \t\t\t %f"%('ave_obs_initial_lat_rs',stats['ave_obs_initial_lat_rs']))
+            print("%s: \t\t\t %f"%('std_obs_initial_lat_rs',stats['std_obs_initial_lat_rs']))
+            print("%s: %f"%('min_obs_initial_lat_rs',stats['min_obs_initial_lat_rs']))
+            print("%s: %f"%('max_obs_initial_lat_rs',stats['max_obs_initial_lat_rs']))
+            print("%s: \t\t\t %f"%('ave_obs_initial_lat',stats['ave_obs_initial_lat']))
+            print("%s: \t\t\t %f"%('std_obs_initial_lat',stats['std_obs_initial_lat']))
             print("%s: %f"%('min_obs_initial_lat',stats['min_obs_initial_lat']))
             print("%s: %f"%('max_obs_initial_lat',stats['max_obs_initial_lat']))
             print("%s: %f"%('ave_obs_final_lat',stats['ave_obs_final_lat']))
@@ -469,12 +529,8 @@ class GPMetrics():
 
         return avaoi, aoi_curve
 
-
-    def assess_aoi_by_obs_target(self,routes,include_routing=False,verbose = True):
-
-        av_aoi_vals = []
+    def preprocess_and_get_aoi(self,rts_by_obs,include_routing,dv_option='scheduled_dv'):
         av_aoi_by_targID = {}
-        aoi_curves_vals = []
         aoi_curves_by_targID = {}
 
         # First we need to seperate downlink time and creation time of all obs taken for this target. Put these into a matrix for convenient sorting.
@@ -482,8 +538,6 @@ class GPMetrics():
         # column 1 is downlink time
         # column 2 is observation time
         dlnk_obs_times_mat = [[] for targ_indx in range(self.num_targ)]
-
-        rts_by_obs = self.get_routes_by_obs (routes)
 
         # start, center, end...whichever we're using for the latency calculation
         time_option = self.latency_params['dlnk']
@@ -509,10 +563,15 @@ class GPMetrics():
                     # figure out at which data route we meet the minimum DV downlink requirement
                     cum_dv = 0
                     for dr in rts:
-                        cum_dv += dr.scheduled_dv
-                        
+                        if dv_option == 'scheduled_dv':
+                            cum_dv += dr.scheduled_dv
+                        elif dv_option == 'possible_dv':
+                            cum_dv += dr.data_vol
+                        else:
+                            raise NotImplementedError
+
                         #  if we have reached our minimum required data volume amount...
-                        if cum_dv >= self.min_obs_dv - self.min_obs_dv_slop:
+                        if cum_dv >= self.min_as_route_dv - self.min_as_obs_dv_slop:
 
                             dlnk_obs_times_mat[targ_indx].append([getattr(dr.get_dlnk(),time_option), obs_wind.start])
 
@@ -531,30 +590,49 @@ class GPMetrics():
 
                 av_aoi,aoi_curve = self.get_av_aoi_routing(dlnk_obs_times_mat_targ,  self.met_start_utc_dt,self.met_end_utc_dt,self.dlnk_same_time_slop_s,aoi_units=self.aoi_units,aoi_plot_t_units=self.aoi_plot_t_units)
             
-            av_aoi_vals.append(av_aoi)
-            aoi_curves_vals.append(aoi_curve)
             targ_ID = self.all_targ_IDs[targ_indx]
             av_aoi_by_targID[targ_ID] = av_aoi
             aoi_curves_by_targID[targ_ID] = aoi_curve
 
+        return av_aoi_by_targID,aoi_curves_by_targID
 
-        valid = len(av_aoi_vals) > 0
+    def assess_aoi_by_obs_target(self,rs_routes_by_obs,sched_routes,include_routing=False,verbose = True):
+
+        sched_rts_by_obs = self.get_routes_by_obs (sched_routes)
+
+        av_aoi_by_targID_rs,aoi_curves_by_targID_rs = self.preprocess_and_get_aoi(rs_routes_by_obs,include_routing,dv_option='possible_dv')
+        av_aoi_by_targID_sched,aoi_curves_by_targID_sched = self.preprocess_and_get_aoi(sched_rts_by_obs,include_routing,dv_option='scheduled_dv')
+
+        valid = len(av_aoi_by_targID_rs) > 0
 
         stats =  {}
-        stats['av_av_aoi'] = np.mean(av_aoi_vals) if valid else None
-        stats['min_av_aoi'] = np.min(av_aoi_vals) if valid else None
-        stats['max_av_aoi'] = np.max(av_aoi_vals) if valid else None
-        stats['std_av_aoi'] = np.std(av_aoi_vals) if valid else None
+        av_aoi_vals_rs = list(av_aoi_by_targID_rs.values())
+        av_aoi_vals_sched = list(av_aoi_by_targID_sched.values())
+        stats['av_av_aoi_rs'] = np.mean(av_aoi_vals_rs) if valid else None
+        stats['av_av_aoi_sched'] = np.mean(av_aoi_vals_sched) if valid else None
+        stats['std_av_aoi_rs'] = np.std(av_aoi_vals_rs) if valid else None
+        stats['std_av_aoi_sched'] = np.std(av_aoi_vals_sched) if valid else None
+        stats['min_av_aoi_rs'] = np.min(av_aoi_vals_rs) if valid else None
+        stats['min_av_aoi_sched'] = np.min(av_aoi_vals_sched) if valid else None
+        stats['max_av_aoi_rs'] = np.max(av_aoi_vals_rs) if valid else None
+        stats['max_av_aoi_sched'] = np.max(av_aoi_vals_sched) if valid else None
 
-        stats['av_aoi_by_targID'] = av_aoi_by_targID
-        stats['aoi_curves_by_targID'] = aoi_curves_by_targID
+        stats['av_aoi_by_targID_rs'] = av_aoi_by_targID_rs
+        stats['av_aoi_by_targID_sched'] = av_aoi_by_targID_sched
+        stats['aoi_curves_by_targID_rs'] = aoi_curves_by_targID_rs
+        stats['aoi_curves_by_targID_sched'] = aoi_curves_by_targID_sched
 
         if verbose:
+            print('------------------------------')
             print('AoI values')
-            print("%s: %f"%('av_av_aoi',stats['av_av_aoi']))
-            print("%s: %f"%('min_av_aoi',stats['min_av_aoi']))
-            print("%s: %f"%('max_av_aoi',stats['max_av_aoi']))
-            print("%s: %f"%('std_av_aoi',stats['std_av_aoi']))
+            print("%s: \t\t\t\t %f"%('av_av_aoi_rs',stats['av_av_aoi_rs']))
+            print("%s: %f"%('std_av_aoi_rs',stats['std_av_aoi_rs']))
+            print("%s: %f"%('min_av_aoi_rs',stats['min_av_aoi_rs']))
+            print("%s: %f"%('max_av_aoi_rs',stats['max_av_aoi_rs']))
+            print("%s: \t\t\t %f"%('av_av_aoi_sched',stats['av_av_aoi_sched']))
+            print("%s: %f"%('std_av_aoi_sched',stats['std_av_aoi_sched']))
+            print("%s: %f"%('min_av_aoi_sched',stats['min_av_aoi_sched']))
+            print("%s: %f"%('max_av_aoi_sched',stats['max_av_aoi_sched']))
 
             # for targ_ID in av_aoi_by_targID.keys ():
             #     avaoi = av_aoi_by_targID.get(targ_ID,None)
@@ -609,8 +687,9 @@ class GPMetrics():
         stats['aoi_curves_by_sat_indx'] = aoi_curves_by_sat_indx
 
         if verbose:
+            print('------------------------------')
             print('Sat CMD AoI values')
-            print("%s: %f"%('av_av_aoi',stats['av_av_aoi']))
+            print("%s: \t\t\t\t %f"%('av_av_aoi',stats['av_av_aoi']))
             print("%s: %f"%('min_av_aoi',stats['min_av_aoi']))
             print("%s: %f"%('max_av_aoi',stats['max_av_aoi']))
             print("%s: %f"%('std_av_aoi',stats['std_av_aoi']))
@@ -643,8 +722,9 @@ class GPMetrics():
         stats['aoi_curves_by_sat_indx'] = aoi_curves_by_sat_indx
 
         if verbose:
+            print('------------------------------')
             print('Sat TLM AoI values')
-            print("%s: %f"%('av_av_aoi',stats['av_av_aoi']))
+            print("%s: \t\t\t\t %f"%('av_av_aoi',stats['av_av_aoi']))
             print("%s: %f"%('min_av_aoi',stats['min_av_aoi']))
             print("%s: %f"%('max_av_aoi',stats['max_av_aoi']))
             print("%s: %f"%('std_av_aoi',stats['std_av_aoi']))
@@ -661,14 +741,22 @@ class GPMetrics():
 
         e_margin_by_sat_indx = {}
         ave_e_margin = []
+        ave_e_margin_prcnt = []
         min_e_margin = []
+        min_e_margin_prcnt = []
         max_e_margin = []
+        max_e_margin_prcnt = []
         for sat_indx in range (self.num_sats):
             e_margin = [e - self.sats_emin_Wh[sat_indx] for e in energy_usage['e_sats'][sat_indx]]
+            max_margin = self.sats_emax_Wh[sat_indx]-self.sats_emin_Wh[sat_indx]
+            e_margin_prcnt = [100*(e - self.sats_emin_Wh[sat_indx])/max_margin for e in energy_usage['e_sats'][sat_indx]]
 
             e_ave = np.mean(e_margin)
+            e_ave_prcnt = np.mean(e_margin_prcnt)
             e_max = np.max(e_margin)
+            e_max_prcnt = np.max(e_margin_prcnt)
             e_min = np.min(e_margin)
+            e_min_prcnt = np.min(e_margin_prcnt)
             e_margin_by_sat_indx[sat_indx] = {
                 "ave": e_ave,
                 "max": e_max,
@@ -676,26 +764,40 @@ class GPMetrics():
             }
 
             ave_e_margin.append(e_ave)
+            ave_e_margin_prcnt.append(e_ave_prcnt)
             min_e_margin.append(e_min)
+            min_e_margin_prcnt.append(e_min_prcnt)
             max_e_margin.append(e_max)
+            max_e_margin_prcnt.append(e_max_prcnt)
 
         valid = len(ave_e_margin) > 0
 
         stats =  {}
         stats['av_ave_e_margin'] = np.mean(ave_e_margin) if valid else None
+        stats['av_ave_e_margin_prcnt'] = np.mean(ave_e_margin_prcnt) if valid else None
         stats['min_ave_e_margin'] = np.min(ave_e_margin) if valid else None
+        stats['min_ave_e_margin_prcnt'] = np.min(ave_e_margin_prcnt) if valid else None
         stats['max_ave_e_margin'] = np.max(ave_e_margin) if valid else None
+        stats['max_ave_e_margin_prcnt'] = np.max(ave_e_margin_prcnt) if valid else None
         stats['std_ave_e_margin'] = np.std(ave_e_margin) if valid else None
+        stats['std_ave_e_margin_prcnt'] = np.std(ave_e_margin_prcnt) if valid else None
         stats['min_min_e_margin'] = np.min(min_e_margin) if valid else None
+        stats['min_min_e_margin_prcnt'] = np.min(min_e_margin_prcnt) if valid else None
 
 
         if verbose:
+            print('------------------------------')
             print('Sat energy margin values')
-            print("%s: %f"%('av_ave_e_margin',stats['av_ave_e_margin']))
-            print("%s: %f"%('min_ave_e_margin',stats['min_ave_e_margin']))
-            print("%s: %f"%('max_ave_e_margin',stats['max_ave_e_margin']))
-            print("%s: %f"%('std_ave_e_margin',stats['std_ave_e_margin']))
-            print("%s: %f"%('min_min_e_margin',stats['min_min_e_margin']))
+            # print("%s: %f"%('av_ave_e_margin',stats['av_ave_e_margin']))
+            print("%s: %f%%"%('av_ave_e_margin_prcnt',stats['av_ave_e_margin_prcnt']))
+            # print("%s: %f"%('min_ave_e_margin',stats['min_ave_e_margin']))
+            print("%s: %f%%"%('min_ave_e_margin_prcnt',stats['min_ave_e_margin_prcnt']))
+            # print("%s: %f"%('max_ave_e_margin',stats['max_ave_e_margin']))
+            print("%s: %f%%"%('max_ave_e_margin_prcnt',stats['max_ave_e_margin_prcnt']))
+            # print("%s: %f"%('std_ave_e_margin',stats['std_ave_e_margin']))
+            print("%s: %f%%"%('std_ave_e_margin_prcnt',stats['std_ave_e_margin_prcnt']))
+            # print("%s: %f"%('min_min_e_margin',stats['min_min_e_margin']))
+            print("%s: %f%%"%('min_min_e_margin_prcnt',stats['min_min_e_margin_prcnt']))
 
             # for sat_indx in range(self.num_sats):
             #     print("sat_indx %d: av e margin %f"%(sat_indx,e_margin_by_sat_indx[sat_indx]['ave']))
@@ -706,17 +808,25 @@ class GPMetrics():
 
     def assess_route_overlap(  self,routes,verbose=False):
         overlap_cnt_by_route = {}
-        for dr_1 in routes:
+        for dr_1_indx,dr_1 in  enumerate (routes):
             overlap_cnt = 0
-            for dr_2 in routes:
-                overlap_cnt += dr_1.count_overlap (dr_2)
+            for dr_2 in routes[dr_1_indx+1:]:
 
-            overlap_cnt_by_route[dr_1] = overlap_cnt
+                overlap_cnt_dr2 = dr_1.count_overlap (dr_2)
+                overlap_cnt += overlap_cnt_dr2
+                
+                overlap_cnt_by_route.setdefault(dr_2,0)
+                overlap_cnt_by_route[dr_2] += overlap_cnt_dr2
+
+            #  might not be the first time we've seen the route so need to set default
+            overlap_cnt_by_route.setdefault(dr_1,0)
+            overlap_cnt_by_route[dr_1] += overlap_cnt
 
         stats =  {}
         stats['total_num_overlaps'] = sum(cnt for cnt in overlap_cnt_by_route.values())
 
         if verbose:
+            print('------------------------------')
             print('Route overlap statistics')
             print("%s: %f"%('total_num_overlaps',stats['total_num_overlaps']))
             for dr_indx,(dr,cnt) in  enumerate (overlap_cnt_by_route.items()):

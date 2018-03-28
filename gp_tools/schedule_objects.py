@@ -123,9 +123,6 @@ class Dancecard(object):
         :raises: NotImplementedError
         """
 
-        # TODO: this method should probably be a generator
-
-
         t_vals_s = (self.tstep_sec*tp_indx for tp_indx in range(self.num_timepoints))
 
         if out_units == 'seconds':

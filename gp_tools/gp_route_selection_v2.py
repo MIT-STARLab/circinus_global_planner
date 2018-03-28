@@ -356,7 +356,6 @@ class GPDataRouteSelection():
 
         #  all dancecards here share the same intial timepoint indices (including for sat_indx, though it's longer)
         time_getter_dc = act_dancecards[obs_wind.sat_indx]
-        timepoint_indcs = time_getter_dc.get_tp_indcs ()
 
         def time_within(t1,t2,toi):
             return toi >= t1 and toi < t2
@@ -387,7 +386,8 @@ class GPDataRouteSelection():
         tp_dt = time_getter_dc.get_tp_from_tp_indx(0,out_units='datetime')
 
         #  the main loop for the dynamic programming algorithm
-        for tp_indx in timepoint_indcs:
+        # note: have to get the generator again
+        for tp_indx in time_getter_dc.get_tp_indcs ():
             if tp_indx % 10 == 0:
                 print(('tp_indx: %d/%d')%(tp_indx,time_getter_dc.num_timepoints-1))
 

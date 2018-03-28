@@ -63,25 +63,26 @@ class GlobalPlannerRunner:
         self.io_proc =GPProcessorIO(self.params)
         self.gp_plot =GPPlotting( self.params)
 
-    def pickle_rtsel_stuff(self,all_routes,all_routes_obs,all_stats,route_times_s,obs_indx,ecl_winds,window_uid):
+    def pickle_rtsel_stuff(self,routes_by_obs,all_stats,route_times_s,obs_indx,obs_winds,dlnk_winds_flat,ecl_winds,window_uid):
 
         pickle_stuff =  {}
-        pickle_stuff['all_routes'] = all_routes
-        pickle_stuff['all_routes_obs'] = all_routes_obs
+        pickle_stuff['routes_by_obs'] = routes_by_obs
         pickle_stuff['all_stats'] = all_stats
         pickle_stuff['route_times_s'] = route_times_s
         pickle_stuff['params'] =  self.params
         pickle_stuff['obs_indx'] = obs_indx
+        pickle_stuff['obs_winds'] = obs_winds
+        pickle_stuff['dlnk_winds_flat'] = dlnk_winds_flat
         pickle_stuff['ecl_winds'] = ecl_winds
         pickle_stuff['window_uid'] = window_uid
         pickle_name ='pickles/rs_%s_oi%d_%s' %( self.other_params['new_pickle_file_name_pre'],obs_indx,datetime.utcnow().isoformat().replace (':','_'))
         with open('%s.pkl' % ( pickle_name),'wb') as f:
             pickle.dump(  pickle_stuff,f)
 
-    def pickle_actsc_stuff(self,obs_routes,ecl_winds,scheduled_routes,energy_usage,window_uid):
+    def pickle_actsc_stuff(self,routes_by_obs,ecl_winds,scheduled_routes,energy_usage,window_uid):
 
         pickle_stuff =  {}
-        pickle_stuff['obs_routes'] = obs_routes
+        pickle_stuff['routes_by_obs'] = routes_by_obs
         pickle_stuff['ecl_winds'] = ecl_winds
         pickle_stuff['scheduled_routes'] = scheduled_routes
         pickle_stuff['energy_usage'] = energy_usage
@@ -96,21 +97,21 @@ class GlobalPlannerRunner:
         #  TODO:  uncommon this  if want to reload parameters from file
         # self.params = p['params']
 
-        return p['all_routes'],p['all_routes_obs'],p['all_stats'],p['route_times_s'],p['obs_indx'],p['ecl_winds'],p['window_uid']
+        return p['routes_by_obs'],p['all_stats'],p['route_times_s'],p['obs_indx'],p['obs_winds'],p['dlnk_winds_flat'],p['ecl_winds'],p['window_uid']
 
     def unpickle_actsc_stuff( self):
 
         p = pickle.load (open ( self.pickle_params['act_scheduling_pickle'],'rb'))
 
-        return p['obs_routes'],p['ecl_winds'],p['scheduled_routes'],p['energy_usage'],p['window_uid']
+        return p['routes_by_obs'],p['ecl_winds'],p['scheduled_routes'],p['energy_usage'],p['window_uid']
 
     
 
-    def run_nominal_activity_scheduling( self, all_routes,ecl_winds):
+    def run_nominal_activity_scheduling( self, routes_by_obs,ecl_winds):
         gp_as = GPActivityScheduling ( self.params)
 
         # flatten the list of all routes, which currently has nested lists for each observation
-        routes_flat = [item for sublist in all_routes for item in sublist]
+        routes_flat = [rt for rts in routes_by_obs.values() for rt in rts]
 
         print('make activity scheduling model')
         gp_as.make_model (routes_flat, ecl_winds,verbose = True)
@@ -129,19 +130,33 @@ class GlobalPlannerRunner:
 
         return  routes, energy_usage
 
-    def calc_activity_scheduling_results ( self,routes, energy_usage):
+    def calc_activity_scheduling_results ( self,obs_winds,dlnk_winds_flat,rs_routes_by_obs,sched_routes, energy_usage):
         gp_met = GPMetrics(self.params)
 
-        print('len(routes)')
-        print(len(routes))
-        # dv_stats = gp_met.assess_dv_all_routes (routes,verbose = True)
-        dv_obs_stats = gp_met.assess_dv_by_obs (routes,verbose = True)
-        lat_stats = gp_met.assess_latency_all_routes (routes,verbose = True)
-        lat_obs_stats = gp_met.assess_latency_by_obs (routes,verbose = True)
-        aoi_targ_stats = gp_met.assess_aoi_by_obs_target(routes,include_routing=True,verbose = True)
+        total_collectible_DV_all_obs_winds = sum(obs.data_vol for winds in obs_winds for obs in winds)
+        total_dlnkable_DV_all_dlnk_winds = sum(dlnk.data_vol for winds in dlnk_winds_flat for dlnk in winds)
+        rs_output_routes = [rt for rts in rs_routes_by_obs.values() for rt in rts]
+        total_collectible_DV_rs_routes = sum(min(obs.data_vol,sum(rt.data_vol for rt in rts)) for obs, rts in rs_routes_by_obs.items())
+
+        print('------------------------------')
+        print('len(rs_output_routes)')
+        print(len(rs_output_routes))
+        print('len(sched_routes)')
+        print(len(sched_routes))
+        print('total_collectible_DV_all_obs_winds')
+        print(total_collectible_DV_all_obs_winds)
+        print('total_dlnkable_DV_all_dlnk_winds')
+        print(total_dlnkable_DV_all_dlnk_winds)
+        print('total_collectible_DV_rs_routes')
+        print(total_collectible_DV_rs_routes)
+        # dv_stats = gp_met.assess_dv_all_routes (sched_routes,verbose = True)
+        dv_obs_stats = gp_met.assess_dv_by_obs (rs_routes_by_obs,sched_routes,verbose = True)
+        lat_stats = gp_met.assess_latency_all_routes (sched_routes,verbose = True)
+        lat_obs_stats = gp_met.assess_latency_by_obs (rs_routes_by_obs,sched_routes,verbose = True)
+        aoi_targ_stats = gp_met.assess_aoi_by_obs_target(rs_routes_by_obs,sched_routes,include_routing=True,verbose = True)
 
         gp_netsim = GPNetSim ( self.params, self.io_proc)
-        gp_netsim.sim_tlm_cmd_routing(routes, verbose =  False)
+        gp_netsim.sim_tlm_cmd_routing(sched_routes, verbose =  False)
         #  this is indexed by sat index
         sats_cmd_update_hist = gp_netsim.get_all_sats_cmd_update_hist()
         aoi_sat_cmd_stats = gp_met.assess_aoi_sat_cmd(sats_cmd_update_hist,verbose = True)
@@ -153,7 +168,7 @@ class GlobalPlannerRunner:
 
 
         plot_outputs = {}
-        plot_outputs['obs_aoi_curves_by_targID'] = aoi_targ_stats['aoi_curves_by_targID']
+        plot_outputs['obs_aoi_curves_by_targID'] = aoi_targ_stats['aoi_curves_by_targID_rs']
         plot_outputs['cmd_aoi_curves_by_sat_indx'] = aoi_sat_cmd_stats['aoi_curves_by_sat_indx']
         plot_outputs['tlm_aoi_curves_by_sat_indx'] = aoi_sat_tlm_stats['aoi_curves_by_sat_indx']
         return plot_outputs
@@ -258,9 +273,8 @@ class GlobalPlannerRunner:
         print ('nominal route selection v2')
 
         obs_indx =0
-        #  list of all routes, indexed by obs_indx ( important for pickling)
-        all_routes =[]
-        all_routes_obs =[]
+        # dict of all routes, with obs as key
+        routes_by_obs ={}
         all_stats =[]
         route_times_s =[]
 
@@ -284,7 +298,7 @@ class GlobalPlannerRunner:
                 t_a = time.time()
                 routes = gp_rs.run_stage1(obs,dlnk_winds_flat,xlnk_winds, dr_uid, verbose = False)
                 t_b = time.time()
-                stats = gp_rs.get_stats(verbose=True )
+                stats = gp_rs.get_stats(verbose=False )
 
                 time_elapsed = t_b-t_a
                 # end algorithm
@@ -302,24 +316,23 @@ class GlobalPlannerRunner:
                 print ('time_elapsed')
                 print (time_elapsed)
 
-                all_routes.append ( routes)
-                all_routes_obs.append ( obs)
+                routes_by_obs[obs] = routes
                 all_stats.append ( stats)
                 route_times_s.append ( time_elapsed)
 
                 obs_indx +=1
 
-                if obs_indx >= 1:
-                    break
+            #     if obs_indx >= 1:
+            #         break
 
-            if obs_indx >= 1:
-                break
+            # if obs_indx >= 1:
+            #     break
 
 
-        gp_met = GPMetrics(self.params)
-        gp_met.assess_route_overlap( routes,verbose=True)
+        # gp_met = GPMetrics(self.params)
+        # gp_met.assess_route_overlap( routes,verbose=False)
 
-        return all_routes,all_routes_obs,all_stats,route_times_s,obs_indx
+        return routes_by_obs,all_stats,route_times_s,obs_indx
 
     def  setup_test( self,obs_winds,dlnk_winds_flat,xlnk_winds):
         obs_winds_sel = [[] for sat_indx in range (self.sat_params['num_sats'])]
@@ -419,11 +432,11 @@ class GlobalPlannerRunner:
         weights_tups = zip(total_dv_weights,num_paths_sel_weights,latency_sf_weights)
         self.gp_plot.plot_route_latdv_pareto(all_routes,weights_tups,'plots/obs_winds_20_6_pareto.pdf')
 
-    def plot_route_selection_results ( self,obs_routes,dlnk_winds_flat,xlnk_winds_flat,num_obs_to_plot):
+    def plot_route_selection_results ( self,routes_by_obs,dlnk_winds_flat,xlnk_winds_flat,num_obs_to_plot):
 
         first_dlnk_indx = 10
         num_dlnks_to_plot = 20
-        for rts_indx, routes in enumerate (obs_routes):
+        for rts_indx, (obs,routes) in enumerate (routes_by_obs.items()):
             if rts_indx >= num_obs_to_plot:
                 break
 
@@ -449,10 +462,6 @@ class GlobalPlannerRunner:
                 (sel_obs_winds_flat, sel_dlnk_winds_flat, sel_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind) = self.io_proc.extract_flat_windows (rts)
 
                 obs = rts[0].get_obs()
-                # for sat_indx in  range (self.sat_params['num_sats']):
-                #     for obs in sel_obs_winds_flat[sat_indx]:
-                #         if obs:
-                #             break
 
                 sats_to_include =  range (self.sat_params['num_sats'])
                 # sats_to_include = [1,2,3]
@@ -486,7 +495,7 @@ class GlobalPlannerRunner:
                 )
 
 
-    def  plot_activity_scheduling_results ( self,obs_routes,routes,energy_usage,ecl_winds,metrics_plot_inputs):
+    def  plot_activity_scheduling_results ( self,routes_by_obs,routes,energy_usage,ecl_winds,metrics_plot_inputs):
 
         # do a bunch of stuff to extract the windows from all of the routes as indexed by observation
         # note that this stuff is not thewindows from the scheduled routes, but rather the windows from all the route selected in route selection
@@ -495,7 +504,7 @@ class GlobalPlannerRunner:
         sel_dlnk_winds_flat = [set() for sat_indx  in range (self.sat_params['num_sats'])]
         sel_xlnk_winds_flat = [set() for sat_indx  in range (self.sat_params['num_sats'])]        
 
-        for rts_indx, rts in enumerate (obs_routes):
+        for rts_indx, (obs,rts) in enumerate (routes_by_obs.items()):
             obs_winds_rt, dlnk_winds_rt, \
             xlnk_winds_rt, _, _ = self.io_proc.extract_flat_windows (rts)
 
@@ -686,16 +695,36 @@ class GlobalPlannerRunner:
 
         #  if  we are loading from file, do that
         if self.pickle_params['unpickle_pre_route_selection']:
-            obs_routes,all_routes_obs,all_stats,route_times_s,obs_indx,ecl_winds,window_uid = self.unpickle_rtsel_stuff()
+            routes_by_obs,all_stats,route_times_s,obs_indx,obs_winds,dlnk_winds_flat,ecl_winds,window_uid = self.unpickle_rtsel_stuff()
 
         #  otherwise run route selection
         else:
-            obs_routes,all_routes_obs,all_stats,route_times_s, obs_indx  =  self.run_nominal_route_selection_v2(obs_winds,dlnk_winds_flat,xlnk_winds)
-            # obs_routes,all_routes_obs,all_stats,route_times_s, obs_indx, weights_tups  =  self.run_test_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
+            routes_by_obs,all_stats,route_times_s, obs_indx  =  self.run_nominal_route_selection_v2(obs_winds,dlnk_winds_flat,xlnk_winds)
+            # routes_by_obs,all_stats,route_times_s, obs_indx, weights_tups  =  self.run_test_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
 
         if self.pickle_params['pickle_route_selection_results']:
-            self.pickle_rtsel_stuff(obs_routes,all_routes_obs,all_stats,route_times_s,obs_indx,ecl_winds,window_uid)
+            self.pickle_rtsel_stuff(routes_by_obs,all_stats,route_times_s,obs_indx,obs_winds,dlnk_winds_flat,ecl_winds,window_uid)
 
+        # run stage 2. todo:  move this elsewhere
+        all_routes = []
+
+        # import ipdb
+        # ipdb.set_trace()
+
+        for obs,routes in routes_by_obs.items():
+            all_routes += routes
+
+        print('len(all_routes)')
+        print(len(all_routes))
+
+        # gp_met = GPMetrics(self.params)
+        # t_a = time.time()
+         # need to figure out how to window this or something so that we don't have to compare to every other data route - that's horribly expensive
+        # gp_met.assess_route_overlap( all_routes,verbose=True)
+        # t_b = time.time()
+        # time_elapsed = t_b-t_a
+        # print('time_elapsed')
+        # print(time_elapsed)
         
         #################################
         # route selection output stage
@@ -704,7 +733,7 @@ class GlobalPlannerRunner:
         print('route selection output stage')
 
         if self.rs_general_params['plot_route_selection_results']:
-            self.plot_route_selection_results (obs_routes,dlnk_winds_flat,xlnk_winds_flat,num_obs_to_plot = 5)
+            self.plot_route_selection_results (routes_by_obs,dlnk_winds_flat,xlnk_winds_flat,num_obs_to_plot = 5)
 
         #################################
         #  activity scheduling stage
@@ -714,21 +743,21 @@ class GlobalPlannerRunner:
             return None
 
         #  explicitly validate routes 
-        # for routes in obs_routes:
+        # for routes in routes_by_obs:
         #     for dr in routes:
         #         dr.validate_route()
 
         #  if  we are loading from file, do that
         if self.pickle_params['unpickle_pre_act_scheduling']:
-            obs_routes,ecl_winds,scheduled_routes,energy_usage,window_uid = self.unpickle_actsc_stuff()
+            routes_by_obs,ecl_winds,scheduled_routes,energy_usage,window_uid = self.unpickle_actsc_stuff()
         else:
-            scheduled_routes,energy_usage = self.run_nominal_activity_scheduling(obs_routes,ecl_winds)
+            scheduled_routes,energy_usage = self.run_nominal_activity_scheduling(routes_by_obs,ecl_winds)
 
         # if we are saving to file, do that
         if self.pickle_params['pickle_act_scheduling_results']:
-            self.pickle_actsc_stuff(obs_routes,ecl_winds,scheduled_routes,energy_usage,window_uid)
+            self.pickle_actsc_stuff(routes_by_obs,ecl_winds,scheduled_routes,energy_usage,window_uid)
 
-        metrics_plot_inputs = self.calc_activity_scheduling_results (scheduled_routes, energy_usage)
+        metrics_plot_inputs = self.calc_activity_scheduling_results (obs_winds,dlnk_winds_flat,routes_by_obs,scheduled_routes, energy_usage)
 
         #################################
         #  Activity scheduling output stage
@@ -737,7 +766,7 @@ class GlobalPlannerRunner:
         print('activity scheduling output stage')
 
         if self.as_params['plot_activity_scheduling_results']:
-            self.plot_activity_scheduling_results(obs_routes,scheduled_routes,energy_usage,ecl_winds,metrics_plot_inputs)
+            self.plot_activity_scheduling_results(routes_by_obs,scheduled_routes,energy_usage,ecl_winds,metrics_plot_inputs)
           
 
         outputs = None

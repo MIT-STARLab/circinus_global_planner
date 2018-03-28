@@ -58,10 +58,6 @@ class GPNetSim():
             merged_activity_dancecard.add_winds_to_dancecard(dlnk_winds[sat_indx])
             merged_activity_dancecard.add_winds_to_dancecard(xlnk_winds[sat_indx])
 
-        # get the time points that we will iterate through to step through the simulation
-        # timepoints is the indices, whereas timepoints_s is the time values in seconds
-        #  NOTE: we assume the same time system for every satellite
-        timepoints_s = merged_activity_dancecard.get_tp_values(units='seconds', time_option ='relative_to_start')
 
         net_sim_sats = []
         net_sim_gs = []
@@ -74,7 +70,11 @@ class GPNetSim():
             net_sim_gs.append (NetSimGS(gs_indx,self.num_sats, self.num_gs,self.sched_start_utc_dt,self.sched_end_utc_dt))
 
 
-        for tp_indx,tp in  enumerate ( timepoints_s):
+        # get the time points that we will iterate through to step through the simulation
+        # timepoints is the indices, whereas timepoints_s is the time values in seconds
+        #  NOTE: we assume the same time system for every satellite
+        genrtr_timepoints_s = merged_activity_dancecard.get_tp_values(out_units='seconds')
+        for tp_indx,tp in  enumerate ( genrtr_timepoints_s):
             if verbose:
                 if tp_indx % 100 == 0:
                     print ('GP network sim at timepoint: %f'% (tp))
@@ -85,7 +85,7 @@ class GPNetSim():
                 continue
 
             # these are the activities we performed right before the current time point
-            activities = merged_activity_dancecard.get_objects_pre_tp_indx(tp_indx)
+            activities = merged_activity_dancecard.get_objects_at_ts_pre_tp_indx(tp_indx)
 
             # need to update the  update times on each of the entities involved in these activities.  this means that any exchange that happens after this takes account of the latest time that each entity updated its information
             # note that none of this will happen for ignored ground stations/satellites, because they should not be present in any of the activity windows

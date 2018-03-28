@@ -41,7 +41,7 @@ class GPActivityScheduling():
         self.solver_name =as_params['solver_name']
         self.solver_optimality_gap =as_params['solver_optimality_gap']
         self.solver_run_remotely =as_params['solver_run_remotely']
-        self.min_path_dv =as_params['min_path_dv_Mb']
+        self.min_forked_route_dv =as_params['min_forked_route_dv_Mb']
         self.num_sats=sat_params['num_sats']
         self.transition_time_s=as_params['transition_time_s']
         self.sched_start_utc_dt  = gp_inst_params['start_utc_dt']
@@ -279,7 +279,7 @@ class GPActivityScheduling():
         # construct a set of dance cards for every satellite, 
         # each of which keeps track of all of the activities of satellite 
         # can possibly execute at any given time slice delta T. 
-        act_dancecards = [Dancecard(self.sched_start_utc_dt,self.sched_end_utc_dt,self.resource_delta_t_s) for sat_indx in range (self.num_sats)]
+        act_dancecards = [Dancecard(self.sched_start_utc_dt,self.sched_end_utc_dt,self.resource_delta_t_s,mode='timestep') for sat_indx in range (self.num_sats)]
         for sat_indx in range (self.num_sats): 
             act_dancecards[sat_indx].add_winds_to_dancecard(sat_acts[sat_indx])
             act_dancecards[sat_indx].add_winds_to_dancecard(ecl_winds[sat_indx])
@@ -296,11 +296,11 @@ class GPActivityScheduling():
         #  subscript for each satellite
         model.sats = pe.Set(initialize=  range ( self.num_sats))
 
-        # timepoints is the indices, whereas timepoints_m is the time values in minutes
+        # timepoints is the indices, which starts at 0 
         #  NOTE: we assume the same time system for every satellite
-        timepoint_indcs = act_dancecards[0].get_tp_indcs ()
-        model.timepoint_indcs = pe.Set(initialize=  timepoint_indcs)
-        self.timepoints_m = act_dancecards[0].get_tp_values(out_units='minutes')
+        self.time_getter_dc = act_dancecards[0]
+        num_timepoints = act_dancecards[0].num_timepoints
+        model.timepoint_indcs = pe.Set(initialize=  self.time_getter_dc.get_tp_indcs())
 
         #  unique indices for observation and link acts
         model.obs_acts = pe.Set(initialize= obs_act_indcs)
@@ -310,7 +310,7 @@ class GPActivityScheduling():
         #  Make parameters
         ##############################
 
-        model.par_min_path_dv = pe.Param (initialize=self.min_path_dv)
+        model.par_min_forked_route_dv = pe.Param (initialize=self.min_forked_route_dv)
         model.par_obs_dv = pe.Param(model.obs_acts,initialize =dv_by_obs_act)
         model.par_total_obs_dv = sum(dv_by_obs_act.values())
         model.par_link_dv = pe.Param(model.link_acts,initialize =dv_by_link_act)
@@ -364,7 +364,7 @@ class GPActivityScheduling():
         model.c1 =pe.Constraint ( model.acts,  rule=c1_rule)
 
         def c2_rule( model,p):
-            return model.par_path_dv[p]*model.var_path_utilization[p] >= model.par_min_path_dv*model.var_path_indic[p]
+            return model.par_path_dv[p]*model.var_path_utilization[p] >= model.par_min_forked_route_dv*model.var_path_indic[p]
         model.c2 =pe.Constraint ( model.paths,  rule=c2_rule)
 
         def c3_rule( model,a):
@@ -432,7 +432,7 @@ class GPActivityScheduling():
                 charging = True
                 activity_delta_e = 0 
                 #  get the activities that were active during the time step immediately preceding time point
-                activities = act_dancecards[sat_indx].get_objects_pre_tp_indx(tp_indx)
+                activities = act_dancecards[sat_indx].get_objects_at_ts_pre_tp_indx(tp_indx)
                 for act in activities:
                     #  if this is a "standard activity" that we can choose to perform or not
                     if type(act) in self.standard_activities:
@@ -502,17 +502,14 @@ class GPActivityScheduling():
         ##############################
 
         #  determine which time points to use as "spot checks" on resource margin. These are the points that will be used in the objective function for maximizing resource margin
-        timepoint_spacing = ceil(len(timepoint_indcs)/self.resource_margin_num_timepoints)
-        decimated_tp_indcs = timepoint_indcs[::timepoint_spacing]
+        timepoint_spacing = ceil(num_timepoints/self.resource_margin_num_timepoints)
+        # need to turn the generator into a list for slicing
+        #  note: have to get the generator again
+        decimated_tp_indcs = list(self.time_getter_dc.get_tp_indcs())[::timepoint_spacing]
         rsrc_norm_f = len(decimated_tp_indcs) * len(model.sats)
 
-        # import ipdb
-        # ipdb.set_trace ()
         def obj_rule(model):
             return (
-                # model.par_obj_weight1 * 1/self.num_paths/model.par_obs_dv * sum(model.var_path_dv_dlnk[p,i,k] for i,k in model.dlnk_subscripts for p in model.paths )  +
-                # model.par_obj_weight2 * 1/self.num_paths                  * sum(model.var_path_indic[p] for p in model.paths) +
-                # model.par_obj_weight3 * 1/self.num_paths                  * sum(model.var_dlnk_path_occ[p,i,k]*model.par_dlnk_sf[i,k] for i,k in model.dlnk_subscripts for p in model.paths )
                 self.obj_weights['obs_dv'] * 1/model.par_total_obs_dv * sum(model.par_path_dv[p]*model.var_path_utilization[p] for p in model.paths) 
                 + self.obj_weights['route_latency'] * 1/len(model.obs_acts) * sum(path_latency_sf_by_path_indx[p]*model.var_path_utilization[p] for p in model.paths)
                 + self.obj_weights['energy_storage'] * 1/rsrc_norm_f * sum(model.var_sats_estore[sat_indx,tp_indx]/model.par_sats_estore_max[sat_indx] for tp_indx in decimated_tp_indcs for sat_indx in model.sats)
@@ -644,15 +641,15 @@ class GPActivityScheduling():
         # TODO: this code feels super inefficient somehow.  make it better?
         for sat_indx, sat in enumerate (self.model.sats):
             last_tp_indx = 0
-            for tp_indx, tp in enumerate (self.model.timepoint_indcs):
+            for tp_indx in self.model.timepoint_indcs:
 
                 if (tp_indx - last_tp_indx) < decimation_factor:
                     continue
                 else:
-                    e_vals[sat_indx].append(pe.value(self.model.var_sats_estore[sat,tp]))
+                    e_vals[sat_indx].append(pe.value(self.model.var_sats_estore[sat,tp_indx]))
 
                     if sat_indx == 0:
-                        t_vals.append(self.timepoints_m[tp])
+                        t_vals.append(self.time_getter_dc.get_tp_from_tp_indx(tp_indx,out_units='minutes'))
 
         energy_usage['time_mins'] = t_vals
         energy_usage['e_sats'] = e_vals

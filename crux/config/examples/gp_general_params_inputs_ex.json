@@ -1,18 +1,6 @@
 {
     "version": "0.1",
-    "other_params": {
-        "targ_id_ignore_list": [],
-        "gs_id_ignore_list": [],
-        "min_allowed_dv_xlnk_Mb" : 100,
-        "min_allowed_dv_dlnk_Mb" : 100,
-        "latency_calculation": {
-            "dlnk": "center",
-            "obs": "end"
-        },
-        "load_windows_from_file":  true
-    },
     "metrics_params": {
-        "min_obs_dv_Mb": 100,
         "aoi_units": "hours"
     },
     "route_selection_general_params": {
@@ -20,7 +8,7 @@
         "wind_filter_duration_obs_sat_s" : 7200,
         "plot_include_dlnk_labels":    false,
         "plot_include_xlnk_labels":   true,
-        "plot_route_selection_results":      true,
+        "plot_route_selection_results":       false,
         "adjust_window_timing_post_selection": true,
         "min_simple_route_dv_Mb" :  50 
     },
@@ -33,7 +21,7 @@
     "route_selection_params_v2": {
     },
     "activity_scheduling_params": {
-        "min_route_dv_Mb" :  100,
+        "min_forked_route_dv_Mb" :  100,
         "dv_epsilon_Mb" :  1,
         "solver_max_runtime_s" :  60,
         "solver_name" :  "gurobi",
@@ -49,7 +37,7 @@
         },
         "obj_weights": {
             "obs_dv": 1.0,
-            "route_latency": 1.0,
+            "route_latency": 10.0,
             "energy_storage": 1.0
         },
         "plot_include_dlnk_labels":    false,
@@ -57,15 +45,26 @@
         "plot_activity_scheduling_results":   true,
         "resource_delta_t_s": 10,
         "resource_margin_num_timepoints": 30,
-        "run_activity_scheduling":  false
+        "run_activity_scheduling":  true
     },
     "pickle_params":  {
-        "unpickle_pre_route_selection":                    false,
-        "pickle_route_selection_results":               false,
+        "unpickle_pre_route_selection":                      true,
+        "pickle_route_selection_results":                   false,
         "unpickle_pre_act_scheduling":                            false,
         "pickle_act_scheduling_results":                            false,
-        "route_selection_pickle": "pickles/rs_walker30_all_obs_30smax_better.pkl",
+        "route_selection_pickle": "pickles/rs_orbit_prop_inputs_walker6_7gs_oi28_2018-03-28T16_50_54.476569.pkl",
         "act_scheduling_pickle": "pickles/as_2018-03-19T20_35_17.004653.pkl"
+    },
+    "other_params": {
+        "targ_id_ignore_list": [],
+        "gs_id_ignore_list": [],
+        "min_allowed_dv_xlnk_Mb" : 100,
+        "min_allowed_dv_dlnk_Mb" : 100,
+        "latency_calculation": {
+            "dlnk": "center",
+            "obs": "end"
+        },
+        "load_windows_from_file":    false
     },
     "plot_params":  {
         "plot_fig_extension":  "pdf",
