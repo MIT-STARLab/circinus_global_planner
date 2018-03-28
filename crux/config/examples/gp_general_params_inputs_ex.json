@@ -1,7 +1,10 @@
 {
     "version": "0.1",
     "metrics_params": {
-        "aoi_units": "hours"
+        "aoi_units": "hours",
+        "overlap_window_s": 3600,
+        "overlap_count_option": "single_overlap",
+        "window_overlap_option": "mutex_window"
     },
     "route_selection_general_params": {
         "wind_filter_duration_s" : 3600,
@@ -45,14 +48,14 @@
         "plot_activity_scheduling_results":   true,
         "resource_delta_t_s": 10,
         "resource_margin_num_timepoints": 30,
-        "run_activity_scheduling":  true
+        "run_activity_scheduling":  false
     },
     "pickle_params":  {
         "unpickle_pre_route_selection":                      true,
         "pickle_route_selection_results":                   false,
         "unpickle_pre_act_scheduling":                            false,
         "pickle_act_scheduling_results":                            false,
-        "route_selection_pickle": "pickles/rs_orbit_prop_inputs_walker6_7gs_oi28_2018-03-28T16_50_54.476569.pkl",
+        "route_selection_pickle": "pickles/rs_orbit_prop_inputs_walker6_7gs_oi28_2018-03-28T22_18_53.513366.pkl",
         "act_scheduling_pickle": "pickles/as_2018-03-19T20_35_17.004653.pkl"
     },
     "other_params": {

@@ -4,7 +4,7 @@
 #
 #  note that a path is the same as a route.
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import numpy as np
 
 from circinus_tools  import time_tools as tt
@@ -38,6 +38,9 @@ class GPMetrics():
 
         self.min_as_route_dv = as_params['min_forked_route_dv_Mb']
         self.aoi_units = metrics_params['aoi_units']
+        self.overlap_count_option = metrics_params['overlap_count_option']
+        self.window_overlap_option = metrics_params['window_overlap_option']
+        self.overlap_window_td = timedelta(metrics_params['overlap_window_s'])
         self.aoi_plot_t_units=plot_params['time_units']
 
         self.power_params = sat_params['power_params_sorted']
@@ -806,30 +809,144 @@ class GPMetrics():
 
         return stats
 
-    def assess_route_overlap(  self,routes,verbose=False):
-        overlap_cnt_by_route = {}
-        for dr_1_indx,dr_1 in  enumerate (routes):
-            overlap_cnt = 0
-            for dr_2 in routes[dr_1_indx+1:]:
+    def calc_overlaps(self,routes_by_obs):
+        # overlap_cnt_by_route = {}
+        # for dr_1_indx,dr_1 in  enumerate (routes):
+        #     overlap_cnt = 0
+        #     for dr_2 in routes[dr_1_indx+1:]:
 
-                overlap_cnt_dr2 = dr_1.count_overlap (dr_2)
-                overlap_cnt += overlap_cnt_dr2
+        #         # overlap_incr = dr_1.count_overlap (dr_2,overlap_count_option='shared_window')
+        #         # overlap_incr = dr_1.count_overlap (dr_2,overlap_count_option='mutex_window')
+        #         # coerce the Boolean to intfor the addition
+        #         # overlap_incr = dr_1.is_overlapping (dr_2,overlap_count_option='shared_window')
+        #         overlap_incr = dr_1.is_overlapping (dr_2,overlap_count_option='mutex_window')
+        #         overlap_cnt += overlap_incr
                 
-                overlap_cnt_by_route.setdefault(dr_2,0)
-                overlap_cnt_by_route[dr_2] += overlap_cnt_dr2
+        #         overlap_cnt_by_route.setdefault(dr_2,0)
+        #         overlap_cnt_by_route[dr_2] += overlap_incr
 
-            #  might not be the first time we've seen the route so need to set default
-            overlap_cnt_by_route.setdefault(dr_1,0)
-            overlap_cnt_by_route[dr_1] += overlap_cnt
+        #     #  might not be the first time we've seen the route so need to set default
+        #     overlap_cnt_by_route.setdefault(dr_1,0)
+        #     overlap_cnt_by_route[dr_1] += overlap_cnt
+
+        overlap_cnt_by_route = {}
+        overlap_rts_by_route = {}
+        for obs_indx_1, (obs_1,rts_1) in enumerate(routes_by_obs.items()): 
+            for obs_indx_2, (obs_2,rts_2) in enumerate(routes_by_obs.items()): 
+                #  don't want to look at observations that are lower in index, because then will be repeating overlap counts
+                if obs_indx_2 <= obs_indx_1:
+                    continue
+
+                #  if the observations are too far apart, don't consider route overlap
+                if abs(obs_2.start - obs_1.start) > self.overlap_window_td:
+                    continue 
+
+                for dr_1 in rts_1:
+                    overlap_cnt = 0
+                    overlap_rts_by_route.setdefault(dr_1,[])
+                    for dr_2 in rts_2:
+                        overlap_rts_by_route.setdefault(dr_2,[])
+
+                        if self.overlap_count_option=='single_overlap':
+                            overlap_incr = dr_1.is_overlapping (dr_2,self.window_overlap_option)
+                        elif self.overlap_count_option=='multiple_overlap':
+                            overlap_incr = dr_1.count_overlap (dr_2,self.window_overlap_option)
+                        else:
+                            raise NotImplementedError
+
+                        # coerce the Boolean to int for the addition, if necessary
+                        overlap_cnt += overlap_incr
+                        
+                        overlap_cnt_by_route.setdefault(dr_2,0)
+                        overlap_cnt_by_route[dr_2] += overlap_incr
+                        
+                        if overlap_incr:
+                            overlap_rts_by_route[dr_2].append(dr_1.ID)
+                            overlap_rts_by_route[dr_1].append(dr_2.ID)
+
+                    #  might not be the first time we've seen the route so need to set default
+                    overlap_cnt_by_route.setdefault(dr_1,0)
+                    overlap_cnt_by_route[dr_1] += overlap_cnt
+
+        return overlap_cnt_by_route,overlap_rts_by_route
+
+    def assess_route_overlap(  self,routes,verbose=False):
+        # overlap_count_option='single_overlap'
+        # overlap_count_option='multiple_overlap'
+        # overlap_count_option='shared_window'
+        # overlap_count_option='mutex_window'
+
+        routes_by_obs = self.get_routes_by_obs (routes)
+        
+        overlap_cnt_by_route,overlap_rts_by_route = self.calc_overlaps(routes_by_obs)
+
+        non_overlap_rt_cnt_by_obs = {}
+        non_overlap_has_xlnk_rt_cnt_by_obs = {}
+        for obs_indx,(obs,rts) in  enumerate (routes_by_obs.items()):
+            rts_overlap_counts = {dr:overlap_cnt_by_route[dr] for dr in rts}
+
+            non_overlap_rt_cnt_by_obs[obs] = 0
+            non_overlap_has_xlnk_rt_cnt_by_obs[obs] = 0
+            for dr_indx, dr in  enumerate(rts):
+                if rts_overlap_counts[dr] == 0:
+                    non_overlap_rt_cnt_by_obs[obs] += 1
+
+                    if dr.has_xlnk():
+                        non_overlap_has_xlnk_rt_cnt_by_obs[obs] += 1
+
+
+        non_overlap_rt_cnt = [cnt for cnt in non_overlap_rt_cnt_by_obs.values()]
+        non_overlap_has_xlnk_rt_cnt = [cnt for cnt in non_overlap_has_xlnk_rt_cnt_by_obs.values()]
 
         stats =  {}
-        stats['total_num_overlaps'] = sum(cnt for cnt in overlap_cnt_by_route.values())
+        counts = list(overlap_cnt_by_route.values())
+        stats['total_num_overlaps'] = sum(counts)
+        stats['ave_num_overlaps_by_route'] = np.mean(counts)
+        stats['ave_non_overlap_count_by_obs'] = np.mean(non_overlap_rt_cnt)
+        stats['ave_non_overlap_count_has_xlnk_by_obs'] = np.mean(non_overlap_has_xlnk_rt_cnt)
+        stats['std_num_overlaps_by_route'] = np.std(counts)
+        stats['std_non_overlap_count_by_obs'] = np.std(non_overlap_rt_cnt)
+        stats['std_non_overlap_count_has_xlnk_by_obs'] = np.std(non_overlap_has_xlnk_rt_cnt)
+        stats['min_num_overlaps_by_route'] = np.min(counts)
+        stats['min_non_overlap_count_by_obs'] = np.min(non_overlap_rt_cnt)
+        stats['min_non_overlap_count_has_xlnk_by_obs'] = np.min(non_overlap_has_xlnk_rt_cnt)
+        stats['max_num_overlaps_by_route'] = np.max(counts)
+        stats['max_non_overlap_count_by_obs'] = np.max(non_overlap_rt_cnt)
+        stats['max_non_overlap_count_has_xlnk_by_obs'] = np.max(non_overlap_has_xlnk_rt_cnt)
+        stats['num_obs_no_non_overlaps'] = non_overlap_rt_cnt.count(0)
+        stats['num_obs_no_non_overlaps_has_xlnk'] = non_overlap_has_xlnk_rt_cnt.count(0)
+
+        #  do a quick  length check
+        assert(len([rt for rts in routes_by_obs.values() for rt in rts]) == len(routes))
 
         if verbose:
             print('------------------------------')
             print('Route overlap statistics')
-            print("%s: %f"%('total_num_overlaps',stats['total_num_overlaps']))
-            for dr_indx,(dr,cnt) in  enumerate (overlap_cnt_by_route.items()):
-                print("%2d, dv %06.2f: overlap %d"%(dr_indx,dr.data_vol,cnt))
+            print("%s: %d"%('total_num_overlaps',stats['total_num_overlaps']))
+            print('------ By route')
+            print("%s: %d"%('ave_num_overlaps',stats['ave_num_overlaps_by_route']))
+            print("%s: %d"%('std_num_overlaps',stats['std_num_overlaps_by_route']))
+            print("%s: %d"%('min_num_overlaps',stats['min_num_overlaps_by_route']))
+            print("%s: %d"%('max_num_overlaps',stats['max_num_overlaps_by_route']))
+            print('------ By obs, routes with no overlaps')
+            print("%s: %d"%('num_obs_no_non_overlaps',stats['num_obs_no_non_overlaps']))
+            print("%s: %d"%('ave_no_overlap_count',stats['ave_non_overlap_count_by_obs']))
+            print("%s: %d"%('std_no_overlap_count',stats['std_non_overlap_count_by_obs']))
+            print("%s: %d"%('min_no_overlap_count',stats['min_non_overlap_count_by_obs']))
+            print("%s: %d"%('max_no_overlap_count',stats['max_non_overlap_count_by_obs']))
+            print('------ By obs, routes with no overlaps, route has xlink')
+            print("%s: %d"%('num_obs_no_non_overlaps',stats['num_obs_no_non_overlaps_has_xlnk']))
+            print("%s: %d"%('ave_no_overlap_count',stats['ave_non_overlap_count_has_xlnk_by_obs']))
+            print("%s: %d"%('std_no_overlap_count',stats['std_non_overlap_count_has_xlnk_by_obs']))
+            print("%s: %d"%('min_no_overlap_count',stats['min_non_overlap_count_has_xlnk_by_obs']))
+            print("%s: %d"%('max_no_overlap_count',stats['max_non_overlap_count_has_xlnk_by_obs']))
+            # for obs_indx,(obs,rts) in  enumerate (routes_by_obs.items()):
+            #     # print("%2d, dv %-7.2f: overlap count %d"%(dr_indx,dr.data_vol,cnt))
+            #     print('obs %d: %s'%(obs_indx,obs))
+            #     rts.sort(key=lambda dr: overlap_cnt_by_route[dr])
+            #     for dr_indx, dr in  enumerate(rts):
+            #         # print("   dr %2d overlap count: %d"%(dr_indx,overlap_cnt_by_route[dr]))
+            #         # print("   dr %2d overlap count: %d \t %s"%(dr_indx,overlap_cnt_by_route[dr],dr))
+            #         print("   dr %2d overlap count: %d \t %s \t %s"%(dr_indx,overlap_cnt_by_route[dr],[drID for drID in overlap_rts_by_route[dr]],dr))
 
 

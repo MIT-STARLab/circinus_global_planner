@@ -296,7 +296,7 @@ class GlobalPlannerRunner:
 
                 # run the route selection algorithm
                 t_a = time.time()
-                routes = gp_rs.run_stage1(obs,dlnk_winds_flat,xlnk_winds, dr_uid, verbose = False)
+                routes,dr_uid = gp_rs.run_stage1(obs,dlnk_winds_flat,xlnk_winds, dr_uid, verbose = False)
                 t_b = time.time()
                 stats = gp_rs.get_stats(verbose=False )
 
@@ -332,7 +332,7 @@ class GlobalPlannerRunner:
         # gp_met = GPMetrics(self.params)
         # gp_met.assess_route_overlap( routes,verbose=False)
 
-        return routes_by_obs,all_stats,route_times_s,obs_indx
+        return routes_by_obs,all_stats,route_times_s,obs_indx, dr_uid
 
     def  setup_test( self,obs_winds,dlnk_winds_flat,xlnk_winds):
         obs_winds_sel = [[] for sat_indx in range (self.sat_params['num_sats'])]
@@ -699,7 +699,7 @@ class GlobalPlannerRunner:
 
         #  otherwise run route selection
         else:
-            routes_by_obs,all_stats,route_times_s, obs_indx  =  self.run_nominal_route_selection_v2(obs_winds,dlnk_winds_flat,xlnk_winds)
+            routes_by_obs,all_stats,route_times_s, obs_indx, dr_uid  =  self.run_nominal_route_selection_v2(obs_winds,dlnk_winds_flat,xlnk_winds)
             # routes_by_obs,all_stats,route_times_s, obs_indx, weights_tups  =  self.run_test_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
 
         if self.pickle_params['pickle_route_selection_results']:
@@ -717,10 +717,10 @@ class GlobalPlannerRunner:
         print('len(all_routes)')
         print(len(all_routes))
 
-        # gp_met = GPMetrics(self.params)
+        gp_met = GPMetrics(self.params)
         # t_a = time.time()
          # need to figure out how to window this or something so that we don't have to compare to every other data route - that's horribly expensive
-        # gp_met.assess_route_overlap( all_routes,verbose=True)
+        gp_met.assess_route_overlap( all_routes,verbose=True)
         # t_b = time.time()
         # time_elapsed = t_b-t_a
         # print('time_elapsed')

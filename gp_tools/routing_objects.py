@@ -62,6 +62,13 @@ class DataRoute(object):
     def get_dlnk( self):
         return self.route[-1]
 
+    def has_xlnk(self):
+        for wind in self.route:
+            if type(wind) == XlnkWindow:
+                return True
+
+        return False
+
     def get_latency( self,units='minutes',obs_option = 'end', dlnk_option = 'center'):
         obs =  self.route[0]
         dlnk =  self.route[-1]
@@ -193,8 +200,7 @@ class DataRoute(object):
 
         return self.route[split_windex]
 
-    def count_overlap(self,other):
-
+    def count_overlap(self,other,window_option ='shared_window'):
 
         overlap_count = 0
         for wind1 in self.route:
@@ -206,12 +212,40 @@ class DataRoute(object):
                     continue
 
                 if wind1 == wind2:
-                    #  only count true overlaps, meaning there's not enough space in the window for both routes
-                    if self.data_vol + other.data_vol > wind1.data_vol: 
+                    if window_option =='shared_window':
+                        #  only count true overlaps, meaning there's not enough space in the window for both routes
+                        if self.data_vol + other.data_vol > wind1.data_vol: 
+                            overlap_count += 1
+                    elif window_option == 'mutex_window':
                         overlap_count += 1
+                    else:
+                        raise NotImplementedError
 
 
         return overlap_count
+
+    def is_overlapping(self,other,window_option ='shared_window'):
+
+        overlap_count = 0
+        for wind1 in self.route:
+            if type(wind1) != XlnkWindow:
+                continue
+
+            for wind2 in  other.route:
+                if type(wind2) != XlnkWindow:
+                    continue
+
+                if wind1 == wind2:
+                    if window_option =='shared_window':
+                        #  only count true overlaps, meaning there's not enough space in the window for both routes
+                        if self.data_vol + other.data_vol > wind1.data_vol: 
+                            return True
+                    elif window_option == 'mutex_window':
+                        return True
+                    else:
+                        raise NotImplementedError
+
+        return False
 
 
 

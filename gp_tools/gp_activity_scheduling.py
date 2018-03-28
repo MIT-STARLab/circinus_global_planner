@@ -235,7 +235,7 @@ class GPActivityScheduling():
             for lat_indx, lat in enumerate(latencies):
                 dr_indx = dr_indcs[lat_indx]
                 path_latency_sf_by_path_indx[dr_indx] = lat/min_lat
-
+ 
         return path_latency_sf_by_path_indx
 
     def make_model ( self,routes_flat, ecl_winds, verbose = True):
@@ -500,6 +500,9 @@ class GPActivityScheduling():
         ##############################
         #  Make objective
         ##############################
+
+        from circinus_tools import debug_tools
+        debug_tools.debug_breakpt()
 
         #  determine which time points to use as "spot checks" on resource margin. These are the points that will be used in the objective function for maximizing resource margin
         timepoint_spacing = ceil(num_timepoints/self.resource_margin_num_timepoints)

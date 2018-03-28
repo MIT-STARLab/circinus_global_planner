@@ -607,7 +607,7 @@ class GPDataRouteSelection():
         for dr in all_routes:
             dr.validate_route()
 
-        return all_routes
+        return all_routes, dr_uid
 
 
     def get_stats(self,verbose=False):
