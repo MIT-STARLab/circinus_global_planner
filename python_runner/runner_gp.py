@@ -136,6 +136,7 @@ class GlobalPlannerRunner:
         total_collectible_DV_all_obs_winds = sum(obs.data_vol for winds in obs_winds for obs in winds)
         total_dlnkable_DV_all_dlnk_winds = sum(dlnk.data_vol for winds in dlnk_winds_flat for dlnk in winds)
         rs_output_routes = [rt for rts in rs_routes_by_obs.values() for rt in rts]
+        total_throughput_DV_rs_routes = sum(sum(rt.data_vol for rt in rts) for obs, rts in rs_routes_by_obs.items())
         total_collectible_DV_rs_routes = sum(min(obs.data_vol,sum(rt.data_vol for rt in rts)) for obs, rts in rs_routes_by_obs.items())
 
         print('------------------------------')
@@ -147,13 +148,15 @@ class GlobalPlannerRunner:
         print(total_collectible_DV_all_obs_winds)
         print('total_dlnkable_DV_all_dlnk_winds')
         print(total_dlnkable_DV_all_dlnk_winds)
+        print('total_throughput_DV_rs_routes')
+        print(total_throughput_DV_rs_routes)
         print('total_collectible_DV_rs_routes')
         print(total_collectible_DV_rs_routes)
         # dv_stats = gp_met.assess_dv_all_routes (sched_routes,verbose = True)
         dv_obs_stats = gp_met.assess_dv_by_obs (rs_routes_by_obs,sched_routes,verbose = True)
         lat_stats = gp_met.assess_latency_all_routes (sched_routes,verbose = True)
         lat_obs_stats = gp_met.assess_latency_by_obs (rs_routes_by_obs,sched_routes,verbose = True)
-        aoi_targ_stats = gp_met.assess_aoi_by_obs_target(rs_routes_by_obs,sched_routes,include_routing=True,verbose = True)
+        aoi_targ_stats = gp_met.assess_aoi_by_obs_target(rs_routes_by_obs,sched_routes,verbose = True)
 
         gp_netsim = GPNetSim ( self.params, self.io_proc)
         gp_netsim.sim_tlm_cmd_routing(sched_routes, verbose =  False)

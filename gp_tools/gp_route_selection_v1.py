@@ -61,11 +61,6 @@ class GPDataRouteSelection():
         self.wind_filter_duration =  timedelta (seconds =rs_general_params['wind_filter_duration_s'])
         self.latency_params =  gp_general_other_params['latency_calculation']
 
-        if self.latency_params['obs'] not in ['start','end']:
-            raise NotImplementedError
-        if self.latency_params['dlnk'] not in ['start','end','center']:
-            raise NotImplementedError
-
         #   quick sanity check on M time value
         total_duration =(self.sel_end_utc_dt- self.sel_start_utc_dt).total_seconds ()
         if  total_duration  > self.M_t_s:

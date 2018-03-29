@@ -37,10 +37,8 @@ class GPActivityScheduling():
         gp_inst_params = gp_params['gp_instance_params']['activity_scheduling_params']
         
         self.latency_params = gp_params['gp_general_params']['other_params']['latency_calculation']
-        self.solver_max_runtime =as_params['solver_max_runtime_s']
         self.solver_name =as_params['solver_name']
-        self.solver_optimality_gap =as_params['solver_optimality_gap']
-        self.solver_run_remotely =as_params['solver_run_remotely']
+        self.solver_params =as_params['solver_params']
         self.min_forked_route_dv =as_params['min_forked_route_dv_Mb']
         self.num_sats=sat_params['num_sats']
         self.transition_time_s=as_params['transition_time_s']
@@ -87,10 +85,9 @@ class GPActivityScheduling():
 
         self.standard_activities = [ObsWindow,DlnkWindow,XlnkWindow]
 
-        if self.latency_params['obs'] not in ['start','end']:
-            raise NotImplementedError
-        if self.latency_params['dlnk'] not in ['start','end','center']:
-            raise NotImplementedError
+        #  this should be as small as possible to prevent ill conditioning, but big enough that score factor constraints are still valid. 
+        #  note: the size of this value is checked in make_model() below
+        self.big_M_lat = 1e6
 
     def get_stats(self,verbose=True):
         stats = {}
@@ -306,6 +303,15 @@ class GPActivityScheduling():
         model.obs_acts = pe.Set(initialize= obs_act_indcs)
         model.link_acts = pe.Set(initialize= link_act_indcs)
 
+        if self.solver_name == 'gurobi':
+            int_feas_tol = self.solver_params['gurobi']['integer_feasibility_tolerance']
+        else:
+            raise NotImplementedError
+
+        for p,lat_sf in path_latency_sf_by_path_indx.items():        
+            if lat_sf > int_feas_tol*self.big_M_lat:
+                raise RuntimeError('big_M_lat (%f) is not large enough for latency score factor %f and integer feasibility tolerance %f (path index %d)'%(self.big_M_lat,lat_sf,int_feas_tol,p))
+
         ##############################
         #  Make parameters
         ##############################
@@ -348,6 +354,8 @@ class GPActivityScheduling():
         
         # satellite energy storage
         model.var_sats_estore  = pe.Var (model.sats,  model.timepoint_indcs,  within = pe.NonNegativeReals)
+
+        model.var_path_latency_sf_by_obs_indx = pe.Var (model.obs_acts,  within = pe.NonNegativeReals)
         
 
         ##############################
@@ -493,16 +501,33 @@ class GPActivityScheduling():
                 #     )
 
 
+        #  observation latency score factor constraints [8]
+        model.c8  = pe.ConstraintList()
+        for obs_indx in model.obs_acts:
+            paths_obs = model.par_path_subscrs_by_obs_act[obs_indx]
 
+            #  sort the latency score factors for all the paths for this observation in increasing order -  important for constraint construction
+            paths_obs.sort(key= lambda p: path_latency_sf_by_path_indx[p])
 
+            num_paths_obs = len(paths_obs)
+            #  initial constraint -  score factor for this observation will be equal to zero if no paths for this obs were chosen
+            model.c8.add( model.var_path_latency_sf_by_obs_indx[obs_indx] <= 0 + self.big_M_lat * sum(model.var_path_indic[p] for p in paths_obs) )
+            
+            for path_obs_indx in range(num_paths_obs):
+                #  add constraint that score factor for observation is less than or equal to the score factor for this path_obs_indx, plus any big M terms for any paths with larger score factors.
+                #  what this does is effectively disable the constraint for the score factor for this path_obs_indx if any higher score factor paths were chosen 
+                model.c8.add( model.var_path_latency_sf_by_obs_indx[obs_indx] <= 
+                    path_latency_sf_by_path_indx[paths_obs[path_obs_indx]] + 
+                    self.big_M_lat * sum(model.var_path_indic[p] for p in paths_obs[path_obs_indx+1:num_paths_obs]) )
+
+                #  note: use constraint body.to_string()  to print out the constraint in a human readable form
+                
 
 
         ##############################
         #  Make objective
         ##############################
 
-        # from circinus_tools import debug_tools
-        # debug_tools.debug_breakpt()
 
         #  determine which time points to use as "spot checks" on resource margin. These are the points that will be used in the objective function for maximizing resource margin
         timepoint_spacing = ceil(num_timepoints/self.resource_margin_num_timepoints)
@@ -514,7 +539,8 @@ class GPActivityScheduling():
         def obj_rule(model):
             return (
                 self.obj_weights['obs_dv'] * 1/model.par_total_obs_dv * sum(model.par_path_dv[p]*model.var_path_utilization[p] for p in model.paths) 
-                + self.obj_weights['route_latency'] * 1/len(model.obs_acts) * sum(path_latency_sf_by_path_indx[p]*model.var_path_utilization[p] for p in model.paths)
+                # + self.obj_weights['route_latency'] * 1/len(model.obs_acts) * sum(path_latency_sf_by_path_indx[p]*model.var_path_utilization[p] for p in model.paths)
+                + self.obj_weights['route_latency'] * 1/len(model.obs_acts) * sum(model.var_path_latency_sf_by_obs_indx[o] for o in model.obs_acts)
                 + self.obj_weights['energy_storage'] * 1/rsrc_norm_f * sum(model.var_sats_estore[sat_indx,tp_indx]/model.par_sats_estore_max[sat_indx] for tp_indx in decimated_tp_indcs for sat_indx in model.sats)
             )
         model.obj = pe.Objective( rule=obj_rule, sense=pe.maximize )
@@ -525,13 +551,14 @@ class GPActivityScheduling():
     def solve(self):
 
         solver = po.SolverFactory(self.solver_name)
-        solver.options['timelimit'] = self.solver_max_runtime
         if self.solver_name == 'gurobi':
             # note default for this is 1e-4, or 0.01%
-            solver.options['MIPGap'] = self.solver_optimality_gap
+            solver.options['TimeLimit'] = self.solver_params['gurobi']['max_runtime_s']
+            solver.options['MIPGap'] = self.solver_params['gurobi']['optimality_gap']
+            solver.options['IntFeasTol'] = self.solver_params['gurobi']['integer_feasibility_tolerance']
 
         # if we're running things remotely, then we will use the NEOS server (https://neos-server.org/neos/)
-        if self.solver_run_remotely:
+        if self.solver_params['run_remotely']:
             solver_manager = po.SolverManagerFactory('neos')
             results = solver_manager.solve(self.model, opt= solver)
         else:

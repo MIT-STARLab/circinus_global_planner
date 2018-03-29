@@ -26,10 +26,20 @@
     "activity_scheduling_params": {
         "min_forked_route_dv_Mb" :  100,
         "dv_epsilon_Mb" :  1,
-        "solver_max_runtime_s" :  60,
         "solver_name" :  "gurobi",
-        "solver_optimality_gap" :  0.0001,
-        "solver_run_remotely" :   false,
+        "solver_params": {
+            "run_remotely" :   false,
+            "gurobi": {
+                "max_runtime_s" :  60,
+                "optimality_gap" :  1e-4,
+                "integer_feasibility_tolerance" :  1e-5,
+                "_helpful_links": [
+                    "http://www.gurobi.com/documentation/7.5/refman/intfeastol.html#parameter:IntFeasTol",
+                    "http://www.gurobi.com/documentation/7.5/refman/mipgap2.html#parameter:MIPGap",
+                    "http://www.gurobi.com/documentation/7.5/refman/timelimit.html#parameter:TimeLimit"
+                ]
+            }
+        },
         "transition_time_s": {
             "simple": 0
         },
@@ -40,7 +50,7 @@
         },
         "obj_weights": {
             "obs_dv": 1.0,
-            "route_latency": 1.0,
+            "route_latency": 2.0,
             "energy_storage": 1.0
         },
         "plot_include_dlnk_labels":    false,
@@ -65,7 +75,7 @@
         "min_allowed_dv_dlnk_Mb" : 100,
         "latency_calculation": {
             "dlnk": "center",
-            "obs": "end"
+            "obs": "center"
         },
         "load_windows_from_file":    false
     },

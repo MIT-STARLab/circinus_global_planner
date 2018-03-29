@@ -282,12 +282,6 @@ class GPDataRouteSelection():
         self.dv_epsilon = self.min_s_route_dv / 1000
         self.wind_filter_duration =  timedelta (seconds =rs_general_params['wind_filter_duration_s'])
         self.wind_filter_duration_obs_sat =  timedelta (seconds =rs_general_params['wind_filter_duration_obs_sat_s'])
-        self.latency_params =  gp_general_other_params['latency_calculation']
-
-        if self.latency_params['obs'] not in ['start','end']:
-            raise NotImplementedError
-        if self.latency_params['dlnk'] not in ['start','end','center']:
-            raise NotImplementedError
 
 
     @staticmethod

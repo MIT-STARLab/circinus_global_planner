@@ -53,11 +53,6 @@ class GPMetrics():
         # if two downlink times are within this number of seconds, then they are counted as being at the same time for the purposes of AoI calculation
         self.dlnk_same_time_slop_s = scenario_params['timestep_s'] - 1
 
-        if self.latency_params['obs'] not in ['start','end']:
-            raise NotImplementedError
-        if self.latency_params['dlnk'] not in ['start','end','center']:
-            raise NotImplementedError
-
     def assess_dv_all_routes(self, routes,  verbose  = False):
         stats = {}
 
@@ -112,8 +107,11 @@ class GPMetrics():
         rs_dvs_by_obs =  {}
         sched_dvs_by_obs =  {}
         num_sched_obs = 0
+        num_rs_obs_dv_not_zero = 0
         for obs in rs_routes_by_obs.keys ():
             rs_dvs_by_obs[obs] = min(obs.data_vol,sum (rt.data_vol for rt in rs_routes_by_obs[obs]))
+            if rs_dvs_by_obs[obs] > 0:
+                num_rs_obs_dv_not_zero += 1
             if obs in sched_rts_by_obs.keys():
                 sched_dvs_by_obs[obs] = sum (rt.scheduled_dv for rt in sched_rts_by_obs[obs])
                 num_sched_obs +=1
@@ -127,6 +125,7 @@ class GPMetrics():
         valid = len(rs_dvs) > 0
 
         stats['num_obs_rs'] = len(rs_dvs)
+        stats['num_obs_rs_pos_dv'] = num_rs_obs_dv_not_zero
         stats['num_obs_sched'] = num_sched_obs
         stats['total_collectible_dv'] = sum(rs_dvs) if valid else 0
         stats['total_sched_dv'] = sum(sched_dvs) if valid else 0
@@ -144,7 +143,8 @@ class GPMetrics():
         if verbose:
             print('------------------------------')
             print('data volume by observation')
-            print("%s: \t\t\t\t %f"%('num_obs_rs',stats['num_obs_rs']))
+            print("%s: %f"%('num_obs_rs',stats['num_obs_rs']))
+            print("%s: \t\t\t %f"%('num_obs_rs_pos_dv',stats['num_obs_rs_pos_dv']))
             print("%s: \t\t\t\t %f"%('num_obs_sched',stats['num_obs_sched']))
             print("%s: \t\t\t %f"%('total_collectible_dv',stats['total_collectible_dv']))
             print("%s: \t\t\t %f"%('total_sched_dv',stats['total_sched_dv']))
@@ -276,6 +276,10 @@ class GPMetrics():
         i_valid = len(i_lats) > 0
         f_valid = len(f_lats) > 0
 
+        # from circinus_tools import debug_tools
+        # debug_tools.debug_breakpt()
+
+        #  note that if center times are not used  with both the observation and downlink for calculating latency, then the route selection and scheduled the numbers might differ. this is because the scheduled numbers reflect the updated start and end time for the Windows
         stats['ave_obs_initial_lat_rs'] = np.mean(i_lats_rs) if i_valid else 0
         stats['std_obs_initial_lat_rs'] = np.std(i_lats_rs) if i_valid else 0
         stats['min_obs_initial_lat_rs'] = np.min(i_lats_rs) if i_valid else 0
@@ -295,8 +299,8 @@ class GPMetrics():
         if verbose:
             print('------------------------------')
             print('latencies by observation')
-            print("%s: \t\t\t %f"%('ave_obs_initial_lat_rs',stats['ave_obs_initial_lat_rs']))
-            print("%s: \t\t\t %f"%('std_obs_initial_lat_rs',stats['std_obs_initial_lat_rs']))
+            print("%s: \t\t %f"%('ave_obs_initial_lat_rs',stats['ave_obs_initial_lat_rs']))
+            print("%s: \t\t %f"%('std_obs_initial_lat_rs',stats['std_obs_initial_lat_rs']))
             print("%s: %f"%('min_obs_initial_lat_rs',stats['min_obs_initial_lat_rs']))
             print("%s: %f"%('max_obs_initial_lat_rs',stats['max_obs_initial_lat_rs']))
             print("%s: \t\t\t %f"%('ave_obs_initial_lat',stats['ave_obs_initial_lat']))
@@ -555,6 +559,8 @@ class GPMetrics():
 
                 targ_indx = self.all_targ_IDs.index(targ_ID)
 
+
+
                 if not include_routing:
                     # add row for this observation. Note: there should be no duplicate observations in obs_winds
                     dlnk_obs_times_mat[targ_indx].append([None,obs_wind.start])
@@ -577,6 +583,8 @@ class GPMetrics():
                         if cum_dv >= self.min_as_route_dv - self.min_as_obs_dv_slop:
 
                             dlnk_obs_times_mat[targ_indx].append([getattr(dr.get_dlnk(),time_option), obs_wind.start])
+                            #  break because we shouldn't count additional down links from the same observation ( they aren't delivering updated information)
+                            break
 
 
         for targ_indx in range(self.num_targ):
@@ -599,10 +607,11 @@ class GPMetrics():
 
         return av_aoi_by_targID,aoi_curves_by_targID
 
-    def assess_aoi_by_obs_target(self,rs_routes_by_obs,sched_routes,include_routing=False,verbose = True):
+    def assess_aoi_by_obs_target(self,rs_routes_by_obs,sched_routes,verbose = True):
 
         sched_rts_by_obs = self.get_routes_by_obs (sched_routes)
 
+        include_routing=True
         av_aoi_by_targID_rs,aoi_curves_by_targID_rs = self.preprocess_and_get_aoi(rs_routes_by_obs,include_routing,dv_option='possible_dv')
         av_aoi_by_targID_sched,aoi_curves_by_targID_sched = self.preprocess_and_get_aoi(sched_rts_by_obs,include_routing,dv_option='scheduled_dv')
 
