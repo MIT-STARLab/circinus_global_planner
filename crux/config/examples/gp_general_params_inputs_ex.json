@@ -40,7 +40,7 @@
         },
         "obj_weights": {
             "obs_dv": 1.0,
-            "route_latency": 10.0,
+            "route_latency": 1.0,
             "energy_storage": 1.0
         },
         "plot_include_dlnk_labels":    false,
@@ -48,7 +48,7 @@
         "plot_activity_scheduling_results":   true,
         "resource_delta_t_s": 10,
         "resource_margin_num_timepoints": 30,
-        "run_activity_scheduling":  false
+        "run_activity_scheduling":  true
     },
     "pickle_params":  {
         "unpickle_pre_route_selection":                      true,

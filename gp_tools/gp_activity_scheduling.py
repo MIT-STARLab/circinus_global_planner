@@ -230,11 +230,11 @@ class GPActivityScheduling():
                     )
                 )
 
-             #  the shortest latency path for this observation has a score factor of 1.0, and the score factors for the other paths decrease linearly with increasing latency
+             #  the shortest latency path for this observation has a score factor of 1.0, and the score factors for the other paths decrease as the inverse of increasing latency
             min_lat = min(latencies)
             for lat_indx, lat in enumerate(latencies):
                 dr_indx = dr_indcs[lat_indx]
-                path_latency_sf_by_path_indx[dr_indx] = lat/min_lat
+                path_latency_sf_by_path_indx[dr_indx] = min_lat/lat
  
         return path_latency_sf_by_path_indx
 
@@ -501,8 +501,8 @@ class GPActivityScheduling():
         #  Make objective
         ##############################
 
-        from circinus_tools import debug_tools
-        debug_tools.debug_breakpt()
+        # from circinus_tools import debug_tools
+        # debug_tools.debug_breakpt()
 
         #  determine which time points to use as "spot checks" on resource margin. These are the points that will be used in the objective function for maximizing resource margin
         timepoint_spacing = ceil(num_timepoints/self.resource_margin_num_timepoints)
