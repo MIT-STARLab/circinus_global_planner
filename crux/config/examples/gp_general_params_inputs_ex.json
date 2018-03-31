@@ -4,7 +4,9 @@
         "aoi_units": "hours",
         "overlap_window_s": 3600,
         "overlap_count_option": "single_overlap",
-        "window_overlap_option": "mutex_window"
+        "window_overlap_option": "mutex_window",
+        "overlap_include_dlnks": false,
+        "overlap_remove_same_obs": true
     },
     "route_selection_general_params": {
         "wind_filter_duration_s" : 3600,
@@ -50,7 +52,7 @@
         },
         "obj_weights": {
             "obs_dv": 1.0,
-            "route_latency": 2.0,
+            "route_latency": 1.0,
             "energy_storage": 1.0
         },
         "plot_include_dlnk_labels":    false,
@@ -61,11 +63,11 @@
         "run_activity_scheduling":  true
     },
     "pickle_params":  {
-        "unpickle_pre_route_selection":                      true,
-        "pickle_route_selection_results":                   false,
+        "unpickle_pre_route_selection":                      false,
+        "pickle_route_selection_results":                   true,
         "unpickle_pre_act_scheduling":                            false,
         "pickle_act_scheduling_results":                            false,
-        "route_selection_pickle": "pickles/rs_orbit_prop_inputs_walker6_7gs_oi28_2018-03-28T22_18_53.513366.pkl",
+        "route_selection_pickle": "pickles/rs_orbit_prop_inputs_walker30_7gs_oi144_2018-03-29T21_46_28.662113.pkl",
         "act_scheduling_pickle": "pickles/as_2018-03-19T20_35_17.004653.pkl"
     },
     "other_params": {
@@ -77,7 +79,7 @@
             "dlnk": "center",
             "obs": "center"
         },
-        "load_windows_from_file":    false
+        "load_windows_from_file":    true
     },
     "plot_params":  {
         "plot_fig_extension":  "pdf",

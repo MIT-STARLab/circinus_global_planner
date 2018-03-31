@@ -115,6 +115,8 @@ class RouteRecord():
         #  if self has routes, then it's possible that these routes share some of the same data from the routes in the other route record ( on the other satellite). this could come up because the routes share some of the same initial windows. we need to determine where the routes split, and use that to determine how much data volume is actually unique ( hasn't already arrived on self), and available to receive
         if len(self.routes) > 0:
 
+            run_optimization =  True
+
             # figure out window data volume availability per the currently selected routes in self
             avail_dv_by_wind = {}
             for dr_1 in self.routes:
@@ -123,9 +125,14 @@ class RouteRecord():
                     avail_dv_by_wind.setdefault(wind,wind.data_vol)
                     avail_dv_by_wind[wind] -= dr_1.data_vol
 
-            #  record any new windows in the other routes, and record which routes use which windows
+            #  record any new windows in the other routes, and for each record which routes use those windows
             other_rts_by_wind = {}
-            dr_2_indcs_keep = []
+            
+            # list of indices that we'll need to drop because of limited data volume availability
+            # we mostly just search in this list to see if an element has already been dropped. not making it into a set because I expect the list to be small
+            dr_2_indcs_drop = []
+
+            #  now add in the windows found in the other routes, checking as we go if there is enough data volume availability for them to actually be included in the deconflication optimization below
             for dr_2_indx, dr_2 in enumerate (rr_other.routes):
                 keep_this_indx = True
                 for wind in dr_2:
@@ -137,102 +144,113 @@ class RouteRecord():
                         # record the fact that this window is contained in dr_2
                         other_rts_by_wind.setdefault(wind,[]).append(dr_2_indx)
                     else:
-                        keep_this_indx = False
+                        #  if there's not enough availability for this window based on the routes in self, add to drop list
+                        if not dr_2_indx in dr_2_indcs_drop:
+                            dr_2_indcs_drop.append(dr_2_indx)
 
-                #  if every window in the row has sufficient data volume ( to meet minimum requirement) this route is possible to select
-                if keep_this_indx:
-                    dr_2_indcs_keep.append(dr_2_indx)
+            #  now that we've stored which data routes from rr_other use which Windows, let's make another pass and see if there are data volume conflicts between the routes
+            for windex, (wind,dr_2_indcs) in  enumerate (other_rts_by_wind.items()):
+                num_rts_possible_wind = floor(avail_dv_by_wind[wind]/min_dv)
+                if num_rts_possible_wind < len(dr_2_indcs):
+                    # TODO: should some kind of sorting be added here, to give preference preferential treatment to certain data routes within dr_2_indcs?
+
+                    # mark all data routes pass the maximum number of possible routes through this window for dropping later. 
+                    # note the implicit lexicographic preference,  i.e. data routes with earlier indices are dropped last
+                    
+                    #  update the list of indices based on those that have already been dropped
+                    dr_2_indcs_update = [indx for indx in dr_2_indcs if not indx in dr_2_indcs_drop]
+                    #  update the drop list if there's anything more that needs to be dropped
+                    dr_2_indcs_drop += dr_2_indcs_update[num_rts_possible_wind-1:]
+
 
             #  if it turns out no more routes can be selected...
-            if len(dr_2_indcs_keep) == 0:
-                return []
+            if len(dr_2_indcs_drop) == len(rr_other.routes):
+                run_optimization = False
+
+            
 
             # construct the data structures for linear program solution
             #  - decision variables are how much data volume to allocate to each route
             #  -- bounds on decision variables, constrained by minimum required route volume
             #  - objective function, cost :  sum of data volumes across all routes ( equally weighted for all routes)
             #  - constraints, A_ub and b_ub:  constrain the sum of the data volumes for all routes going through a given window to be less than or equal to the available data volume for that window
-            
-            b_ub = [0 for i in range(len(other_rts_by_wind.keys()))]
-            A_ub = [[0 for j in range(len (rr_other.routes))] for i in range(len (other_rts_by_wind.keys()))]
 
-            #  construct cost
-            # note that costs are equal because we're assuming data volume from any route is the same. If this assumption changes, then this overall algorithm will break (particularly due to rt_possible_cntr below).
+            num_vars = len(rr_other.routes)
+            bounds = []
             cost = []
-            for dr_2_indx in range(len(rr_other.routes)):
-                if dr_2_indx in dr_2_indcs_keep:
-                    #  negative one because the sense of linprog is minimization
-                    cost.append(-1)
-                else:
+            b_ub = []
+            A_ub = []
+
+            #  construct cost and bounds
+            # note that costs are equal because we're assuming data volume from any route is the same. If this assumption changes, then this overall algorithm will break (particularly due to rt_possible_cntr below).
+            for dr_2_indx in range(num_vars):
+                if dr_2_indx in dr_2_indcs_drop:
                     #  if not considering this index, ignore cost and bounds
                     cost.append(0)
+                    #  let the data route volume bottom out at zero
+                    bounds.append((None,None))
+                else:
+                    #  negative one because the sense of linprog is minimization
+                    cost.append(-1)
+                    #  bound on minimum data volume, no upper bound, that's handled by the constraints
+                    bounds.append((min_dv,None))
 
             #  construct constraints from every window included on selectable routes
             for windex, (wind,dr_2_indcs) in  enumerate (other_rts_by_wind.items()):
 
-                #  constraint imposed by data volume availability from a single window
-                b_ub[windex] = avail_dv_by_wind[wind]
+                #  we will only keep the window if not all the routes that pass through it have been dropped
+                keep_wind = False
 
-                #  only factor in those data routes that cross through this window
-                #  Note:  a row can be all zeros if a dr_indx was  disqualified from dr_2_indcs_keep  after one of its windows was already added to other_rts_by_wind.  not great, but has no effect on the LP simplex algorithm
+                A_ub_row = [0 for dr_2_indx in range(num_vars)]
+                #  only factor in those data routes that cross through this window and have not been dropped
                 for dr_2_indx in dr_2_indcs:
-                    if dr_2_indx in dr_2_indcs_keep: 
-                        A_ub[windex][dr_2_indx] = 1
+                    if dr_2_indx in dr_2_indcs_drop: 
+                        pass
+                    else:
+                        A_ub_row[dr_2_indx] = 1
+                        keep_wind = True
 
-            #  there is going to be a most constrained window that can only allow a certain number of routes through. this constrains the number of routes with min_dv that we can get from our linear program solution. figure out what this number is
-            #  note that we might've been able to figure this out in the code above -  adding it here is mildly hacky.
-            # consider b_ub = [ 339.07, 201.58, 111.23], A_ub = [[1,1,1,1],[0,1,0,1],[1,0,0,0]], and min_dv = 100. In this case, num_routes_possible is 3, from the 339.07 index, because that most constrains the DESIRED # of routes through a window
-            # zero_protect where a row of the A matrix is all zeros.  see note above about this. 
-            zero_protect = 0.001
-            if len (rr_other.routes) > 1/zero_protect:
-                raise RuntimeWarning('zero_protect is not small enough')
-            num_routes_possible_indx = [floor(b_ub[indx]/min_dv) for indx in range(len(b_ub))]
-            num_routes_desired_indx = [sum(A_ub[indx])+zero_protect for indx in range(len(b_ub))]
-            mindex = argmin([num_routes_possible_indx[indx]/num_routes_desired_indx[indx] for indx in range(len(b_ub))])
-            num_routes_possible = num_routes_possible_indx[mindex]
+                if keep_wind:
+                    # append the row that specifies which data routes are contributing to the window
+                    A_ub.append(A_ub_row)
+                    #  constraint imposed by data volume availability from a single window
+                    b_ub.append(avail_dv_by_wind[wind])
 
-            #  construct bounds
-            bounds = []
-            rt_possible_cntr = 0
-            for dr_2_indx in range(len(rr_other.routes)):
-                # if we're keeping the data route as a possibility because both:
-                # - the dr has no window along its route that has less available data volume than minimum dv
-                # - the counter for the number of possible data routes has not reached its limit
-                # note that we're implicitly deciding to choose the first routes we see as those that will get selected. This is only okay because all the costs are equal 
-                if dr_2_indx in dr_2_indcs_keep and rt_possible_cntr < num_routes_possible:
-                    #  bound on minimum data volume, no upper bound, that's handled by the constraints
-                    bounds.append((min_dv,None))
-                    rt_possible_cntr += 1
-                else:
-                    #  otherwise, let the data route volume bottom out at zero if need be
-                    bounds.append((None,None))
+            #  if all of the windows were dropped because there is no availability, then we can't schedule anything
+            if len(b_ub) == 0:
+                run_optimization = False
 
-            #  run the solver to figure out the best allocation of data volume to the route possibilities
-            res = linprog(cost, A_ub=A_ub, b_ub=b_ub, bounds = bounds,method='simplex')
+
+            if run_optimization:
+                #  run the solver to figure out the best allocation of data volume to the route possibilities
+                res = linprog(cost, A_ub=A_ub, b_ub=b_ub, bounds = bounds,method='simplex')
+                
+                #  we were not able to find a solution -  either number of iterations ran up, or there is not enough availability to have any de-conflicted routes
+                if not res['status'] == 0:
+                    # for time being, error out...
+                    raise RuntimeWarning('LP not solved successfully')
+                    # return []
+
+                #  extract the selected solutions as de-conflicted routes
+                dr_2_dv_avails = res['x']
+                for dr_2_indx, dr_2 in enumerate (rr_other.routes):
+                    dr_dv = dr_2_dv_avails[dr_2_indx]
+                    # if dr_2_indx in dr_2_indcs_keep and dr_dv >= min_dv: 
+                    if (not dr_2_indx in dr_2_indcs_drop) and dr_dv >= min_dv: 
+                        deconflicted_routes.append(DeconflictedRoute(dr=dr_2,available_dv=dr_dv))
 
             if verbose:
                 print('get_deconflicted_routes()')
-                print('  status %d'%(res['status']))
-                print('  num simplex iters %d'%(res['nit']))
+                if run_optimization:
+                    print('  status %d'%(res['status']))
+                    print('  num simplex iters %d'%(res['nit']))
+                else:
+                    print('  did not run optimization')
                 print('  num other routes %d'%(len(rr_other.routes)))
-                print('  num routes possible %d'%(len(dr_2_indcs_keep)))
+                # print('  num routes possible %d'%(len(dr_2_indcs_keep)))
+                print('  num routes possible %d'%(num_vars-len(dr_2_indcs_drop)))
+                print('  num deconflicted routes %d'%(len(deconflicted_routes)))
 
-                # if res['status'] == 2:
-                #     import ipdb
-                #     ipdb.set_trace()
-
-            #  we were not able to find a solution -  either number of iterations ran up, or there is not enough availability to have any de-conflicted routes
-            if not res['status'] == 0:
-                # for time being, error out...
-                raise RuntimeWarning('LP not solved successfully')
-                # return []
-
-            #  extract the selected solutions as de-conflicted routes
-            dr_2_dv_avails = res['x']
-            for dr_2_indx, dr_2 in enumerate (rr_other.routes):
-                dr_dv = dr_2_dv_avails[dr_2_indx]
-                if dr_2_indx in dr_2_indcs_keep and dr_dv >= min_dv: 
-                    deconflicted_routes.append(DeconflictedRoute(dr=dr_2,available_dv=dr_dv))
 
         #  if self has no routes ( it hasn't yet received data from anywhere), then every route in  the other route record (on the other satellite) is valid
         else:

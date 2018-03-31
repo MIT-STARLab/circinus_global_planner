@@ -284,6 +284,8 @@ class GlobalPlannerRunner:
         # this should be unique across all data routes
         dr_uid = 0
 
+        num_obs = sum(len(obs_winds[sat_indx]) for sat_indx in range (self.sat_params['num_sats']))
+
         for sat_indx in range( self.sat_params['num_sats']):
             for  index, obs in  enumerate ( obs_winds[sat_indx]):
 
@@ -292,10 +294,11 @@ class GlobalPlannerRunner:
                 # if not (index == 0 and sat_indx == 2):
                 #     continue
 
-                print ("sat_indx")
-                print (sat_indx)
-                print ("obs")
-                print ( index)
+                print ("")
+                print ("----------------------------")
+                print ("obs %d/%d"%(obs_indx+1,num_obs))
+                print ("sat_indx: %d"%(sat_indx))
+                print ("obs: %d"%(index))
 
                 # run the route selection algorithm
                 t_a = time.time()
@@ -719,11 +722,15 @@ class GlobalPlannerRunner:
 
         print('len(all_routes)')
         print(len(all_routes))
+        print('runtime per rs iteration')
+        print('ave: %fs'%(np.mean(route_times_s)))
+        print('std: %fs'%(np.std(route_times_s)))
 
         gp_met = GPMetrics(self.params)
         # t_a = time.time()
-         # need to figure out how to window this or something so that we don't have to compare to every other data route - that's horribly expensive
-        gp_met.assess_route_overlap( all_routes,verbose=True)
+        # need to figure out how to window this or something so that we don't have to compare to every other data route - that's horribly expensive
+        print('Assess route overlap')
+        gp_met.assess_route_overlap( routes_by_obs,verbose=True)
         # t_b = time.time()
         # time_elapsed = t_b-t_a
         # print('time_elapsed')

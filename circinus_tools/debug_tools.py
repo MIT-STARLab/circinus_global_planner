@@ -5,6 +5,8 @@
 def debug_breakpt(option='ipdb'):
     if option == 'ipdb':
         print("YOU ARE IN debug_breakpt(). ENTER 's' TO GET TO DEBUG CALL")
+        print("use > globals().update(locals()) to make list comps work")
+
         import ipdb
         ipdb.set_trace()
     else:

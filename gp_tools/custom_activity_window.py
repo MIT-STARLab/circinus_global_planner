@@ -6,6 +6,8 @@
 
 from datetime import datetime, timedelta
 
+from numpy import mean as np_mean
+
 from circinus_tools  import time_tools as tt
 from circinus_tools  import  constants as const
 from circinus_tools.activity_window import ActivityWindow
@@ -74,118 +76,35 @@ class ObsWindow(ActivityWindow):
 
 class CommWindow(ActivityWindow):
     def __init__(self, start, end,window_ID):
-        
-        
-        self.data_pkts = []
-        # store initial start and end so we have them after start and end themselves get modified
-        self.unmodified_start = start
-        self.unmodified_end = end
-        self.unmodified_data_vol = const.UNASSIGNED
-        self.rates_mat = None
         super(CommWindow, self).__init__(start, end,window_ID)
 
-    def set_data_vol_and_refresh_times(self):
+    def set_data_vol(self,rates_mat,rates_mat_dv_indx=1):
         """
-        Calculates the total data volume that can be sent over this link. Resets the start and stop times based on the non-zero rates in rates_mat. If the rates mat has all zeros as the data rates, the data volume is set to 0. Note that the original duration of the window (self) will be collapsed to hug the non-zero data rate points in rates_mat. If the rate values in rates mat are undersampled such that they don't exactly line up with start and stop times of original window, the window will be shortened a little bit.
+        Calculates the total data volume that can be sent over this link. Uses average data rate to determine data volume. Depending on how much the input data rates matrix is decimated, this could lead to over or underestimates of data volume.
 
         :return:
         """
 
-        # Note: float[num_timepoints][2] rates_mat: matrix of datarates at each time during the pass. First column is time in MJD, and second column is data rate in Mbps. It is assumed that the data rate transitions from 0 to non-zero only once, and back from non-zero to 0 only once.
+        # Note: float[num_timepoints][2] rates_mat: matrix of datarates at each time during the pass. First column is time in MJD, and second column is data rate from sat to xsat in Mbps, third is rate from xsat to sat.
 
         start_mjd = tt.datetime2mjd(self.start)-5/86400.0  # add 5 secs padding to evade any precision problems
         end_mjd = tt.datetime2mjd(self.end)+5/86400.0  # add 5 secs padding to evade any precision problems
 
-        first_mjd_with_nonzero = const.UNASSIGNED
-        last_mjd_with_nonzero = const.UNASSIGNED
-        found_first = False
-        # found_last = False
+        #  this is fixed in the structure of the data rates output file
+        rates_mat_tp_indx = 0;
 
-        rates_mat = self.rates_mat
-
-        # note that the below code assumes the data rate over the whole interval from time i to time i+1 is the data rate at i.
-
-        total_data_vol = 0
+        data_rates = []
         for i in range(len(rates_mat)):
+            # if point i is within window -  this should take care of any indexing issues
+            if rates_mat[i][rates_mat_tp_indx] >= start_mjd and rates_mat[i][rates_mat_tp_indx] <= end_mjd:
+                data_rates.append(rates_mat[i][rates_mat_dv_indx])
 
-            # if point i is within window, and has a data rate greater than 0.
-            if (rates_mat[i][0] >= start_mjd and rates_mat[i][0] <= end_mjd) and (rates_mat[i][1] > 0):
+        try:
+            #  take the average of all the data rates we saw and multiply by the duration of the window to get data volume
+            self.data_vol = np_mean(data_rates) * (self.end - self.start).total_seconds()
+        except RuntimeWarning as e:
+            raise RuntimeWarning('Trouble determining average data rate. Probable no time points were found within start and end of window. Ensure that you are not overly decimating data rate calculations in data rates input file (window: %s, exception seen: %s)'%(self,str(e)))
 
-                if found_first == False:
-                    first_mjd_with_nonzero = rates_mat[i][0]
-                    found_first = True
-
-                last_mjd_with_nonzero = rates_mat[i][0]
-
-                # if we still have another interval before the end of the window
-                if (i<len(rates_mat)-1)  and (rates_mat[i + 1][0] <= end_mjd):
-                    time_slice_sec = (rates_mat[i+1][0] - rates_mat[i][0]) * 86400
-
-                    #                   data rate at i     *  time
-                    total_data_vol += rates_mat[i][1] * time_slice_sec
-
-
-        self.data_vol = total_data_vol
-        self.remaining_data_vol = self.data_vol
-        self.unmodified_data_vol = total_data_vol
-
-        # If the data rates are not all zero and yet the times are const.UNASSIGNED, there's a problem
-        if first_mjd_with_nonzero == const.UNASSIGNED and last_mjd_with_nonzero == const.UNASSIGNED and self.data_vol > 0:
-            print('problem with recalculating window start and stop time')
-            1/0
-
-        # if no problems with const.UNASSIGNED start/end mjd, then update start and end
-        else:
-            old_start = self.start - timedelta(seconds=5)
-            old_end = self.end + timedelta(seconds=5)
-            self.start = tt.mjd2datetime(first_mjd_with_nonzero)
-            self.end = tt.mjd2datetime(last_mjd_with_nonzero)
-
-            # if the window is actually way too short, indicate by making data vol 0
-            if self.end - self.start < timedelta(seconds=5):
-                self.data_vol = 0
-
-
-            if self.end == const.UNASSIGNED_DT and self.start != const.UNASSIGNED_DT:
-                1 / 0
-
-            # just some sanity checks here...
-            if self.start != const.UNASSIGNED_DT and (self.start < old_start or self.start > old_end):
-                1/0
-            if self.end != const.UNASSIGNED_DT and (self.end < old_start or self.end > old_end):
-                1/0
-
-    def recalc_data_vol(self):
-        """
-        Calculates the total data volume that can be sent over this link, but does not change any of the data fields of object self
-
-        :return: the data volume that can be sent over the link
-        """
-
-        # Note: float[num_timepoints][2] rates_mat: matrix of datarates at each time during the pass. First column is time in MJD, and second column is data rate in Mbps. It is assumed that the data rate transitions from 0 to non-zero only once, and back from non-zero to 0 only once.
-
-        start_mjd = tt.datetime2mjd(self.start)-5/86400.0  # add 5 secs padding to evade any precision problems
-        end_mjd = tt.datetime2mjd(self.end)+5/86400.0  # add 5 secs padding to evade any precision problems
-
-        rates_mat = self.rates_mat
-
-        # note that the below code assumes the data rate over the whole interval from time i to time i+1 is the data rate at i.
-
-        total_data_vol = 0
-        for i in range(len(rates_mat)):
-
-            # if point i is within window, and has a data rate greater than 0.
-            if (rates_mat[i][0] >= start_mjd and rates_mat[i][0] <= end_mjd) and (rates_mat[i][1] > 0):
-
-                # if we still have another interval before the end of the window
-                if (i<len(rates_mat)-1)  and (rates_mat[i + 1][0] <= end_mjd):
-                    time_slice_sec = (rates_mat[i+1][0] - rates_mat[i][0]) * 86400
-
-                    #                   data rate at i     *  time
-                    total_data_vol += rates_mat[i][1] * time_slice_sec
-
-
-        return total_data_vol
 
 class DlnkWindow(CommWindow):
     def __init__(self, window_ID, sat_indx, gs_indx, sat_gs_indx, start, end):

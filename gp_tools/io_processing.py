@@ -180,8 +180,7 @@ class GPProcessorIO():
 
                     # figure out the data volume for this window
                     xlnk_rates_mat =  self.xlnk_rates[new_wind.sat_indx][new_wind.xsat_indx][new_wind.sat_xsat_indx]
-                    new_wind.rates_mat = xlnk_rates_mat
-                    new_wind.set_data_vol_and_refresh_times()
+                    new_wind.set_data_vol(xlnk_rates_mat)
 
                     if new_wind.data_vol >  self.min_allowed_dv_xlnk:
                         #  add to regular matrix
@@ -223,8 +222,8 @@ class GPProcessorIO():
 
                     new_wind = DlnkWindow(next_window_uid,sat_indx,gs_indx,dlnk_indx,start, end)
 
-                    new_wind.rates_mat =  self.dlnk_rates[new_wind.sat_indx][new_wind.gs_indx][new_wind.sat_gs_indx]
-                    new_wind.set_data_vol_and_refresh_times()
+                    rates_mat =  self.dlnk_rates[new_wind.sat_indx][new_wind.gs_indx][new_wind.sat_gs_indx]
+                    new_wind.set_data_vol(rates_mat)
 
                     if new_wind.data_vol >  self.min_allowed_dv_dlnk:
 
@@ -416,7 +415,7 @@ class GPProcessorIO():
 
     def create_data_history( self,obs_winds_flat,dlink_winds_flat,xlink_winds_flat):
 
-        #  TODO :   fix this code
+        #  TODO :  haven't verified this code works, need to finish adapting it ( was copied over from small sat 2017 code)
 
         all_wind = [[] for k in range(self.num_sats)]
         for sat_indx in range(self.num_sats):
@@ -460,8 +459,8 @@ class GPProcessorIO():
                 if start_time_sec < (latest_time_sec - self.tstep_sec/2):
                     raise Exception ('create_data_history: problem in data history construction, times wrong')
 
-                if wind.data_vol > wind.unmodified_data_vol or wind.remaining_data_vol < 0:
-                    raise Exception ('create_data_history: problem in data history construction, data vol wrong')
+                # if wind.data_vol > wind.unmodified_data_vol or wind.remaining_data_vol < 0:
+                #     raise Exception ('create_data_history: problem in data history construction, data vol wrong')
 
                 if type(wind) == ObsWindow:
                     dv_created = wind.collected_data_vol

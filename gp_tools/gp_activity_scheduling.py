@@ -255,31 +255,36 @@ class GPActivityScheduling():
 
         # note: a path is the same as a route
 
-        (sat_acts,
-            all_acts_indcs,
-            path_indcs_by_act,
-            dv_by_act,
-            all_acts_by_obj,
-            obs_act_indcs,
-            path_indcs_by_obs_act,
-            dv_by_obs_act,
-            link_act_indcs,
-            path_indcs_by_link_act,
-            dv_by_link_act) =  self.get_activity_structs(routes_flat)
+        try:
+            (sat_acts,
+                all_acts_indcs,
+                path_indcs_by_act,
+                dv_by_act,
+                all_acts_by_obj,
+                obs_act_indcs,
+                path_indcs_by_obs_act,
+                dv_by_obs_act,
+                link_act_indcs,
+                path_indcs_by_link_act,
+                dv_by_link_act) =  self.get_activity_structs(routes_flat)
 
-        path_latency_sf_by_path_indx =  self.get_path_latency_score_factors(
-            routes_flat,
-            path_indcs_by_obs_act,
-            self.latency_params
-        )
+            path_latency_sf_by_path_indx =  self.get_path_latency_score_factors(
+                routes_flat,
+                path_indcs_by_obs_act,
+                self.latency_params
+            )
 
-        # construct a set of dance cards for every satellite, 
-        # each of which keeps track of all of the activities of satellite 
-        # can possibly execute at any given time slice delta T. 
-        act_dancecards = [Dancecard(self.sched_start_utc_dt,self.sched_end_utc_dt,self.resource_delta_t_s,mode='timestep') for sat_indx in range (self.num_sats)]
-        for sat_indx in range (self.num_sats): 
-            act_dancecards[sat_indx].add_winds_to_dancecard(sat_acts[sat_indx])
-            act_dancecards[sat_indx].add_winds_to_dancecard(ecl_winds[sat_indx])
+            # construct a set of dance cards for every satellite, 
+            # each of which keeps track of all of the activities of satellite 
+            # can possibly execute at any given time slice delta T. 
+            act_dancecards = [Dancecard(self.sched_start_utc_dt,self.sched_end_utc_dt,self.resource_delta_t_s,mode='timestep') for sat_indx in range (self.num_sats)]
+            
+            for sat_indx in range (self.num_sats): 
+                act_dancecards[sat_indx].add_winds_to_dancecard(sat_acts[sat_indx])
+                act_dancecards[sat_indx].add_winds_to_dancecard(ecl_winds[sat_indx])
+                    
+        except IndexError:
+            raise RuntimeWarning('sat_indx out of range. Are you sure all of your input files are consistent? (including pickles)')        
 
         self.all_acts_indcs = all_acts_indcs
         self.obs_act_indcs = obs_act_indcs
