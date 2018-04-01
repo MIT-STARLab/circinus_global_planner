@@ -165,6 +165,11 @@ class DataRoute(object):
                 next_sat_indx=wind.get_xlnk_partner(curr_sat_indx)
                 # next_sat_indx = wind.xsat_indx if not wind.xsat_indx == curr_sat_indx else wind.sat_indx
 
+                #  if this happens to be a unidirectional window, and the current satellite index is not the transmitting satellite for that window, there's a problem
+                if not wind.symmetric and curr_sat_indx != wind.tx_sat:
+                    string ='routing_objects.py: Found incorrect tx sat at window indx %d in route. Route string: %s'%( windex, self.get_route_string())
+                    raise RuntimeError(string)
+
             last_time = wind.end
 
     def get_split(self,other):

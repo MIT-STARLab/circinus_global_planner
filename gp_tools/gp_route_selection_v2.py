@@ -50,33 +50,33 @@ class DeconflictedRoute():
     def __repr__( self):
         return 'DeconflictedRoute(%s,%s)'%( self.dr, self.available_dv)
 
-def no_route_conflict(dr1,dr2):
-    """ check for route conflicts. implementation specific check to see if a cross-link window in one route both overlaps in time and includes the same satellites as a cross-link window in another route"""
+# def no_route_conflict(dr1,dr2):
+#     """ check for route conflicts. implementation specific check to see if a cross-link window in one route both overlaps in time and includes the same satellites as a cross-link window in another route"""
 
-     # go through all of the windows in route 1 and for each one see if it conflicts with a window in route 2
-    for wind1 in dr1:
-        if not type(wind1) == XlnkWindow:
-            continue
+#      # go through all of the windows in route 1 and for each one see if it conflicts with a window in route 2
+#     for wind1 in dr1:
+#         if not type(wind1) == XlnkWindow:
+#             continue
 
-        for wind2 in dr2:
-            if not type(wind2) == XlnkWindow:
-                continue
+#         for wind2 in dr2:
+#             if not type(wind2) == XlnkWindow:
+#                 continue
 
-            #  check for overlap
-            #  if before the start, continue to next window in route 2
-            if wind1.end <= wind2.start:
-                continue
-            #  if after the end, we've passed a point where wind1 could overlap with a window in route 2.
-            elif wind1.start >= wind2.end:
-                break
-            # if there's any overlap at all...
-            else:
-                #  I'm sure there's a better way to express this check
-                wind2_indcs = [wind2.sat_indx,wind2.xsat_indx]
-                if wind1.sat_indx in wind2_indcs or wind1.xsat_indx in wind2_indcs:
-                    return False
+#             #  check for overlap
+#             #  if before the start, continue to next window in route 2
+#             if wind1.end <= wind2.start:
+#                 continue
+#             #  if after the end, we've passed a point where wind1 could overlap with a window in route 2.
+#             elif wind1.start >= wind2.end:
+#                 break
+#             # if there's any overlap at all...
+#             else:
+#                 #  I'm sure there's a better way to express this check
+#                 wind2_indcs = [wind2.sat_indx,wind2.xsat_indx]
+#                 if wind1.sat_indx in wind2_indcs or wind1.xsat_indx in wind2_indcs:
+#                     return False
 
-    return True
+#     return True
 
 class RouteRecord():
     """docstring for RouteRecord"""
@@ -109,6 +109,8 @@ class RouteRecord():
         :returns:  a set of de-conflicted routes with data volume allocations that, if all selected together, would violate no constraints on window data volume capacities across all routes in self
         :rtype: {list[DeconflictedRoute]}
         """
+
+        # TODO: for future, should add removal of any time conflicts between the routes (e.g. transition times or temporal keep out zones around the activities in self.routes). Would probably add time keep out zones in for dr_1 in self.routes: loop and check them in for dr_2_indx, dr_2 in enumerate (rr_other.routes): loop.
 
         deconflicted_routes = []
 
@@ -152,7 +154,7 @@ class RouteRecord():
             for windex, (wind,dr_2_indcs) in  enumerate (other_rts_by_wind.items()):
                 num_rts_possible_wind = floor(avail_dv_by_wind[wind]/min_dv)
                 if num_rts_possible_wind < len(dr_2_indcs):
-                    # TODO: should some kind of sorting be added here, to give preference preferential treatment to certain data routes within dr_2_indcs?
+                    # TODO: should some kind of sorting be added here, to give preferential treatment to certain data routes within dr_2_indcs?
 
                     # mark all data routes pass the maximum number of possible routes through this window for dropping later. 
                     # note the implicit lexicographic preference,  i.e. data routes with earlier indices are dropped last
@@ -434,7 +436,8 @@ class GPDataRouteSelection():
                     if act in visited_act_set: continue
 
                     if type(act) == XlnkWindow:
-                        if time_within(tp_last_dt,tp_dt,act.end):
+                        #  if the cross-link ends in the time step leading up to the current time point, and sat_indx is a receiving satellite in the cross-link
+                        if time_within(tp_last_dt,tp_dt,act.end) and act.is_rx(sat_indx):
                             xlnk_options.append(act)
                             # visited_act_set.add(act)
 

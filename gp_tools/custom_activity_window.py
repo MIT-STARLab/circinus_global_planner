@@ -153,9 +153,13 @@ class DlnkWindow(CommWindow):
         return  "(DlnkWindow id %d sat %d dv %f gs %d %s,%s)" % (self.window_ID,self.sat_indx,  self.data_vol, self.gs_indx,date_string(self.start),date_string(self.end))
 
 class XlnkWindow(CommWindow):
-    def __init__(self, window_ID, sat_indx, xsat_indx, sat_xsat_indx, start, end):
+    def __init__(self, window_ID, sat_indx, xsat_indx, sat_xsat_indx, start, end, symmetric=True, tx_sat=None):
         '''
         A downlink window. Can represent a window during which an activity can happen, or the actual activity itself
+
+        A cross-link window can be marked as symmetric as a space-saving mechanism. "symmetric" means that both satellites are performing the cross-link window with the same start and end and at the same data rate ( given that the satellites have the same communication technology on both sides, both are equally able to transmit and receive, and there are no unidirectional effects in the link, this will be the case). This saves space by only using one object to represent the cross-link.  it's almost like I thought about this really hard in advance and realized that this was a good way to go - nah, I added in directionality later.
+
+        If the window is not symmetric, then one of the satellite should be marked as the transmitting satellite. note that the sat_indx and xsat_indx fields should not be used to infer the direction of the cross-link.
 
         :param int window_ID: a unique ID for this window, for hashing and comparing windows
         :param int sat_indx: index of the satellite on "side A" of the link
@@ -163,16 +167,21 @@ class XlnkWindow(CommWindow):
         :param int sat_xsat_indx: the serial index of this xlnk in the list of sat-xsat links from input struct
         :param datetime start: start time of the window
         :param datetime end: end time of the window
+        :param bool symmetric:  true if both satellites are transmitting at the same data rate during the window.
+        :param bool tx_sat: the single satellite that is transmitting, if the window is not symmetric
         '''
 
         self.sat_indx = sat_indx
         self.xsat_indx = xsat_indx
         self.sat_xsat_indx = sat_xsat_indx
-        # this stores the amount of data routed to either sat index during the xlnk. Dictionary keys are integers representing the sat index routed to, and the values are the amount of data routed
-        # Using a dictionary here to support eventual bi-directionality of crosslinks
-        self.routed_data_vol_to_sat_indx = {}
-        self.routed_pkts_to_sat_indx = {}
-        self.routed_pkt_ids_to_sat_indx = {}
+        self.symmetric = symmetric
+        #  note that tx_sat is NOT meant to be used to keep track of which satellite was decided on as the tx-er for a symmetric window (e.g. after route selection). Should keep track of that in an external data structure (e.g. in a data route object), otherwise there's a lot of potential for problems to crop up from the fact that this cross-link window object may appear in multiple routes
+        self.tx_sat = tx_sat
+
+        if symmetric and tx_sat:
+            raise RuntimeError('Cross-link window should not be both symmetric and have a transmitting satellite specified')
+        if not symmetric and not tx_sat:
+            raise RuntimeError('Cross-link window should either be marked as symmetric or have a transmitting satellite specified')
 
         super(XlnkWindow, self).__init__(start, end, window_ID)
 
@@ -187,25 +196,19 @@ class XlnkWindow(CommWindow):
         print('end: ' + str(self.end))
         print('......')
 
-    def get_total_routed_data(self):
-        '''
-        Magnitude of total data exchanged in this link, regardless of direction
-
-        :return:
-        '''
-
-        return sum(self.routed_data_vol_to_sat_indx[key] for key in self.routed_data_vol_to_sat_indx.keys())
-
     def __str__(self):
-        return  "(XlnkWindow id %d sats %d,%d dv %f %s,%s)" % (self.window_ID,self.sat_indx, self.xsat_indx,self.data_vol, date_string(self.start),date_string(self.end))
+        return  self.__repr__()
 
     def __repr__(self):
-        return  "(XlnkWindow id %d sats %d,%d dv %f %s,%s)" % (self.window_ID,self.sat_indx, self.xsat_indx,self.data_vol, date_string(self.start),date_string(self.end))
+        if self.symmetric:
+            return  "(XlnkWindow id %d sym. sats %d<->%d dv %f %s,%s)" % (self.window_ID,self.sat_indx, self.xsat_indx,self.data_vol, date_string(self.start),date_string(self.end))
+        else:
+            return  "(XlnkWindow id %d uni. sats %d->%d dv %f %s,%s)" % (self.window_ID,self.tx_sat, self.get_xlnk_partner(self.tx_sat),self.data_vol, date_string(self.start),date_string(self.end))
 
     def get_xlnk_partner(self,sat_indx):
         """return indx of the cross-linked partner
         
-        a cross-link Windows stores the indices for both satellites involved (sat_indx and xsat_indx) but assumes the window is bidirectional, i.e. data could travel either direction between the two satellites.  this method tells us, from sat_indx's perspective, who its cross-link partner is
+        This method tells us, from sat_indx's perspective, who its cross-link partner is. Does not take directionality of window into account
         :param sat_indx: a satellite index contained in either self.sat_indx or self.xsat_indx
         :type sat_indx: int
         :returns: the index of the crosslink partner satellite
@@ -214,6 +217,22 @@ class XlnkWindow(CommWindow):
 
         xsat_indx= self.xsat_indx  if sat_indx == self.sat_indx else self.sat_indx
         return xsat_indx
+
+    def is_rx(self,sat_indx):
+        """ check if satellite is receiving during this cross-link
+        
+        satellite is always a receiver during a symmetric cross-link, and is a receiver if it's not the tx satellite in a nonsymmetric cross-link
+        :param sat_indx:  satellite index
+        :type sat_indx: int
+        :returns:  true if it's receiving
+        :rtype: {bool}
+        """
+        if self.symmetric:
+            return True
+        elif sat_indx == self.tx_sat:
+            return False
+        else:
+            return True
 
 class UrgentWindow(ActivityWindow):
     def __init__(self, target_ID, start, end):

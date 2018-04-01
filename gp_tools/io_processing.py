@@ -175,21 +175,39 @@ class GPProcessorIO():
                     else:
                         raise NotImplementedError
 
-                    # create a new window 
-                    new_wind = XlnkWindow(next_window_uid,sat_indx,xsat_indx,xlnk_indx, start, end)
+                    # first satellite is transmitting
+                    sat_indx_tx = bool(xlnk[2])
+                    # second satellite is transmitting
+                    xsat_indx_tx = bool(xlnk[3])
+                    #  if their data rates are both the same and they are both transmitting, then the cross-link window is symmetric
+                    symmetric = bool(xlnk[4]) and (sat_indx_tx and xsat_indx_tx)
 
-                    # figure out the data volume for this window
-                    xlnk_rates_mat =  self.xlnk_rates[new_wind.sat_indx][new_wind.xsat_indx][new_wind.sat_xsat_indx]
-                    new_wind.set_data_vol(xlnk_rates_mat)
+                    xlnk_rates_mat =  self.xlnk_rates[sat_indx][xsat_indx][xlnk_indx]
 
-                    if new_wind.data_vol >  self.min_allowed_dv_xlnk:
-                        #  add to regular matrix
-                        xlink_winds[sat_indx][xsat_indx].append(new_wind)
-                        # add it to the  flat lists for the sats on both ends of the crosslink. Note that the same object is stored for both, so any modification of the object by one sat modifies it for the other sat as well
-                        xlink_winds_flat[sat_indx].append(new_wind)
-                        xlink_winds_flat[xsat_indx].append(new_wind)
+                    def make_xlnk_wind(symmetric,tx_sat,next_window_uid, rates_mat_dv_indx):
+                        # create a new window 
+                        new_wind = XlnkWindow(next_window_uid,sat_indx,xsat_indx,xlnk_indx, start, end, symmetric,tx_sat)
 
-                    next_window_uid+=1
+                        # figure out the data volume for this window
+                        new_wind.set_data_vol(xlnk_rates_mat,rates_mat_dv_indx)
+
+                        if new_wind.data_vol >  self.min_allowed_dv_xlnk:
+                            #  add to regular matrix
+                            xlink_winds[sat_indx][xsat_indx].append(new_wind)
+                            # add it to the  flat lists for the sats on both ends of the crosslink. Note that the same object is stored for both, so any modification of the object by one sat modifies it for the other sat as well
+                            xlink_winds_flat[sat_indx].append(new_wind)
+                            xlink_winds_flat[xsat_indx].append(new_wind)
+
+                        return next_window_uid+1
+
+                    #  if it's a symmetric cross-link only make one window
+                    if symmetric:
+                        next_window_uid = make_xlnk_wind(True,None,next_window_uid,rates_mat_dv_indx=1)
+                    #  otherwise, we have to make a window for each of the satellites that is transmitting
+                    else:
+                        if sat_indx_tx: next_window_uid = make_xlnk_wind( False,sat_indx,next_window_uid,rates_mat_dv_indx=1)
+                        if xsat_indx_tx: next_window_uid = make_xlnk_wind( False,xsat_indx,next_window_uid,rates_mat_dv_indx=2)
+
 
             # sort the xlink windows for convenience
             if sort:

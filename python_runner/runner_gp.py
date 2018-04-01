@@ -850,7 +850,7 @@ class PipelineRunner:
             raise NotImplementedError
 
         #  check that it's the right version
-        if not data_rates_inputs['version'] == "0.2": 
+        if not data_rates_inputs['version'] == "0.3": 
             raise NotImplementedError
 
         gp_params['gp_orbit_prop_params'] = gp_orbit_prop_params
