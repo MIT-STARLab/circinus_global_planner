@@ -39,7 +39,7 @@ class GPMetrics():
         self.all_targ_IDs = [targ['id'] for targ in obs_params['targets']]
         self.targ_id_ignore_list = gp_general_other_params['targ_id_ignore_list']
 
-        self.min_as_route_dv = as_params['min_forked_route_dv_Mb']
+        self.min_as_route_dv = as_params['min_as_route_dv_Mb']
         self.aoi_units = metrics_params['aoi_units']
         self.overlap_count_option = metrics_params['overlap_count_option']
         self.window_overlap_option = metrics_params['window_overlap_option']
@@ -965,6 +965,7 @@ class GPMetrics():
                         non_overlap_has_xlnk_rt_cnt_by_obs[obs] += 1
 
 
+        rt_cnt = [len(rts) for rts in routes_by_obs.values()]
         non_overlap_rt_cnt = [cnt for cnt in non_overlap_rt_cnt_by_obs.values()]
         non_overlap_has_xlnk_rt_cnt = [cnt for cnt in non_overlap_has_xlnk_rt_cnt_by_obs.values()]
 
@@ -973,6 +974,11 @@ class GPMetrics():
         stats['overlap calc time'] = time_elapsed
         stats['total_num_overlaps'] = sum(counts)
         stats['ave_num_overlaps_by_route'] = np.mean(counts)
+        stats['ave_num_rts_by_obs'] = np.mean(rt_cnt)
+        stats['mdn_num_rts_by_obs'] = np.median(rt_cnt)
+        stats['std_num_rts_by_obs'] = np.std(rt_cnt)
+        stats['min_num_rts_by_obs'] = np.min(rt_cnt)
+        stats['max_num_rts_by_obs'] = np.max(rt_cnt)
         stats['ave_non_overlap_count_by_obs'] = np.mean(non_overlap_rt_cnt)
         stats['ave_non_overlap_count_has_xlnk_by_obs'] = np.mean(non_overlap_has_xlnk_rt_cnt)
         stats['mdn_num_overlaps_by_route'] = np.median(counts)
@@ -1001,15 +1007,21 @@ class GPMetrics():
             print("%s: %f"%('std_num_overlaps',stats['std_num_overlaps_by_route']))
             print("%s: %f"%('min_num_overlaps',stats['min_num_overlaps_by_route']))
             print("%s: %f"%('max_num_overlaps',stats['max_num_overlaps_by_route']))
+            print('------ By obs, num routes')
+            print("%s: %f"%('ave_num_rts_by_obs',stats['ave_num_rts_by_obs']))
+            print("%s: %f"%('mdn_num_rts_by_obs',stats['mdn_num_rts_by_obs']))
+            print("%s: %f"%('std_num_rts_by_obs',stats['std_num_rts_by_obs']))
+            print("%s: %f"%('min_num_rts_by_obs',stats['min_num_rts_by_obs']))
+            print("%s: %f"%('max_num_rts_by_obs',stats['max_num_rts_by_obs']))
             print('------ By obs, routes with no overlaps')
-            print("%s: %f"%('num_obs_no_non_overlaps',stats['num_obs_no_non_overlaps']))
+            print("%s: %d"%('num_obs_no_non_overlaps',stats['num_obs_no_non_overlaps']))
             print("%s: %f"%('ave_non_overlap_count_by_obs',stats['ave_non_overlap_count_by_obs']))
             print("%s: %f"%('mdn_non_overlap_count_by_obs',stats['mdn_non_overlap_count_by_obs']))
             print("%s: %f"%('std_non_overlap_count_by_obs',stats['std_non_overlap_count_by_obs']))
             print("%s: %f"%('min_non_overlap_count_by_obs',stats['min_non_overlap_count_by_obs']))
             print("%s: %f"%('max_non_overlap_count_by_obs',stats['max_non_overlap_count_by_obs']))
             print('------ By obs, routes with no overlaps, route has xlink')
-            print("%s: %f"%('num_obs_no_non_overlaps',stats['num_obs_no_non_overlaps_has_xlnk']))
+            print("%s: %d"%('num_obs_no_non_overlaps',stats['num_obs_no_non_overlaps_has_xlnk']))
             print("%s: %f"%('ave_non_overlap_count_by_obs',stats['ave_non_overlap_count_has_xlnk_by_obs']))
             print("%s: %f"%('mdn_non_overlap_count_by_obs',stats['mdn_non_overlap_count_has_xlnk_by_obs']))
             print("%s: %f"%('std_non_overlap_count_by_obs',stats['std_non_overlap_count_has_xlnk_by_obs']))
@@ -1026,5 +1038,7 @@ class GPMetrics():
 
         # from circinus_tools import debug_tools 
         # debug_tools.debug_breakpt()
+
+        return overlap_cnt_by_route,stats
 
 

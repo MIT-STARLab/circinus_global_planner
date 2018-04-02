@@ -15,7 +15,7 @@
         "plot_include_xlnk_labels":   true,
         "plot_route_selection_results":       false,
         "adjust_window_timing_post_selection": true,
-        "min_simple_route_dv_Mb" :  50 
+        "min_rs_route_dv_Mb" :  50 
     },
     "route_selection_params_v1": {
         "num_paths" :  5,
@@ -26,7 +26,7 @@
     "route_selection_params_v2": {
     },
     "activity_scheduling_params": {
-        "min_forked_route_dv_Mb" :  100,
+        "min_as_route_dv_Mb" :  100,
         "dv_epsilon_Mb" :  1,
         "solver_name" :  "gurobi",
         "solver_params": {
@@ -63,8 +63,8 @@
         "run_activity_scheduling":  false
     },
     "pickle_params":  {
-        "unpickle_pre_route_selection":                      true,
-        "pickle_route_selection_results":                   false,
+        "unpickle_pre_route_selection":                      false,
+        "pickle_route_selection_results":                   true,
         "unpickle_pre_act_scheduling":                            false,
         "pickle_act_scheduling_results":                            false,
         "route_selection_pickle": "pickles/rs_walker30_all_obs_30smax_better.pkl",
