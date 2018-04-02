@@ -898,55 +898,6 @@ class GPMetrics():
             #  final overlap count is the number of routes left
             overlap_cnt_by_route[dr] = len(overlap_rts_by_route[dr])
 
-
-
-        # from circinus_tools import debug_tools 
-        # debug_tools.debug_breakpt()
-
-        # start_time_by_obs_s = {}
-        # for obs in routes_by_obs.keys():
-        #     start_time_by_obs_s[obs] = (obs.start - self.scenario_start_dt).total_seconds()
-
-        # for obs_indx_1, (obs_1,rts_1) in enumerate(routes_by_obs.items()): 
-        #     for obs_indx_2, (obs_2,rts_2) in enumerate(routes_by_obs.items()): 
-        #         #  don't want to look at observations that are lower in index, because then will be repeating overlap counts
-        #         if obs_indx_2 <= obs_indx_1:
-        #             continue
-
-        #         #  if the observations are too far apart, don't consider route overlap
-        #         # if abs(obs_2.start - obs_1.start) > self.overlap_window_td:
-        #         if abs(start_time_by_obs_s[obs_2] - start_time_by_obs_s[obs_1]) > self.overlap_window_s:
-        #             continue 
-
-        #         for dr_1 in rts_1:
-        #             print('%d %d'%(obs_indx_1,obs_indx_2))
-
-        #             overlap_cnt = 0
-        #             overlap_rts_by_route.setdefault(dr_1,[])
-        #             for dr_2 in rts_2:
-        #                 overlap_rts_by_route.setdefault(dr_2,[])
-
-        #                 if self.overlap_count_option=='single_overlap':
-        #                     overlap_incr = dr_1.is_overlapping (dr_2,self.window_overlap_option)
-        #                 elif self.overlap_count_option=='multiple_overlap':
-        #                     overlap_incr = dr_1.count_overlap (dr_2,self.window_overlap_option)
-        #                 else:
-        #                     raise NotImplementedError
-
-        #                 # coerce the Boolean to int for the addition, if necessary
-        #                 overlap_cnt += overlap_incr
-                        
-        #                 overlap_cnt_by_route.setdefault(dr_2,0)
-        #                 overlap_cnt_by_route[dr_2] += overlap_incr
-                        
-        #                 if overlap_incr:
-        #                     overlap_rts_by_route[dr_2].append(dr_1.ID)
-        #                     overlap_rts_by_route[dr_1].append(dr_2.ID)
-
-        #             #  might not be the first time we've seen the route so need to set default
-        #             overlap_cnt_by_route.setdefault(dr_1,0)
-        #             overlap_cnt_by_route[dr_1] += overlap_cnt
-
         return overlap_cnt_by_route,overlap_rts_by_route
 
     def assess_route_overlap(  self,routes_by_obs,verbose=False):
