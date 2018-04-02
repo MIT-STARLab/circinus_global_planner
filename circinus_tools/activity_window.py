@@ -22,7 +22,7 @@ class ActivityWindow(object):
         self.window_ID = window_ID
         self.data_vol = const.UNASSIGNED
         self.scheduled_data_vol = const.UNASSIGNED
-        # self.remaining_data_vol = const.UNASSIGNED
+        self.remaining_data_vol = const.UNASSIGNED
 
         self._center_cache = None
         self._ave_data_rate_cache = None
