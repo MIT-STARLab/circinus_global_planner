@@ -316,8 +316,9 @@ class GPProcessorIO():
             else:
                 return wind
 
+        # dr should be of type DataRoute or DataMultiRoute
         for dr_indx, dr in enumerate (routes_flat):
-            for wind in dr.route:
+            for wind in dr.get_winds():
                 # copy the window before we make any changes to it, if so desired
                 wind = copy_choice(wind)
 
@@ -434,6 +435,8 @@ class GPProcessorIO():
     def create_data_history( self,obs_winds_flat,dlink_winds_flat,xlink_winds_flat):
 
         #  TODO :  haven't verified this code works, need to finish adapting it ( was copied over from small sat 2017 code)
+
+        raise RuntimeWarning('this code has not been updated')
 
         all_wind = [[] for k in range(self.num_sats)]
         for sat_indx in range(self.num_sats):

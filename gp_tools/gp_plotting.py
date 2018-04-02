@@ -102,7 +102,7 @@ class GPPlotting():
         # for each agent
         for  plot_indx, sat_id in enumerate (sats_ids_list):
             #  get the index for this ID
-            sat_indx = self.sat_id_order.index(sat_id)
+            sat_indx = self.sat_id_order.index(str(sat_id))
 
             # 
             axes = plt.subplot( num_sats,1,plot_indx+1)
@@ -470,7 +470,7 @@ class GPPlotting():
         # for each agent
         for  plot_indx, sat_id in enumerate (sats_ids_list):
             #  get the index for this ID
-            sat_indx = self.sat_id_order.index(sat_id)
+            sat_indx = self.sat_id_order.index(str(sat_id))
 
             # 
             axes = plt.subplot( num_sats,1,plot_indx+1)
@@ -818,7 +818,7 @@ class GPPlotting():
         # for each agent
         for  plot_indx, sat_id in enumerate (sats_ids_list):
             #  get the index for this ID
-            sat_indx = self.sat_id_order.index(sat_id)
+            sat_indx = self.sat_id_order.index(str(sat_id))
 
             #  make a subplot for each
             axes = plt.subplot( num_sats,1,plot_indx+1)

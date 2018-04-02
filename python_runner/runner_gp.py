@@ -270,7 +270,7 @@ class GlobalPlannerRunner:
 
         return all_routes,all_routes_obs,all_stats,route_times_s,obs_indx
 
-    def run_nominal_route_selection_v2_stage1( self,obs_winds,dlnk_winds_flat,xlnk_winds):
+    def run_nominal_route_selection_v2_step1( self,obs_winds,dlnk_winds_flat,xlnk_winds):
         gp_rs = gprsv2.GPDataRouteSelection ( self.params)
 
         print ('nominal route selection v2 stage 1')
@@ -302,7 +302,7 @@ class GlobalPlannerRunner:
 
                 # run the route selection algorithm
                 t_a = time.time()
-                routes,dr_uid = gp_rs.run_stage1(obs,dlnk_winds_flat,xlnk_winds, dr_uid, verbose = False)
+                routes,dr_uid = gp_rs.run_step1(obs,dlnk_winds_flat,xlnk_winds, dr_uid, verbose = False)
                 t_b = time.time()
                 stats = gp_rs.get_stats(verbose=False )
 
@@ -334,9 +334,14 @@ class GlobalPlannerRunner:
             # if obs_indx >= 1:
             #     break
 
+        # explicitly validate routes 
+        for routes in routes_by_obs:
+            for dr in routes:
+                dr.validate()
 
-        # gp_met = GPMetrics(self.params)
-        # gp_met.assess_route_overlap( routes,verbose=False)
+        print('runtime per rs iteration')
+        print('ave: %fs'%(np.mean(route_times_s)))
+        print('std: %fs'%(np.std(route_times_s)))
 
         return routes_by_obs,all_stats,route_times_s,obs_indx, dr_uid
 
@@ -442,9 +447,11 @@ class GlobalPlannerRunner:
 
         first_dlnk_indx = 10
         num_dlnks_to_plot = 20
-        for rts_indx, (obs,routes) in enumerate (routes_by_obs.items()):
-            if rts_indx >= num_obs_to_plot:
+        for obs_indx, (obs,routes) in enumerate (routes_by_obs.items()):
+            if obs_indx >= num_obs_to_plot:
                 break
+
+            print('Plotting obs index %d'%(obs_indx))
 
             rts_by_dlnk = OrderedDict()
 
@@ -497,7 +504,7 @@ class GlobalPlannerRunner:
                     plot_include_dlnk_labels = self.rs_general_params['plot_include_dlnk_labels'],
                     plot_include_xlnk_labels = self.rs_general_params['plot_include_xlnk_labels'],
                     show= False,
-                    fig_name='plots/test_rs_o{0}_d{1}_6sat.pdf'.format (rts_indx,dlnk_indx)
+                    fig_name='plots/test_rs_o{0}_d{1}_6sat.pdf'.format (obs_indx,dlnk_indx)
                 )
 
 
@@ -659,6 +666,34 @@ class GlobalPlannerRunner:
                     raise Exception('Found a duplicate unique window ID where it should not have been possible')
                 all_wind_ids.add(wind.window_ID)
 
+    def run_nominal_route_selection_v2_step2(self,routes_by_obs):
+        print('num routes')
+        print(sum(len(rts) for rts in routes_by_obs.values()))
+        
+
+        gp_met = GPMetrics(self.params)
+        # t_a = time.time()
+        # need to figure out how to window this or something so that we don't have to compare to every other data route - that's horribly expensive
+        print('Assess route overlap pre RS step 2')
+        overlap_cnt_by_route,stats_rs1 = gp_met.assess_route_overlap( routes_by_obs,verbose=True)
+        # t_b = time.time()
+        # time_elapsed = t_b-t_a
+        # print('time_elapsed')
+        # print(time_elapsed)
+
+        gp_rs = gprsv2.GPDataRouteSelection ( self.params)
+
+        selected_rts_by_obs = gp_rs.run_step2(routes_by_obs,overlap_cnt_by_route)
+
+        print('Assess route overlap post RS step 2')
+        overlap_cnt_by_route,stats_rs2 = gp_met.assess_route_overlap( selected_rts_by_obs,verbose=True)
+
+        for rts in selected_rts_by_obs.values():
+            for dmr in rts:
+                dmr.validate()
+
+        return selected_rts_by_obs
+
     def run( self):
 
         #################################
@@ -703,45 +738,17 @@ class GlobalPlannerRunner:
         if self.pickle_params['unpickle_pre_route_selection']:
             routes_by_obs,all_stats,route_times_s,obs_indx,obs_winds,dlnk_winds_flat,ecl_winds,window_uid = self.unpickle_rtsel_stuff()
 
-        #  otherwise run route selection
+        #  otherwise run route selection step 1
         else:
-            routes_by_obs,all_stats,route_times_s, obs_indx, dr_uid  =  self.run_nominal_route_selection_v2_stage1(obs_winds,dlnk_winds_flat,xlnk_winds)
+            routes_by_obs,all_stats,route_times_s, obs_indx, dr_uid  =  self.run_nominal_route_selection_v2_step1(obs_winds,dlnk_winds_flat,xlnk_winds)
             # routes_by_obs,all_stats,route_times_s, obs_indx, weights_tups  =  self.run_test_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
 
+        #  pickle before step 2 because step 2 doesn't take that long
         if self.pickle_params['pickle_route_selection_results']:
             self.pickle_rtsel_stuff(routes_by_obs,all_stats,route_times_s,obs_indx,obs_winds,dlnk_winds_flat,ecl_winds,window_uid)
 
-        # run stage 2. todo:  move this elsewhere
-        all_routes = []
-
-        # import ipdb
-        # ipdb.set_trace()
-
-        for obs,routes in routes_by_obs.items():
-            all_routes += routes
-
-        print('len(all_routes)')
-        print(len(all_routes))
-        print('runtime per rs iteration')
-        print('ave: %fs'%(np.mean(route_times_s)))
-        print('std: %fs'%(np.std(route_times_s)))
-
-        gp_met = GPMetrics(self.params)
-        # t_a = time.time()
-        # need to figure out how to window this or something so that we don't have to compare to every other data route - that's horribly expensive
-        print('Assess route overlap')
-        overlap_cnt_by_route,stats_rs1 = gp_met.assess_route_overlap( routes_by_obs,verbose=True)
-        # t_b = time.time()
-        # time_elapsed = t_b-t_a
-        # print('time_elapsed')
-        # print(time_elapsed)
-
-        gp_rs = gprsv2.GPDataRouteSelection ( self.params)
-
-        selected_rts_by_obs = gp_rs.run_stage2(routes_by_obs,overlap_cnt_by_route)
-
-        overlap_cnt_by_route,stats_rs2 = gp_met.assess_route_overlap( selected_rts_by_obs,verbose=True)
-
+        # run step 2. todo:  move this elsewhere
+        sel_routes_by_obs = self.run_nominal_route_selection_v2_step2(routes_by_obs)
         
         #################################
         # route selection output stage
@@ -750,7 +757,7 @@ class GlobalPlannerRunner:
         print('route selection output stage')
 
         if self.rs_general_params['plot_route_selection_results']:
-            self.plot_route_selection_results (routes_by_obs,dlnk_winds_flat,xlnk_winds_flat,num_obs_to_plot = 5)
+            self.plot_route_selection_results (sel_routes_by_obs,dlnk_winds_flat,xlnk_winds_flat,num_obs_to_plot = 5)
 
         #################################
         #  activity scheduling stage
@@ -759,22 +766,17 @@ class GlobalPlannerRunner:
         if not self.as_params['run_activity_scheduling']:
             return None
 
-        #  explicitly validate routes 
-        # for routes in routes_by_obs:
-        #     for dr in routes:
-        #         dr.validate_route()
-
         #  if  we are loading from file, do that
         if self.pickle_params['unpickle_pre_act_scheduling']:
-            routes_by_obs,ecl_winds,scheduled_routes,energy_usage,window_uid = self.unpickle_actsc_stuff()
+            sel_routes_by_obs,ecl_winds,scheduled_routes,energy_usage,window_uid = self.unpickle_actsc_stuff()
         else:
-            scheduled_routes,energy_usage = self.run_nominal_activity_scheduling(routes_by_obs,ecl_winds)
+            scheduled_routes,energy_usage = self.run_nominal_activity_scheduling(sel_routes_by_obs,ecl_winds)
 
         # if we are saving to file, do that
         if self.pickle_params['pickle_act_scheduling_results']:
-            self.pickle_actsc_stuff(routes_by_obs,ecl_winds,scheduled_routes,energy_usage,window_uid)
+            self.pickle_actsc_stuff(sel_routes_by_obs,ecl_winds,scheduled_routes,energy_usage,window_uid)
 
-        metrics_plot_inputs = self.calc_activity_scheduling_results (obs_winds,dlnk_winds_flat,routes_by_obs,scheduled_routes, energy_usage)
+        metrics_plot_inputs = self.calc_activity_scheduling_results (obs_winds,dlnk_winds_flat,sel_routes_by_obs,scheduled_routes, energy_usage)
 
         #################################
         #  Activity scheduling output stage
@@ -783,7 +785,7 @@ class GlobalPlannerRunner:
         print('activity scheduling output stage')
 
         if self.as_params['plot_activity_scheduling_results']:
-            self.plot_activity_scheduling_results(routes_by_obs,scheduled_routes,energy_usage,ecl_winds,metrics_plot_inputs)
+            self.plot_activity_scheduling_results(sel_routes_by_obs,scheduled_routes,energy_usage,ecl_winds,metrics_plot_inputs)
           
 
         outputs = None

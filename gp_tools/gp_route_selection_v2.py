@@ -296,7 +296,7 @@ class GPDataRouteSelection():
         # get the smallest time step used in orbit link. this is the smallest time step we need to worry about in data route selection
         self.act_timestep = min(link_params['xlnk_max_len_s'],link_params['dlnk_max_len_s'])
 
-        #  minimum stage1 route data volume -  the minimum data volume a route may have to be considered as a candidate for moving data volume from an observation to a downlink,  when finding routes in stage one
+        #  minimum step1 route data volume -  the minimum data volume a route may have to be considered as a candidate for moving data volume from an observation to a downlink,  when finding routes in step one
         self.min_rs_route_dv =rs_general_params['min_rs_route_dv_Mb']
         # minimum data volume that is considered for routes in the activity scheduling stage
         self.min_as_route_dv =as_params['min_as_route_dv_Mb']
@@ -328,7 +328,7 @@ class GPDataRouteSelection():
 
         return dlink_winds_flat_filtered, xlink_winds_flat_filtered
 
-    def run_stage1 ( self,obs_wind,dlnk_winds_flat,xlnk_winds, dr_uid, verbose = False):
+    def run_step1 ( self,obs_wind,dlnk_winds_flat,xlnk_winds, dr_uid, verbose = False):
         #  note that a potential source of slowness in the code below is the creation of new RouteRecord objects for every sat at every time step 
         # TODO: figure out if there's a more efficient way to do this -  for example, we shouldn't have to preserve these objects when they're more than a certain number of time steps in the past
 
@@ -393,9 +393,6 @@ class GPDataRouteSelection():
                 assert(t >= rr_pre.release_time)
                 return rr_pre
 
-        ########################################
-        #  run stage one algorithm
-        ########################################
 
         final_route_records = []
 
@@ -625,7 +622,7 @@ class GPDataRouteSelection():
 
         all_routes = [dr for rr in final_route_records for dr in rr.routes]
         for dr in all_routes:
-            dr.validate_route()
+            dr.validate()
 
         return all_routes, dr_uid
 
@@ -666,7 +663,7 @@ class GPDataRouteSelection():
 
         return sel_rts,dmr_uid
 
-    def run_stage2(self,routes_by_obs,overlap_cnt_by_route):
+    def run_step2(self,routes_by_obs,overlap_cnt_by_route):
 
         rts_by_obs_sorted_overlap = {}
         rts_by_obs_sorted_dv = {}
