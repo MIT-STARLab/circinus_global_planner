@@ -25,7 +25,7 @@ from scipy.optimize import linprog
 # ...
 
 from circinus_tools  import time_tools as tt
-from .routing_objects import DataRoute
+from .routing_objects import DataRoute, DataMultiRoute
 from .schedule_objects import Dancecard
 from .custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
 
@@ -286,7 +286,7 @@ class GPDataRouteSelection():
         rs_params = gp_params['gp_general_params']['route_selection_params_v2']
         as_params = gp_params['gp_general_params']['activity_scheduling_params']
         gp_general_other_params = gp_params['gp_general_params']['other_params']
-        link_params = gp_params['gp_orbit_link_params']['link_params']
+        link_params = gp_params['gp_orbit_link_params']['general_link_params']
         gp_as_inst_params = gp_params['gp_instance_params']['activity_scheduling_params']
 
         self.num_sats=sat_params['num_sats']
@@ -630,6 +630,42 @@ class GPDataRouteSelection():
         return all_routes, dr_uid
 
 
+    def get_from_sorted(self,sorted_rts,num_rts,min_dmr_candidate_dv,dmr_uid):
+        rt_index = 0
+        sel_rts = []
+        while rt_index < len(sorted_rts):
+            dmr = DataMultiRoute(ID=dmr_uid,data_routes=[sorted_rts[rt_index]])
+            dmr_uid += 1
+
+
+            #  if the data route already has enough data volume to meet the minimum requirement for the activity scheduling stage, add it as a selected route
+            if dmr.data_vol >= self.min_as_route_dv:
+                sel_rts.append(dmr)
+
+            #  otherwise, we need to smoosh routes together in order to meet that requirement
+            else:
+                
+                #  consider all subsequent data routes in the list. add them to the data multi-route to see if we can make minimum data volume requirement
+                next_rt_index = rt_index+1
+                while next_rt_index < len(sorted_rts):
+                    next_dr = sorted_rts[next_rt_index]
+                    #  add the data route to the data multi-route if possible
+                    dmr.accumulate_dr( next_dr,min_dmr_candidate_dv)
+
+                    #  check if we are meeting the minimum data volume requirement after the accumulation. if yes include the selected route and  and break out of the loop
+                    if dmr.data_vol >= self.min_as_route_dv:
+                        sel_rts.append(dmr)
+                        break
+
+                    next_rt_index += 1
+
+            if len(sel_rts) >= num_rts:
+                break 
+
+            rt_index += 1
+
+        return sel_rts,dmr_uid
+
     def run_stage2(self,routes_by_obs,overlap_cnt_by_route):
 
         rts_by_obs_sorted_overlap = {}
@@ -656,82 +692,25 @@ class GPDataRouteSelection():
         num_rts_sel_per_obs_overlap = 10
         num_rts_sel_per_obs_dv = 10
         num_rts_sel_per_obs_lat = 10
+        min_dmr_candidate_dv = 10 # Mb
 
-        def get_from_sorted(sorted_rts,num_rts):
-            rt_index = 0
-            sel_rts = []
-            while rt_index < len(rts):
-                dr = rts[rt_index]
-
-                #  if the data route already has enough data volume to meet the minimum requirement for the activity scheduling stage, add it as a selected route
-                if dr.data_vol >= self.min_as_route_dv:
-                    sel_rts.append(dr)
-
-                #  otherwise, we need to smoosh routes together in order to meet that requirement
-                else:
-                    cumul_dr=dr
-
-                    # todo: should probably check overlap in here...
-                    next_rt_index += 1
-                    while cumul_dr.data_vol < self.min_as_route_dv and next_rt_index < len(rts):
-                        next_dr = rts[next_rt_index]
-                        # drs.append(next_dr)
-                        cumul_dr = DataRoute.make_multi_route([cumul_dr,next_dr])
-                        # cumul_dv += next_dr.data_vol
-                        next_rt_index += 1
-
-                    if cumul_dr >= self.min_as_route_dv:
-                        sel_rts.append(cumul_dr)
-
-                rt_index += 1
+        dmr_uid = 0
 
 
         selected_rts_by_obs = {}
         for obs in routes_by_obs.keys():
             selected_rts_by_obs[obs] = []
-            selected_rts_by_obs[obs].append(get_from_sorted(rts_by_obs_sorted_overlap[obs],num_rts_sel_per_obs_overlap))
-            selected_rts_by_obs[obs].append(get_from_sorted(rts_by_obs_sorted_dv[obs],num_rts_sel_per_obs_dv))
-            selected_rts_by_obs[obs].append(get_from_sorted(rts_by_obs_sorted_lat[obs],num_rts_sel_per_obs_lat))
-
-
-        selected_rts_by_obs = {}
-        for obs,rts in routes_by_obs_sorted.items():
-            selected_rts_by_obs[obs] = []
             
-            rt_index = 0
-            while rt_index < len(rts):
-                dr = rts[rt_index]
+            sel_rts,dmr_uid = self.get_from_sorted(rts_by_obs_sorted_overlap[obs],num_rts_sel_per_obs_overlap,min_dmr_candidate_dv,dmr_uid)
+            selected_rts_by_obs[obs] += sel_rts
+            sel_rts,dmr_uid = self.get_from_sorted(rts_by_obs_sorted_dv[obs],num_rts_sel_per_obs_dv,min_dmr_candidate_dv,dmr_uid)
+            selected_rts_by_obs[obs] += sel_rts
+            sel_rts,dmr_uid = self.get_from_sorted(rts_by_obs_sorted_lat[obs],num_rts_sel_per_obs_lat,min_dmr_candidate_dv,dmr_uid)
+            selected_rts_by_obs[obs] += sel_rts
+            # from circinus_tools import debug_tools 
+            # debug_tools.debug_breakpt()
 
-                #  if the data route already has enough data volume to meet the minimum requirement for the activity scheduling stage, add it as a selected route
-                if dr.data_vol >= self.min_as_route_dv:
-                    selected_rts_by_obs[obs].append(dr)
-                    rt_index += 1
-                #  otherwise, we need to smoosh routes together in order to meet that requirement
-                else:
-                    drs=[dr]
-                    cum_dv = dr.data_vol
-
-                    # todo: should probably check overlap in here...
-                    rt_index += 1
-                    while cum_dv < self.min_as_route_dv and rt_index < len(rts):
-                        next_dr = rts[rt_index]
-                        drs.append(next_dr)
-                        cum_dv += next_dr.data_vol
-                        rt_index += 1
-
-                    if cum_dv >= self.min_as_route_dv:
-                        selected_rts_by_obs[obs].append()
-
-
-
-        # is_overlapping(self,other,window_option ='shared_window'):
-                    
-
-
-
-
-
-
+        return selected_rts_by_obs
 
 
     def get_stats(self,verbose=False):

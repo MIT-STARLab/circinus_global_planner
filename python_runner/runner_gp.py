@@ -730,16 +730,17 @@ class GlobalPlannerRunner:
         # t_a = time.time()
         # need to figure out how to window this or something so that we don't have to compare to every other data route - that's horribly expensive
         print('Assess route overlap')
-        overlap_cnt_by_route,stats = gp_met.assess_route_overlap( routes_by_obs,verbose=True)
+        overlap_cnt_by_route,stats_rs1 = gp_met.assess_route_overlap( routes_by_obs,verbose=True)
         # t_b = time.time()
         # time_elapsed = t_b-t_a
         # print('time_elapsed')
         # print(time_elapsed)
 
-        # gp_rs = gprsv2.GPDataRouteSelection ( self.params)
+        gp_rs = gprsv2.GPDataRouteSelection ( self.params)
 
-        # gp_rs.run_stage2(routes_by_obs,overlap_cnt_by_route)
+        selected_rts_by_obs = gp_rs.run_stage2(routes_by_obs,overlap_cnt_by_route)
 
+        overlap_cnt_by_route,stats_rs2 = gp_met.assess_route_overlap( selected_rts_by_obs,verbose=True)
 
         
         #################################

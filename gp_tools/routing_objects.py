@@ -19,17 +19,95 @@ def date_string(dt):
     if DATE_STRING_FORMAT == 'short':
         return  short_date_string(dt)
 
-class DataRoute(object):
+    # multi:  there are forks and convergences in the route; data can split out from one window to travel through multiple windows and converge back on another window.  temporal consistency must still be maintained though
+
+class DataMultiRoute():
+
+    def __init__(self,ID,data_routes):
+        self.ID = ID
+        self.data_routes = data_routes
+        self.data_vol_by_dr = {dr:dr.data_vol for dr in data_routes}
+
+        for dr in data_routes:
+            if not type(dr) == DataRoute:
+                raise RuntimeError('only data route objects should be used to construct a new data multi-route')
+
+    @property
+    def data_vol(self):
+        return sum(self.data_vol_by_dr.values())
+
+    def get_winds(self):
+        return (wind for dr in self.data_routes for wind in dr.get_winds())
+
+    def get_obs( self):
+        #  use first route because all routes should have the same observation
+        return self.data_routes[0].get_obs()
+
+    def get_dlnk(self):
+        #  use first route because all routes should have the same downlink
+        return self.data_routes[0].get_dlnk()
+
+    def has_xlnk(self):
+        return any(dr.has_xlnk() for dr in self.data_routes)
+
+    def __repr__(self):
+        return  '(DataMultiRoute %d, routes: %s)'%(self.ID,{dr.ID: self.data_vol_by_dr[dr] for dr in self.data_routes})
+
+    def accumulate_dr( self, candidate_dr,min_dmr_candidate_dv=0):
+        """[summary]
+        
+        [description]
+        :param dmrs: data multi routes to combine into a new multiroute
+        :type dmrs: list(DataMultiRoute)
+        """
+
+        # need to have matching observation and downlink for candidate to be added on to the multi-route
+        if not candidate_dr.get_obs() == self.get_obs():
+            return False
+        if not candidate_dr.get_dlnk() == self.get_dlnk():
+            return False
+
+        avail_dv_by_wind = {}
+        # req_dv_by_wind = {}
+        for dr in self.data_routes:
+            for wind in dr.route:
+                #  if we didn't yet encounter this window in any of the routes in self
+                avail_dv_by_wind.setdefault(wind,wind.data_vol)
+                avail_dv_by_wind[wind] -= dr.data_vol
+                # req_dv_by_wind.setdefault(wind,0)
+                # req_dv_by_wind[wind] += dr.data_vol
+
+
+                # if avail_check >= dr.data_vol:
+                #     avail_dv_by_wind[wind] -= dr.data_vol
+                #     # record the fact that this window is contained in dr_2
+                #     other_rts_by_wind.setdefault(wind,[]).append(dr_2_indx)
+
+        # candidate_feasible = True
+        candidate_dv =candidate_dr.data_vol
+        for wind in candidate_dr.route:
+            # if wind in avail_dv_by_wind.keys():
+            #     new_dv = avail_dv_by_wind[wind] - candidate_dr.data_vol
+            usable_wind_dv = min(avail_dv_by_wind.get(wind,wind.data_vol),candidate_dr.data_vol)
+
+            candidate_dv = min(candidate_dv, usable_wind_dv)
+
+        if candidate_dv > min_dmr_candidate_dv:
+            self.data_routes.append(candidate_dr)
+            self.data_vol_by_dr[candidate_dr] = candidate_dv
+            return True
+        else:
+            return False
+
+
+class DataRoute():
     '''
     Contains all the relevant information about the path taken by a single data packet traveling through the satellite network
     '''
 
-    #  route types:
-    # simple:  there are no forks in the route; there is a simple linear path from an observation to a downlink through which data flows. all windows must be in temporal order.
-    # multi:  there are forks and convergences in the route; data can split out from one window to travel through multiple windows and converge back on another window.  temporal consistency must still be maintained though
-    ROUTE_TYPES = ['simple','multi']
+    # note this route is simple:  there are no forks in the route; there is a simple linear path from an observation to a downlink through which data flows. all windows must be in temporal order.
 
-    def __init__(self, ID, route  =[], window_start_sats={},dv=0,route_type='simple'):
+    def __init__(self, ID, route  =[], window_start_sats={},dv=0):
 
         self.ID =  ID
 
@@ -45,23 +123,11 @@ class DataRoute(object):
         #  the amount of capacity on the path that actually ends up scheduled for usage
         self.scheduled_dv = const.UNASSIGNED
 
-        if route_type not in self.ROUTE_TYPES:
-            raise NotImplementedError
-
-        self.route_type = route_type
-
         self.sort_windows()   
 
         #  check the timing and satellite indices along the route.  throws an exception if a problem is seen
         self.validate_route()
 
-    @staticmethod
-    def make_multi_route(rts):
-        
-        for dr in rts
-
-        pass
-        # todo: write this code
 
 
     def __copy__(self):
@@ -74,6 +140,9 @@ class DataRoute(object):
     def append_wind_to_route( self,wind,window_start_sat_indx):
         self.route.append(wind)
         self.window_start_sats[wind] = window_start_sat_indx
+
+    def get_winds(self):
+        return (wind for wind in self.route)
 
     def get_obs( self):
         return self.route[0]
@@ -161,39 +230,35 @@ class DataRoute(object):
         if not type (obs) is ObsWindow:
             raise Exception('First window on route was not an ObsWindow instance. Route string: %s'%( self.get_route_string()))
 
-        if self.route_type == 'simple': 
-            curr_sat_indx = obs.sat_indx
-            next_sat_indx = obs.sat_indx
-            last_time = obs.start
+        curr_sat_indx = obs.sat_indx
+        next_sat_indx = obs.sat_indx
+        last_time = obs.start
 
-            #  trace through the route and make sure: 1. we cross through satellites in order and 2.  every activity along the path starts after the last activity ended
-            for windex, wind in  enumerate(self.route):
-                if self.window_start_sats[wind] != next_sat_indx:
-                    string = 'routing_objects.py: Found the incorrect sat indx at window indx %d in route. Route string: %s'%( windex, self.get_route_string())
+        #  trace through the route and make sure: 1. we cross through satellites in order and 2.  every activity along the path starts after the last activity ended
+        for windex, wind in  enumerate(self.route):
+            if self.window_start_sats[wind] != next_sat_indx:
+                string = 'routing_objects.py: Found the incorrect sat indx at window indx %d in route. Route string: %s'%( windex, self.get_route_string())
+                raise RuntimeError(string)
+            if not wind.start >= last_time or not wind.end >= last_time:
+                string ='routing_objects.py: Found a bad start time at window indx %d in route. Route string: %s'%( windex, self.get_route_string())
+                raise RuntimeError( string)
+
+            if not self.data_vol <= wind.data_vol:
+                string ='routing_objects.py: Found bad dv at window indx %d in route. Route string: %s'%( windex, self.get_route_string())
+                raise RuntimeError( string)
+
+            #  note that we manually trace the satellite index through cross-link window here. This is a bit redundant with the functionality of window_start_sats,  but adds a little bit more of a warm, happy, comfortable feeling in the area checking
+            if type (wind) is XlnkWindow:
+                curr_sat_indx = next_sat_indx
+                next_sat_indx=wind.get_xlnk_partner(curr_sat_indx)
+                # next_sat_indx = wind.xsat_indx if not wind.xsat_indx == curr_sat_indx else wind.sat_indx
+
+                #  if this happens to be a unidirectional window, and the current satellite index is not the transmitting satellite for that window, there's a problem
+                if not wind.symmetric and curr_sat_indx != wind.tx_sat:
+                    string ='routing_objects.py: Found incorrect tx sat at window indx %d in route. Route string: %s'%( windex, self.get_route_string())
                     raise RuntimeError(string)
-                if not wind.start >= last_time or not wind.end >= last_time:
-                    string ='routing_objects.py: Found a bad start time at window indx %d in route. Route string: %s'%( windex, self.get_route_string())
-                    raise RuntimeError( string)
 
-                if not self.data_vol <= wind.data_vol:
-                    string ='routing_objects.py: Found bad dv at window indx %d in route. Route string: %s'%( windex, self.get_route_string())
-                    raise RuntimeError( string)
-
-                #  note that we manually trace the satellite index through cross-link window here. This is a bit redundant with the functionality of window_start_sats,  but adds a little bit more of a warm, happy, comfortable feeling in the area checking
-                if type (wind) is XlnkWindow:
-                    curr_sat_indx = next_sat_indx
-                    next_sat_indx=wind.get_xlnk_partner(curr_sat_indx)
-                    # next_sat_indx = wind.xsat_indx if not wind.xsat_indx == curr_sat_indx else wind.sat_indx
-
-                    #  if this happens to be a unidirectional window, and the current satellite index is not the transmitting satellite for that window, there's a problem
-                    if not wind.symmetric and curr_sat_indx != wind.tx_sat:
-                        string ='routing_objects.py: Found incorrect tx sat at window indx %d in route. Route string: %s'%( windex, self.get_route_string())
-                        raise RuntimeError(string)
-
-                last_time = wind.end
-        elif self.route == 'multi':
-            # TODO: add this
-            pass
+            last_time = wind.end
 
     def get_split(self,other):
         """ return the last window in common with other data route

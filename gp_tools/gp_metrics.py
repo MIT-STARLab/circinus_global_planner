@@ -10,9 +10,12 @@ import numpy as np
 
 from circinus_tools  import time_tools as tt
 from .custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow
+from .routing_objects import DataRoute, DataMultiRoute
 
 class GPMetrics():
     """docstring for GPMetrics"""
+
+    ALLOWED_DR_TYPES = [DataRoute, DataMultiRoute]
 
     def __init__(self, gp_params):
         """initializes based on parameters
@@ -824,6 +827,11 @@ class GPMetrics():
 
         return stats
 
+    def verify_dr_type(self,dr):
+        #  data route can be a multiple types. verify is one of those
+        if not type(dr) in self.ALLOWED_DR_TYPES:
+            raise RuntimeWarning('Data route object is not of expected type. Expected: %s, saw %s'%(self.ALLOWED_DR_TYPES,dr))
+
     def calc_overlaps(self,routes_by_obs):
 
         # Note: no longer  implementing the window_overlap_option of "shared_window". the "mutex_window" option is hardcoded below (i.e.  if two routes share the same window at all they are considered overlapping, we don't consider how much data volume is available for that window)
@@ -849,8 +857,12 @@ class GPMetrics():
         #  go through all routes and for each window within the route and the route to a dictionary indexed by the window
         for obs_indx, (obs,rts) in enumerate(routes_by_obs.items()): 
             for dr in rts:
+                #  verify the data route type to avoid confusion down the road
+                self.verify_dr_type(dr)
+
+                overlap_rts_by_route[dr] = []
                 obs_by_route.setdefault(dr, obs)
-                for wind in dr.route:
+                for wind in dr.get_winds():
                     if type(wind) == XlnkWindow:
                         rts_by_xlnk.setdefault(wind,[]).append(dr)
                     elif type(wind) == DlnkWindow:
@@ -860,7 +872,6 @@ class GPMetrics():
         #  look through all of the route lists as indexed by cross-link window and wherever we find a list that has more than one data route,  mark an overlap for all of the data routes in that list
         for wind, rts in rts_by_xlnk.items():
             for dr in rts:
-                overlap_rts_by_route.setdefault(dr, [])
                 if len(rts) > 1:
                     #  leaving this is a list addition rather than a set addition to reduce memory requirements
                     overlap_rts_by_route[dr] += rts
@@ -869,7 +880,6 @@ class GPMetrics():
         if self.overlap_include_dlnks:
             for wind, rts in rts_by_dlnk.items():
                 for dr in rts:
-                    overlap_rts_by_route.setdefault(dr, [])
                     if len(rts) > 1:
                         overlap_rts_by_route[dr] += rts
 
@@ -953,11 +963,14 @@ class GPMetrics():
         non_overlap_rt_cnt_by_obs = {}
         non_overlap_has_xlnk_rt_cnt_by_obs = {}
         for obs_indx,(obs,rts) in  enumerate (routes_by_obs.items()):
-            rts_overlap_counts = {dr:overlap_cnt_by_route.get(dr,0) for dr in rts}
+            rts_overlap_counts = {dr:overlap_cnt_by_route[dr] for dr in rts}
 
             non_overlap_rt_cnt_by_obs[obs] = 0
             non_overlap_has_xlnk_rt_cnt_by_obs[obs] = 0
             for dr_indx, dr in  enumerate(rts):
+                #  verify the data route type to avoid confusion down the road
+                self.verify_dr_type(dr)
+
                 if rts_overlap_counts[dr] == 0:
                     non_overlap_rt_cnt_by_obs[obs] += 1
 
