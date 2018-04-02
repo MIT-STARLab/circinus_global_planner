@@ -284,6 +284,7 @@ class GPDataRouteSelection():
         sat_params = gp_params['gp_orbit_prop_params']['sat_params']
         rs_general_params = gp_params['gp_general_params']['route_selection_general_params']
         rs_params = gp_params['gp_general_params']['route_selection_params_v2']
+        as_params = gp_params['gp_general_params']['activity_scheduling_params']
         gp_general_other_params = gp_params['gp_general_params']['other_params']
         link_params = gp_params['gp_orbit_link_params']['link_params']
         gp_as_inst_params = gp_params['gp_instance_params']['activity_scheduling_params']
@@ -295,13 +296,17 @@ class GPDataRouteSelection():
         # get the smallest time step used in orbit link. this is the smallest time step we need to worry about in data route selection
         self.act_timestep = min(link_params['xlnk_max_len_s'],link_params['dlnk_max_len_s'])
 
-        #  minimum simple route data volume -  the minimum data volume a route may have to be considered as a candidate for moving data volume from an observation to a downlink
-        self.min_s_route_dv =rs_general_params['min_simple_route_dv_Mb']
+        #  minimum stage1 route data volume -  the minimum data volume a route may have to be considered as a candidate for moving data volume from an observation to a downlink,  when finding routes in stage one
+        self.min_rs_route_dv =rs_general_params['min_rs_route_dv_Mb']
+        # minimum data volume that is considered for routes in the activity scheduling stage
+        self.min_as_route_dv =as_params['min_as_route_dv_Mb']
         
         #  the "effectively zero" number. defining in terms of the minimum path data volume for future proofing
-        self.dv_epsilon = self.min_s_route_dv / 1000
+        self.dv_epsilon = self.min_rs_route_dv / 1000
         self.wind_filter_duration =  timedelta (seconds =rs_general_params['wind_filter_duration_s'])
         self.wind_filter_duration_obs_sat =  timedelta (seconds =rs_general_params['wind_filter_duration_obs_sat_s'])
+
+        self.latency_params = gp_params['gp_general_params']['other_params']['latency_calculation']
 
 
     @staticmethod
@@ -476,7 +481,7 @@ class GPDataRouteSelection():
                         continue
 
                     #  need to figure out what data on the other satellite is data that we have not yet received on sat_indx. this returns a set of de-conflicted routes that all send valid, non-duplicated data to sat_indx
-                    deconf_rts = rr_last_xlnk.get_deconflicted_routes(rr_xsat,min_dv=self.min_s_route_dv,verbose= False)
+                    deconf_rts = rr_last_xlnk.get_deconflicted_routes(rr_xsat,min_dv=self.min_rs_route_dv,verbose= False)
 
                     #todo: hmm, do we also want to consider other direction, where rr_sat is incumbent and rr_last_xlnk are the routes to deconflict?
 
@@ -495,7 +500,7 @@ class GPDataRouteSelection():
                         else:
                             available_dv = xlnk_dv - x_cum_dv 
                             #  check if greater than specified minimum
-                            if available_dv >= self.min_s_route_dv:
+                            if available_dv >= self.min_rs_route_dv:
                                 deconf_rt.available_dv = available_dv
                                 xlnk_candidate_rts.append(deconf_rt)
                                 x_cum_dv += available_dv
@@ -623,6 +628,110 @@ class GPDataRouteSelection():
             dr.validate_route()
 
         return all_routes, dr_uid
+
+
+    def run_stage2(self,routes_by_obs,overlap_cnt_by_route):
+
+        rts_by_obs_sorted_overlap = {}
+        rts_by_obs_sorted_dv = {}
+        rts_by_obs_sorted_lat = {}
+
+        def  latency_getter(dr):
+            return dr.get_latency(
+                    'minutes',
+                    obs_option = self.latency_params['obs'], 
+                    dlnk_option = self.latency_params['dlnk']
+                )
+
+        for obs,rts in routes_by_obs.items():
+            #  sort the routes for each observation by overlap count. Prefer routes with less overlap
+            rts_by_obs_sorted_overlap[obs] = sorted(rts,key=lambda dr: overlap_cnt_by_route[dr])
+            #  sort the routes for each observation by data volume. Prefer routes with more data volume
+            rts_by_obs_sorted_dv[obs] = sorted(rts,key=lambda dr: dr.data_vol)
+            #  sort the routes for each observation by latency. Prefer routes with lower latency
+            rts_by_obs_sorted_lat[obs] = sorted(rts,key=lambda dr: latency_getter(dr))
+
+            
+        # todo: move to init
+        num_rts_sel_per_obs_overlap = 10
+        num_rts_sel_per_obs_dv = 10
+        num_rts_sel_per_obs_lat = 10
+
+        def get_from_sorted(sorted_rts,num_rts):
+            rt_index = 0
+            sel_rts = []
+            while rt_index < len(rts):
+                dr = rts[rt_index]
+
+                #  if the data route already has enough data volume to meet the minimum requirement for the activity scheduling stage, add it as a selected route
+                if dr.data_vol >= self.min_as_route_dv:
+                    sel_rts.append(dr)
+
+                #  otherwise, we need to smoosh routes together in order to meet that requirement
+                else:
+                    cumul_dr=dr
+
+                    # todo: should probably check overlap in here...
+                    next_rt_index += 1
+                    while cumul_dr.data_vol < self.min_as_route_dv and next_rt_index < len(rts):
+                        next_dr = rts[next_rt_index]
+                        # drs.append(next_dr)
+                        cumul_dr = DataRoute.make_multi_route([cumul_dr,next_dr])
+                        # cumul_dv += next_dr.data_vol
+                        next_rt_index += 1
+
+                    if cumul_dr >= self.min_as_route_dv:
+                        sel_rts.append(cumul_dr)
+
+                rt_index += 1
+
+
+        selected_rts_by_obs = {}
+        for obs in routes_by_obs.keys():
+            selected_rts_by_obs[obs] = []
+            selected_rts_by_obs[obs].append(get_from_sorted(rts_by_obs_sorted_overlap[obs],num_rts_sel_per_obs_overlap))
+            selected_rts_by_obs[obs].append(get_from_sorted(rts_by_obs_sorted_dv[obs],num_rts_sel_per_obs_dv))
+            selected_rts_by_obs[obs].append(get_from_sorted(rts_by_obs_sorted_lat[obs],num_rts_sel_per_obs_lat))
+
+
+        selected_rts_by_obs = {}
+        for obs,rts in routes_by_obs_sorted.items():
+            selected_rts_by_obs[obs] = []
+            
+            rt_index = 0
+            while rt_index < len(rts):
+                dr = rts[rt_index]
+
+                #  if the data route already has enough data volume to meet the minimum requirement for the activity scheduling stage, add it as a selected route
+                if dr.data_vol >= self.min_as_route_dv:
+                    selected_rts_by_obs[obs].append(dr)
+                    rt_index += 1
+                #  otherwise, we need to smoosh routes together in order to meet that requirement
+                else:
+                    drs=[dr]
+                    cum_dv = dr.data_vol
+
+                    # todo: should probably check overlap in here...
+                    rt_index += 1
+                    while cum_dv < self.min_as_route_dv and rt_index < len(rts):
+                        next_dr = rts[rt_index]
+                        drs.append(next_dr)
+                        cum_dv += next_dr.data_vol
+                        rt_index += 1
+
+                    if cum_dv >= self.min_as_route_dv:
+                        selected_rts_by_obs[obs].append()
+
+
+
+        # is_overlapping(self,other,window_option ='shared_window'):
+                    
+
+
+
+
+
+
 
 
     def get_stats(self,verbose=False):

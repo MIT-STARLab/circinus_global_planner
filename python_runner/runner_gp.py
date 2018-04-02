@@ -270,10 +270,10 @@ class GlobalPlannerRunner:
 
         return all_routes,all_routes_obs,all_stats,route_times_s,obs_indx
 
-    def run_nominal_route_selection_v2( self,obs_winds,dlnk_winds_flat,xlnk_winds):
+    def run_nominal_route_selection_v2_stage1( self,obs_winds,dlnk_winds_flat,xlnk_winds):
         gp_rs = gprsv2.GPDataRouteSelection ( self.params)
 
-        print ('nominal route selection v2')
+        print ('nominal route selection v2 stage 1')
 
         obs_indx =0
         # dict of all routes, with obs as key
@@ -705,7 +705,7 @@ class GlobalPlannerRunner:
 
         #  otherwise run route selection
         else:
-            routes_by_obs,all_stats,route_times_s, obs_indx, dr_uid  =  self.run_nominal_route_selection_v2(obs_winds,dlnk_winds_flat,xlnk_winds)
+            routes_by_obs,all_stats,route_times_s, obs_indx, dr_uid  =  self.run_nominal_route_selection_v2_stage1(obs_winds,dlnk_winds_flat,xlnk_winds)
             # routes_by_obs,all_stats,route_times_s, obs_indx, weights_tups  =  self.run_test_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
 
         if self.pickle_params['pickle_route_selection_results']:
@@ -730,11 +730,17 @@ class GlobalPlannerRunner:
         # t_a = time.time()
         # need to figure out how to window this or something so that we don't have to compare to every other data route - that's horribly expensive
         print('Assess route overlap')
-        gp_met.assess_route_overlap( routes_by_obs,verbose=True)
+        overlap_cnt_by_route,stats = gp_met.assess_route_overlap( routes_by_obs,verbose=True)
         # t_b = time.time()
         # time_elapsed = t_b-t_a
         # print('time_elapsed')
         # print(time_elapsed)
+
+        # gp_rs = gprsv2.GPDataRouteSelection ( self.params)
+
+        # gp_rs.run_stage2(routes_by_obs,overlap_cnt_by_route)
+
+
         
         #################################
         # route selection output stage
