@@ -60,14 +60,14 @@
         "plot_activity_scheduling_results":   true,
         "resource_delta_t_s": 10,
         "resource_margin_num_timepoints": 30,
-        "run_activity_scheduling":  true
+        "run_activity_scheduling":  false
     },
     "pickle_params":  {
-        "unpickle_pre_route_selection":                      false,
-        "pickle_route_selection_results":                   true,
+        "unpickle_pre_route_selection":                      true,
+        "pickle_route_selection_results":                   false,
         "unpickle_pre_act_scheduling":                            false,
         "pickle_act_scheduling_results":                            false,
-        "route_selection_pickle": "pickles/rs_orbit_prop_inputs_walker30_7gs_oi144_2018-03-29T21_46_28.662113.pkl",
+        "route_selection_pickle": "pickles/rs_walker30_all_obs_30smax_better.pkl",
         "act_scheduling_pickle": "pickles/as_2018-03-19T20_35_17.004653.pkl"
     },
     "other_params": {

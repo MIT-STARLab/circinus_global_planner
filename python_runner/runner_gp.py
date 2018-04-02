@@ -829,8 +829,8 @@ class PipelineRunner:
             sat_id_order = io_tools.make_and_validate_sat_id_order(sat_id_order,orbit_prop_inputs['sat_params']['num_sats'],all_sat_ids1)
             orbit_prop_inputs['sat_params']['sat_id_order'] = sat_id_order
 
-            orbit_prop_inputs['sat_params']['power_params_sorted'] = io_tools.sort_input_params_by_sat_indcs(orbit_prop_inputs['sat_params']['power_params'],sat_id_order)
-            orbit_prop_inputs['sat_params']['initial_state_sorted'] = io_tools.sort_input_params_by_sat_indcs(orbit_prop_inputs['sat_params']['initial_state'],sat_id_order)
+            orbit_prop_inputs['sat_params']['power_params_sorted'] = io_tools.sort_input_params_by_sat_IDs(orbit_prop_inputs['sat_params']['power_params'],sat_id_order)
+            orbit_prop_inputs['sat_params']['initial_state_sorted'] = io_tools.sort_input_params_by_sat_IDs(orbit_prop_inputs['sat_params']['initial_state'],sat_id_order)
         else:
             raise NotImplementedError
 
