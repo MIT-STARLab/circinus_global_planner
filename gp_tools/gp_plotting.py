@@ -967,7 +967,7 @@ class GPPlotting():
 
     def plot_sat_tlm_cmd_aoi(
         self,
-        sats_to_include,
+        sats_ids_list,
         aoi_curves_by_sat_indx,
         aoi_option,
         plot_start,
@@ -988,7 +988,7 @@ class GPPlotting():
         
         time_to_end = (plot_end-plot_start).total_seconds()/time_divisor
 
-        num_sats = len(sats_to_include)
+        num_sats = len(sats_ids_list)
 
         #  make a new figure
         plt.figure()
@@ -1004,7 +1004,9 @@ class GPPlotting():
         aoi_plot = None
 
         # for each agent
-        for  plot_indx, sat_indx in enumerate (sats_to_include):
+        for  plot_indx, sat_id in enumerate (sats_ids_list):
+            sat_indx = self.sat_id_order.index(str(sat_id))
+
 
             #  make a subplot for each
             axes = plt.subplot( num_sats,1,plot_indx+1)

@@ -46,6 +46,14 @@ class DataMultiRoute():
     def data_vol(self):
         return sum(self.data_vol_by_dr.values())
 
+    def data_vol_for_wind(self,wind):
+        wind_sum = sum(dv for dr,dv in self.data_vol_by_dr.items() if wind in dr.get_winds())
+
+        if wind_sum == 0:
+            raise KeyError('Found zero data volume for window, which assumedly means it is not in the route. self: %s, wind: %s'%(self,wind))
+
+        return wind_sum
+
     @property
     def scheduled_dv(self):
         if self.has_scheduled_dv:
@@ -56,9 +64,29 @@ class DataMultiRoute():
         else:
             return const.UNASSIGNED
 
+    def scheduled_dv_for_wind(self,wind):
+        if self.has_scheduled_dv:
+            # note: don't check minimum data volume here because scheduled data volume could go to zero
+            return sum(s_dv for dr,s_dv in self.scheduled_dv_by_dr.items() if wind in dr.get_winds())
+        else:
+            return const.UNASSIGNED    
+
+    def set_scheduled_dv_frac(self,fraction):
+        for dr in self.data_routes:
+            self.scheduled_dv_by_dr[dr] = self.data_vol_by_dr[dr]*fraction
+
+        self.has_scheduled_dv = True
+
 
     def get_winds(self):
-        return (wind for dr in self.data_routes for wind in dr.get_winds())
+        """ get the set of windows from all of the routes contained within this multi-route
+        
+        Returns the set of all windows from all the DataRoutes within. Note that this is a set, so each window only shows up once
+        :returns: [description]
+        :rtype: {[type]}
+        """
+
+        return set(wind for dr in self.data_routes for wind in dr.get_winds())
 
     def get_obs( self):
         #  use first route because all routes should have the same observation
@@ -70,6 +98,9 @@ class DataMultiRoute():
 
     def has_xlnk(self):
         return any(dr.has_xlnk() for dr in self.data_routes)
+
+    def get_latency( self,units='minutes',obs_option = 'end', dlnk_option = 'center'):
+        return self.data_routes[0].get_latency(units,obs_option,dlnk_option)
 
     def __repr__(self):
         return  '(DataMultiRoute %d, routes: %s)'%(self.ID,{dr.ID: self.data_vol_by_dr[dr] for dr in self.data_routes})
@@ -221,19 +252,19 @@ class DataRoute():
             if type (wind)  == ObsWindow:
                 start_str =  "%.0fs" % ( wind.start-time_base).total_seconds() if  time_base else  date_string(wind.start)
                 end_str =  "%.0fs" % ( wind.end-time_base).total_seconds() if  time_base else  date_string(wind.end)
-                out_string  +=  "o %d dv %.0f %s,%s" % (wind.sat_indx, wind.data_vol,start_str,end_str)
+                out_string  +=  "o %d s%d dv %.0f %s,%s" % (wind.window_ID,wind.sat_indx, wind.data_vol,start_str,end_str)
             elif type (wind)  == XlnkWindow:
                 start_str =  "%.0fs" % ( wind.start-time_base).total_seconds() if  time_base else  date_string(wind.start)
                 end_str =  "%.0fs" % ( wind.end-time_base).total_seconds() if  time_base else  date_string(wind.end)
                 sat_indx=self.window_start_sats[wind]
                 # xsat_indx=wind.xsat_indx  if self.window_start_sats[wind] == wind.sat_indx else wind.sat_indx
                 xsat_indx=wind.get_xlnk_partner(self.window_start_sats[wind])
-                out_string  +=  " -> x %d,%d dv %.0f %s,%s" % (sat_indx, xsat_indx, wind.data_vol,start_str,end_str)
+                out_string  +=  " -> x %d s%d,xs%d dv %.0f %s,%s" % (wind.window_ID,sat_indx, xsat_indx, wind.data_vol,start_str,end_str)
             elif type (wind)  == DlnkWindow:
                 start_str =  "%.0fs" % ( wind.start-time_base).total_seconds() if  time_base else  date_string(wind.start)
                 end_str =  "%.0fs" % ( wind.end-time_base).total_seconds() if  time_base else  date_string(wind.end)
                 sat_indx= wind.sat_indx
-                out_string  +=  " -> d %d dv %.0f %s,%s" % (sat_indx, wind.data_vol,start_str,end_str)
+                out_string  +=  " -> d %d s%d dv %.0f %s,%s" % (wind.window_ID,sat_indx, wind.data_vol,start_str,end_str)
         
         return out_string
 

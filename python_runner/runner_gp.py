@@ -28,6 +28,7 @@ import gp_tools.gp_route_selection_v2 as gprsv2
 from gp_tools.gp_activity_scheduling import GPActivityScheduling
 from gp_tools.gp_metrics import GPMetrics
 from gp_tools.network_sim.gp_network_sim import GPNetSim
+from gp_tools.routing_objects import DataMultiRoute
 
 # TODO: remove this line if not needed
 # from gp_tools.custom_activity_window import ObsWindow
@@ -92,8 +93,10 @@ class GlobalPlannerRunner:
             pickle.dump(  pickle_stuff,f)
 
     def unpickle_rtsel_stuff( self):
+        rs_pickle = self.other_params['rs_pickle_input']
+        rs_pickle = rs_pickle if rs_pickle else self.pickle_params['route_selection_pickle']
 
-        p = pickle.load (open ( self.pickle_params['route_selection_pickle'],'rb'))
+        p = pickle.load (open ( rs_pickle,'rb'))
         #  TODO:  uncommon this  if want to reload parameters from file
         # self.params = p['params']
 
@@ -123,7 +126,7 @@ class GlobalPlannerRunner:
         # gp_as.print_sol ()
         print('extract_routes')
         #  make a copy of the windows in the extracted routes so we don't mess with the original objects ( just to be extra careful)
-        routes = gp_as.extract_utilized_routes ( copy_windows = True, verbose  = False)
+        routes = gp_as.extract_utilized_routes ( copy_routes = True, verbose  = False)
         energy_usage = gp_as.extract_resource_usage(  decimation_factor =1)
 
         time_elapsed = t_b-t_a
@@ -539,7 +542,7 @@ class GlobalPlannerRunner:
         sched_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind = self.io_proc.extract_flat_windows (routes,copy_windows= False)
 
         # 
-        sats_to_include =  [sat_p['sat_id'] for sat_p in self.sat_orbit_params]
+        sats_to_include =  [sat_id for sat_id in self.sat_params['sat_id_order']]
         # sats_to_include = [12,13,14,15,16]
 
         # sats_to_include =  range(20,30)
@@ -747,8 +750,14 @@ class GlobalPlannerRunner:
         if self.pickle_params['pickle_route_selection_results']:
             self.pickle_rtsel_stuff(routes_by_obs,all_stats,route_times_s,obs_indx,obs_winds,dlnk_winds_flat,ecl_winds,window_uid)
 
-        # run step 2. todo:  move this elsewhere
-        sel_routes_by_obs = self.run_nominal_route_selection_v2_step2(routes_by_obs)
+        passthru = False
+        if passthru:
+            sel_routes_by_obs = {obs:[DataMultiRoute(ID=0,data_routes=[dr]) for dr in rts] for obs,rts in routes_by_obs.items()}
+        else:
+            # run step 2. todo:  move this elsewhere
+            sel_routes_by_obs = self.run_nominal_route_selection_v2_step2(routes_by_obs)
+
+
         
         #################################
         # route selection output stage
@@ -788,8 +797,10 @@ class GlobalPlannerRunner:
             self.plot_activity_scheduling_results(sel_routes_by_obs,scheduled_routes,energy_usage,ecl_winds,metrics_plot_inputs)
           
 
-        outputs = None
-        # outputs= self.io_proc.make_sat_history_outputs (sel_obs_winds_flat, sel_xlnk_winds_flat, sel_dlnk_winds_flat, link_info_by_wind)
+        # outputs = None
+        sel_routes_flat = [dr for rts in sel_routes_by_obs.values() for dr in rts]
+        (sel_obs_winds_flat, sel_dlnk_winds_flat, sel_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind) = self.io_proc.extract_flat_windows (sel_routes_flat)
+        outputs= self.io_proc.make_sat_history_outputs (sel_obs_winds_flat, sel_xlnk_winds_flat, sel_dlnk_winds_flat, link_info_by_wind)
 
         return outputs
 
@@ -816,6 +827,7 @@ class PipelineRunner:
         gp_data_rates_params = data_rates_inputs
         gp_other_params = {}
         gp_other_params['new_pickle_file_name_pre']  = file_params.get ('orbit_prop_inputs_file' ,'default.json').split ('.')[0]
+        gp_other_params['rs_pickle_input']  = data['rs_pickle']
 
         if orbit_prop_inputs['version'] == "0.3": 
             # do some useful transformations while preserving the structure of the inputs ( important for avoiding namespace clashes)
@@ -898,6 +910,11 @@ if __name__ == "__main__":
                     default='orbit_link_inputs_ex.json',
                     help='specify orbit link inputs file from orbit link repo')
 
+    ap.add_argument('--rs_pickle',
+                    type=str,
+                    default=None,
+                    help='specify route selection pickle to use')
+
     args = ap.parse_args()
 
     pr = PipelineRunner()
@@ -926,6 +943,7 @@ if __name__ == "__main__":
         "gp_instance_params_inputs": gp_instance_params_inputs,
         # "viz_params": viz_params,
         "data_rates_inputs": data_rates_inputs,
+        "rs_pickle": args.rs_pickle,
         "file_params":  {'orbit_prop_inputs_file': args.prop_inputs_file.split('/')[-1]}
     }
 

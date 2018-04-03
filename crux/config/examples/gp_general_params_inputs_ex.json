@@ -57,7 +57,7 @@
         },
         "plot_include_dlnk_labels":    false,
         "plot_include_xlnk_labels":   true,
-        "plot_activity_scheduling_results":   true,
+        "plot_activity_scheduling_results":   false,
         "resource_delta_t_s": 10,
         "resource_margin_num_timepoints": 30,
         "run_activity_scheduling":  true
@@ -67,7 +67,7 @@
         "pickle_route_selection_results":                   false,
         "unpickle_pre_act_scheduling":                            false,
         "pickle_act_scheduling_results":                            false,
-        "route_selection_pickle": "/Users/ktikennedy/Desktop/circinus_files/4hour/walker6_7gs/rs_orbit_prop_inputs_walker6_7gs_oi28_2018-04-02T15_23_31.691935.pkl",
+        "route_selection_pickle": "/Users/ktikennedy/Desktop/circinus_files/4hour/walker30_7gs/rs_orbit_prop_inputs_walker30_7gs_oi144_2018-04-02T04_15_59.848933.pkl",
         "act_scheduling_pickle": "pickles/as_2018-03-19T20_35_17.004653.pkl"
     },
     "other_params": {

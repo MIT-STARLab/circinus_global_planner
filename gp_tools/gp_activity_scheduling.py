@@ -2,7 +2,6 @@
 # 
 # @author Kit Kennedy
 #
-#  note that a path is the same as a route. 
 
 from  datetime import timedelta
 from copy import  deepcopy
@@ -13,7 +12,7 @@ from pyomo import opt  as po
 
 from circinus_tools  import time_tools as tt
 from .custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
-from .routing_objects import DataRoute
+from .routing_objects import DataMultiRoute
 from .schedule_objects import Dancecard
 
 class GPActivityScheduling():
@@ -39,7 +38,7 @@ class GPActivityScheduling():
         self.latency_params = gp_params['gp_general_params']['other_params']['latency_calculation']
         self.solver_name =as_params['solver_name']
         self.solver_params =as_params['solver_params']
-        self.min_forked_route_dv =as_params['min_forked_route_dv_Mb']
+        self.min_as_route_dv =as_params['min_as_route_dv_Mb']
         self.num_sats=sat_params['num_sats']
         self.transition_time_s=as_params['transition_time_s']
         self.sched_start_utc_dt  = gp_inst_params['start_utc_dt']
@@ -124,9 +123,10 @@ class GPActivityScheduling():
         # these structures keep track of the subset of unique indices that correspond to observations and links. Also we keep track of what data routes correspond to an activity
         link_act_indcs = []
         obs_act_indcs = []
-        path_indcs_by_link_act = {}
-        path_indcs_by_obs_act = {}
-        path_indcs_by_act = {}
+        # dmr is data multi-route
+        dmr_indcs_by_link_act = {}
+        dmr_indcs_by_obs_act = {}
+        dmr_indcs_by_act = {}
         dv_by_link_act = {}
         dv_by_obs_act = {}
         dv_by_act = {}
@@ -134,8 +134,8 @@ class GPActivityScheduling():
         sat_acts = [[] for sat_indx in range (self.num_sats)]
 
         new_act_indx = 0
-        for dr_indx, dr in enumerate (routes_flat):
-            for act in dr.route:
+        for dmr_indx, dmr in enumerate (routes_flat):
+            for act in dmr.get_winds():
 
                 # if we haven't yet seen this activity, then add it to bookkeeping
                 if not act in all_acts_by_obj.keys():
@@ -143,8 +143,8 @@ class GPActivityScheduling():
                     all_acts_indcs.append(act_indx)
                     all_acts_by_indx[act_indx] = act
                     all_acts_by_obj[act] = act_indx
-                    path_indcs_by_act[act_indx] = []
-                    path_indcs_by_act[act_indx].append (dr_indx)
+                    dmr_indcs_by_act[act_indx] = []
+                    dmr_indcs_by_act[act_indx].append (dmr_indx)
                     dv_by_act[act_indx] = act.data_vol
                     new_act_indx += 1
 
@@ -152,22 +152,22 @@ class GPActivityScheduling():
                     if type(act) == ObsWindow:
                         sat_acts[act.sat_indx].append(act)
                         obs_act_indcs.append(act_indx)
-                        path_indcs_by_obs_act[act_indx] = []
-                        path_indcs_by_obs_act[act_indx].append (dr_indx)
+                        dmr_indcs_by_obs_act[act_indx] = []
+                        dmr_indcs_by_obs_act[act_indx].append (dmr_indx)
                         dv_by_obs_act[act_indx] = act.data_vol
 
                     # also need to add it to the list and dictionary for links
                     if type(act) == DlnkWindow:
                         link_act_indcs.append(act_indx)
-                        path_indcs_by_link_act[act_indx] = []
-                        path_indcs_by_link_act[act_indx].append (dr_indx)
+                        dmr_indcs_by_link_act[act_indx] = []
+                        dmr_indcs_by_link_act[act_indx].append (dmr_indx)
                         dv_by_link_act[act_indx] = act.data_vol
                         sat_acts[act.sat_indx].append(act)
 
                     if type(act) == XlnkWindow:
                         link_act_indcs.append(act_indx)
-                        path_indcs_by_link_act[act_indx] = []
-                        path_indcs_by_link_act[act_indx].append (dr_indx)
+                        dmr_indcs_by_link_act[act_indx] = []
+                        dmr_indcs_by_link_act[act_indx].append (dmr_indx)
                         dv_by_link_act[act_indx] = act.data_vol
                         sat_acts[act.sat_indx].append(act)
                         sat_acts[act.xsat_indx].append(act)
@@ -175,70 +175,68 @@ class GPActivityScheduling():
                 #  if we have already seen the activity,  then just need to update the appropriate structures
                 else:
                     act_indx = all_acts_by_obj[act]
-                    path_indcs_by_act[act_indx].append (dr_indx)
+                    dmr_indcs_by_act[act_indx].append (dmr_indx)
 
                     # add the data route index
                     if type(act) == ObsWindow:
-                        path_indcs_by_obs_act[act_indx].append (dr_indx)
+                        dmr_indcs_by_obs_act[act_indx].append (dmr_indx)
                     if type(act) == DlnkWindow or type(act) == XlnkWindow:
-                        path_indcs_by_link_act[act_indx].append (dr_indx)
+                        dmr_indcs_by_link_act[act_indx].append (dmr_indx)
 
-        # print (path_indcs_by_link_act)
-        # print (path_indcs_by_obs_act)
+        # print (dmr_indcs_by_link_act)
+        # print (dmr_indcs_by_obs_act)
 
         #  sort the activities, because we'll need that for constructing constraints
         for sat_indx in range (self.num_sats):
             sat_acts[sat_indx].sort(key=lambda x: x.start)
 
-        return sat_acts,all_acts_indcs,path_indcs_by_act,dv_by_act,all_acts_by_obj,obs_act_indcs,path_indcs_by_obs_act,dv_by_obs_act,link_act_indcs,path_indcs_by_link_act,dv_by_link_act
+        return sat_acts,all_acts_indcs,dmr_indcs_by_act,dv_by_act,all_acts_by_obj,obs_act_indcs,dmr_indcs_by_obs_act,dv_by_obs_act,link_act_indcs,dmr_indcs_by_link_act,dv_by_link_act
                     
 
     def filter_routes( self,routes_flat):
 
         new_routes = []
-        for dr in routes_flat:
-            dr_start = dr.get_obs().start
-            dr_end = dr.get_dlnk().end
+        for dmr in routes_flat:
+            dmr_start = dmr.get_obs().start
+            dmr_end = dmr.get_dlnk().end
 
-            if dr_start < self.sched_start_utc_dt or dr_end > self.sched_end_utc_dt:
+            if dmr_start < self.sched_start_utc_dt or dmr_end > self.sched_end_utc_dt:
                 pass
             else:
-                new_routes.append (dr)
+                new_routes.append (dmr)
 
         return new_routes
 
     @staticmethod
-    def get_path_latency_score_factors(routes_flat,path_indcs_by_obs_act,latency_params):
+    def get_dmr_latency_score_factors(routes_flat,dmr_indcs_by_obs_act,latency_params):
 
-        path_latency_sf_by_path_indx = {}
+        dmr_latency_sf_by_dmr_indx = {}
 
         # loop through all satellites and their downlinks
         # explicitly indexing by num_sats just to include a bit of error checking
-        for obs,dr_indcs in path_indcs_by_obs_act.items():
+        for obs,dmr_indcs in dmr_indcs_by_obs_act.items():
             latencies = []
-            for dr_indx in dr_indcs:
-                dr = routes_flat[dr_indx]
+            for dmr_indx in dmr_indcs:
+                dmr = routes_flat[dmr_indx]
 
                 latencies.append(
-                    dr.get_latency(
+                    dmr.get_latency(
                         'minutes',
                         obs_option = latency_params['obs'], 
                         dlnk_option = latency_params['dlnk']
                     )
                 )
 
-             #  the shortest latency path for this observation has a score factor of 1.0, and the score factors for the other paths decrease as the inverse of increasing latency
+             #  the shortest latency dmr (DataMultiRoute) for this observation has a score factor of 1.0, and the score factors for the other dmrs decrease as the inverse of increasing latency
             min_lat = min(latencies)
             for lat_indx, lat in enumerate(latencies):
-                dr_indx = dr_indcs[lat_indx]
-                path_latency_sf_by_path_indx[dr_indx] = min_lat/lat
+                dmr_indx = dmr_indcs[lat_indx]
+                dmr_latency_sf_by_dmr_indx[dmr_indx] = min_lat/lat
  
-        return path_latency_sf_by_path_indx
+        return dmr_latency_sf_by_dmr_indx
 
     def make_model ( self,routes_flat, ecl_winds, verbose = True):
         model = pe.ConcreteModel()
-
-        # print(routes_flat)
 
         # filter the routes to make sure that  none of their activities fall outside the scheduling window
         routes_flat = self.filter_routes(routes_flat)
@@ -246,6 +244,11 @@ class GPActivityScheduling():
         self.routes_flat = routes_flat
         self.ecl_winds = ecl_winds
 
+        #  should only be using data multi-route objects for activity scheduling, even if they're just a shallow wrapper around a DataRoute
+        for dmr in routes_flat:
+            assert(type(dmr) == DataMultiRoute)
+
+        #  really useful code below!!!
         if verbose:
             pass
 
@@ -253,24 +256,22 @@ class GPActivityScheduling():
         #  Make indices/ subscripts
         ##############################
 
-        # note: a path is the same as a route
-
         try:
             (sat_acts,
                 all_acts_indcs,
-                path_indcs_by_act,
+                dmr_indcs_by_act,
                 dv_by_act,
                 all_acts_by_obj,
                 obs_act_indcs,
-                path_indcs_by_obs_act,
+                dmr_indcs_by_obs_act,
                 dv_by_obs_act,
                 link_act_indcs,
-                path_indcs_by_link_act,
+                dmr_indcs_by_link_act,
                 dv_by_link_act) =  self.get_activity_structs(routes_flat)
 
-            path_latency_sf_by_path_indx =  self.get_path_latency_score_factors(
+            dmr_latency_sf_by_dmr_indx =  self.get_dmr_latency_score_factors(
                 routes_flat,
-                path_indcs_by_obs_act,
+                dmr_indcs_by_obs_act,
                 self.latency_params
             )
 
@@ -291,8 +292,10 @@ class GPActivityScheduling():
         self.link_act_indcs = link_act_indcs
         self.all_acts_by_obj = all_acts_by_obj
 
-        #  subscript for each path p
-        model.paths = pe.Set(initialize= range(len(routes_flat)))
+        # these subscripts probably should've been done using the unique IDs for the objects, rather than their arbitrary locations within a list. Live and learn, hélas...
+
+        #  subscript for each dmr (data multi route) p  (p index is a hold-over from when I called them paths)
+        model.dmrs = pe.Set(initialize= range(len(routes_flat)))
         #  subscript for each activity a
         model.acts = pe.Set(initialize= all_acts_indcs)
         #  subscript for each satellite
@@ -313,25 +316,37 @@ class GPActivityScheduling():
         else:
             raise NotImplementedError
 
-        for p,lat_sf in path_latency_sf_by_path_indx.items():        
+        for p,lat_sf in dmr_latency_sf_by_dmr_indx.items():        
             if lat_sf > int_feas_tol*self.big_M_lat:
-                raise RuntimeError('big_M_lat (%f) is not large enough for latency score factor %f and integer feasibility tolerance %f (path index %d)'%(self.big_M_lat,lat_sf,int_feas_tol,p))
+                raise RuntimeError('big_M_lat (%f) is not large enough for latency score factor %f and integer feasibility tolerance %f (dmr index %d)'%(self.big_M_lat,lat_sf,int_feas_tol,p))
 
         ##############################
         #  Make parameters
         ##############################
 
-        model.par_min_forked_route_dv = pe.Param (initialize=self.min_forked_route_dv)
+        model.par_min_as_route_dv = pe.Param (initialize=self.min_as_route_dv)
         model.par_obs_dv = pe.Param(model.obs_acts,initialize =dv_by_obs_act)
         model.par_total_obs_dv = sum(dv_by_obs_act.values())
         model.par_link_dv = pe.Param(model.link_acts,initialize =dv_by_link_act)
         model.par_act_dv = pe.Param(model.acts,initialize =dv_by_act)
-        model.par_path_dv = pe.Param(model.paths,initialize ={ i: dr.data_vol for i,dr in enumerate (routes_flat)})
-        # each of these is essentially a dictionary indexed by link or obs act indx, with  the value being a list of path indices that are included within that act
-        # these are valid indices into model.paths
-        model.par_path_subscrs_by_link_act = pe.Param(model.link_acts,initialize =path_indcs_by_link_act)
-        model.par_path_subscrs_by_obs_act = pe.Param(model.obs_acts,initialize =path_indcs_by_obs_act)
-        model.par_path_subscrs_by_act = pe.Param(model.acts,initialize =path_indcs_by_act)
+        #  data volume for each data multi-route
+        model.par_dmr_dv = pe.Param(model.dmrs,initialize ={ dmr_indx: dmr.data_vol for dmr_indx,dmr in enumerate (routes_flat)})
+        #  data volume for each activity in each data multi-route
+
+        # todo: will probably have to fix this to not be the full set multiplication of model.dmrs, model.acts - can use dmr_indcs_by_act
+        model.par_dmr_act_dv = pe.Param(
+            model.dmrs,
+            model.acts,
+            initialize = { (dmr_indx,self.all_acts_by_obj[act]): 
+                dmr.data_vol_for_wind(act) for dmr_indx,dmr in enumerate (routes_flat) for act in dmr.get_winds()
+            }
+        )
+
+        # each of these is essentially a dictionary indexed by link or obs act indx, with  the value being a list of dmr indices that are included within that act
+        # these are valid indices into model.dmrs
+        model.par_dmr_subscrs_by_link_act = pe.Param(model.link_acts,initialize =dmr_indcs_by_link_act)
+        model.par_dmr_subscrs_by_obs_act = pe.Param(model.obs_acts,initialize =dmr_indcs_by_obs_act)
+        model.par_dmr_subscrs_by_act = pe.Param(model.acts,initialize =dmr_indcs_by_act)
 
 
         if self.energy_unit == "Wh":
@@ -351,16 +366,16 @@ class GPActivityScheduling():
 
         # activity utilization variable indicating how much of an activity's capacity is used [1]
         model.var_activity_utilization  = pe.Var (model.acts, bounds =(0,1))
-        # path utilization variable indicating how much of a path's capacity is used [2]
-        model.var_path_utilization  = pe.Var (model.paths, bounds =(0,1))
-        #  indicator variables for whether or not paths [3] and activities [4] have been chosen
-        model.var_path_indic  = pe.Var (model.paths, within = pe.Binary)
+        # dmr utilization variable indicating how much of a dmr's capacity is used [2]
+        model.var_dmr_utilization  = pe.Var (model.dmrs, bounds =(0,1))
+        #  indicator variables for whether or not dmrs [3] and activities [4] have been chosen
+        model.var_dmr_indic  = pe.Var (model.dmrs, within = pe.Binary)
         model.var_act_indic  = pe.Var (model.acts, within = pe.Binary)
         
         # satellite energy storage
         model.var_sats_estore  = pe.Var (model.sats,  model.timepoint_indcs,  within = pe.NonNegativeReals)
 
-        model.var_path_latency_sf_by_obs_indx = pe.Var (model.obs_acts,  within = pe.NonNegativeReals)
+        model.var_dmr_latency_sf_by_obs_indx = pe.Var (model.obs_acts,  within = pe.NonNegativeReals)
         
 
         ##############################
@@ -371,22 +386,22 @@ class GPActivityScheduling():
 
         def c1_rule( model,a):
             return (model.par_act_dv[a]*model.var_activity_utilization[a] -
-                        sum(model.par_path_dv[p]*model.var_path_utilization[p] 
-                            for p in model.par_path_subscrs_by_act[a]) 
+                        sum(model.par_dmr_act_dv[p,a]*model.var_dmr_utilization[p] 
+                            for p in model.par_dmr_subscrs_by_act[a]) 
                     >= 0)
         model.c1 =pe.Constraint ( model.acts,  rule=c1_rule)
 
         def c2_rule( model,p):
-            return model.par_path_dv[p]*model.var_path_utilization[p] >= model.par_min_forked_route_dv*model.var_path_indic[p]
-        model.c2 =pe.Constraint ( model.paths,  rule=c2_rule)
+            return model.par_dmr_dv[p]*model.var_dmr_utilization[p] >= model.par_min_as_route_dv*model.var_dmr_indic[p]
+        model.c2 =pe.Constraint ( model.dmrs,  rule=c2_rule)
 
         def c3_rule( model,a):
             return model.var_act_indic[a] >=  model.var_activity_utilization[a]
         model.c3 =pe.Constraint ( model.acts,  rule=c3_rule)  
 
         def c3c_rule( model,p):
-            return model.var_path_indic[p] >=  model.var_path_utilization[p]
-        model.c3c =pe.Constraint ( model.paths,  rule=c3c_rule)
+            return model.var_dmr_indic[p] >=  model.var_dmr_utilization[p]
+        model.c3c =pe.Constraint ( model.dmrs,  rule=c3c_rule)
 
         #  activity overlap constraints [4],[5],[5b]
         model.c4  = pe.ConstraintList()
@@ -481,49 +496,25 @@ class GPActivityScheduling():
                     + base_delta_e
                 )
 
-                #  TODO: reassess if adding this version of the code back in is faster
-                # if charging:
-                #     # maximum bound of energy at current time step based on last time step
-                #     model.c6.add( model.var_sats_estore[sat_indx,tp_indx] <= 
-                #         model.var_sats_estore[sat_indx,tp_indx-1]
-                #         + activity_delta_e
-                #         + charging_delta_e
-                #         + base_delta_e
-                #     )
-
-                #     # maximum bound of energy at current time step based on last time step
-                #     model.c6.add( model.var_sats_estore[sat_indx,tp_indx] >= 
-                #         model.var_sats_estore[sat_indx,tp_indx-1]
-                #         + activity_delta_e
-                #         + base_delta_e
-                #     )
-                # else:
-                #     # energy at time step is deterministic function of last time step
-                #     model.c6.add( model.var_sats_estore[sat_indx,tp_indx] == 
-                #         model.var_sats_estore[sat_indx,tp_indx-1]
-                #         + activity_delta_e
-                #         + base_delta_e
-                #     )
-
 
         #  observation latency score factor constraints [8]
         model.c8  = pe.ConstraintList()
         for obs_indx in model.obs_acts:
-            paths_obs = model.par_path_subscrs_by_obs_act[obs_indx]
+            dmrs_obs = model.par_dmr_subscrs_by_obs_act[obs_indx]
 
-            #  sort the latency score factors for all the paths for this observation in increasing order -  important for constraint construction
-            paths_obs.sort(key= lambda p: path_latency_sf_by_path_indx[p])
+            #  sort the latency score factors for all the dmrs for this observation in increasing order -  important for constraint construction
+            dmrs_obs.sort(key= lambda p: dmr_latency_sf_by_dmr_indx[p])
 
-            num_paths_obs = len(paths_obs)
-            #  initial constraint -  score factor for this observation will be equal to zero if no paths for this obs were chosen
-            model.c8.add( model.var_path_latency_sf_by_obs_indx[obs_indx] <= 0 + self.big_M_lat * sum(model.var_path_indic[p] for p in paths_obs) )
+            num_dmrs_obs = len(dmrs_obs)
+            #  initial constraint -  score factor for this observation will be equal to zero if no dmrs for this obs were chosen
+            model.c8.add( model.var_dmr_latency_sf_by_obs_indx[obs_indx] <= 0 + self.big_M_lat * sum(model.var_dmr_indic[p] for p in dmrs_obs) )
             
-            for path_obs_indx in range(num_paths_obs):
-                #  add constraint that score factor for observation is less than or equal to the score factor for this path_obs_indx, plus any big M terms for any paths with larger score factors.
-                #  what this does is effectively disable the constraint for the score factor for this path_obs_indx if any higher score factor paths were chosen 
-                model.c8.add( model.var_path_latency_sf_by_obs_indx[obs_indx] <= 
-                    path_latency_sf_by_path_indx[paths_obs[path_obs_indx]] + 
-                    self.big_M_lat * sum(model.var_path_indic[p] for p in paths_obs[path_obs_indx+1:num_paths_obs]) )
+            for dmr_obs_indx in range(num_dmrs_obs):
+                #  add constraint that score factor for observation is less than or equal to the score factor for this dmr_obs_indx, plus any big M terms for any dmrs with larger score factors.
+                #  what this does is effectively disable the constraint for the score factor for this dmr_obs_indx if any higher score factor dmrs were chosen 
+                model.c8.add( model.var_dmr_latency_sf_by_obs_indx[obs_indx] <= 
+                    dmr_latency_sf_by_dmr_indx[dmrs_obs[dmr_obs_indx]] + 
+                    self.big_M_lat * sum(model.var_dmr_indic[p] for p in dmrs_obs[dmr_obs_indx+1:num_dmrs_obs]) )
 
                 #  note: use constraint body.to_string()  to print out the constraint in a human readable form
                 
@@ -543,9 +534,9 @@ class GPActivityScheduling():
 
         def obj_rule(model):
             return (
-                self.obj_weights['obs_dv'] * 1/model.par_total_obs_dv * sum(model.par_path_dv[p]*model.var_path_utilization[p] for p in model.paths) 
-                # + self.obj_weights['route_latency'] * 1/len(model.obs_acts) * sum(path_latency_sf_by_path_indx[p]*model.var_path_utilization[p] for p in model.paths)
-                + self.obj_weights['route_latency'] * 1/len(model.obs_acts) * sum(model.var_path_latency_sf_by_obs_indx[o] for o in model.obs_acts)
+                self.obj_weights['obs_dv'] * 1/model.par_total_obs_dv * sum(model.par_dmr_dv[p]*model.var_dmr_utilization[p] for p in model.dmrs) 
+                # + self.obj_weights['route_latency'] * 1/len(model.obs_acts) * sum(dmr_latency_sf_by_dmr_indx[p]*model.var_dmr_utilization[p] for p in model.dmrs)
+                + self.obj_weights['route_latency'] * 1/len(model.obs_acts) * sum(model.var_dmr_latency_sf_by_obs_indx[o] for o in model.obs_acts)
                 + self.obj_weights['energy_storage'] * 1/rsrc_norm_f * sum(model.var_sats_estore[sat_indx,tp_indx]/model.par_sats_estore_max[sat_indx] for tp_indx in decimated_tp_indcs for sat_indx in model.sats)
             )
         model.obj = pe.Objective( rule=obj_rule, sense=pe.maximize )
@@ -596,40 +587,38 @@ class GPActivityScheduling():
                     val  = varobject[index].value
                     print (" ",index, val)
 
-            elif str (v) =='var_path_utilization': 
+            elif str (v) =='var_dmr_utilization': 
                 print ("Variable",v)
                 varobject = getattr(self.model, str(v))
                 for index in varobject:
                     val  = varobject[index].value
                     print (" ",index, val)
             
-            elif str (v) =='var_path_indic': 
+            elif str (v) =='var_dmr_indic': 
                 print ("Variable",v)
                 varobject = getattr(self.model, str(v))
                 for index in varobject:
                     val  = varobject[index].value
                     print (" ",index, val)
 
-    def extract_utilized_routes( self, copy_windows = True, verbose = False):
-        #  note that routes are the same as paths
-
+    def extract_utilized_routes( self, copy_routes = True, verbose = False):
         # scheduled_dv
         scheduled_routes_flat = []
 
         if verbose:
             print ('utilized routes:')
 
-        def copy_choice(wind):
-            if copy_windows:
-                return deepcopy(wind)
+        def copy_choice(route):
+            if copy_routes:
+                return deepcopy(route)
             else:
-                return wind
+                return route
 
-        # figure out which paths were used, and add the scheduled data volume to each
-        for p in self.model.paths:
-            if pe.value(self.model.var_path_indic[p]) >= 1.0 - self.binary_epsilon:
+        # figure out which dmrs were used, and add the scheduled data volume to each
+        for p in self.model.dmrs:
+            if pe.value(self.model.var_dmr_indic[p]) >= 1.0 - self.binary_epsilon:
                 scheduled_route =  copy_choice (self.routes_flat[p]) 
-                scheduled_route.scheduled_dv = pe.value(self.model.var_path_utilization[p])* self.model.par_path_dv[p]
+                scheduled_route.set_scheduled_dv_frac(pe.value(self.model.var_dmr_utilization[p]))  #* self.model.par_dmr_dv[p])
                 scheduled_routes_flat. append (scheduled_route)
 
                 if verbose:
@@ -637,27 +626,32 @@ class GPActivityScheduling():
 
         # examine the schedulable data volume for every activity window, checking as we go that the data volume is sufficient for at least the route in which the window is found
         #  note that this code is slightly inefficient because it might duplicate windows across routes. that's fine though, because we're thorough in checking across all routes
-        for dr in scheduled_routes_flat:
-            for wind in dr.route:
+        # note: dmr is for DataMultiRoute
+        wind_sched_dv_check = {}
+        for dmr in scheduled_routes_flat:
+            # wind may get set multiple times due to Windows appearing across routes, but that's not really a big deal
+            for wind in dmr.get_winds():
                 act_indx = self.all_acts_by_obj[wind]
-                w_s_dv = wind.data_vol * pe.value(self.model.var_act_indic[act_indx])
+                wind_sched_dv_check[wind] = wind.data_vol * pe.value(self.model.var_act_indic[act_indx])
                 #  initialize this while we're here
                 wind.scheduled_data_vol = 0
-                if w_s_dv < dr.scheduled_dv - self.dv_epsilon: 
-                    raise RuntimeWarning('inconsistent activity scheduling results: activity data volume (%f) smaller than route data volume (%f) [%s,%s]'%(w_s_dv,dr.scheduled_dv,dr,wind))
 
 
         #  now we want to mark the real scheduled data volume for every window. We need to do this separately because the model.var_act_indic continuous variables only give an upper bound on the data volume for an activity. we only actually need to use as much data volume as the data routes want to push through the window
         #  add data volume for every route passing through every window
-        for dr in scheduled_routes_flat:
-            for wind in dr.route:
-                wind.scheduled_data_vol += dr.scheduled_dv
+        for dmr in scheduled_routes_flat:
+            for wind in dmr.get_winds():
+                wind.scheduled_data_vol += dmr.scheduled_dv_for_wind(wind)
 
         # update the window beginning and end times based upon their amount of scheduled data volume
         # keep track of which ones we've updated, because we should only update once
         updated_winds = set()
-        for dr in scheduled_routes_flat:
-            for wind in dr.route:
+        for dmr in scheduled_routes_flat:
+            for wind in dmr.get_winds():
+                #  this check should be at least as big as the scheduled data volume as calculated from all of the route data volumes. (it's not constrained from above, so it could be bigger)
+                if wind_sched_dv_check[wind] < wind.scheduled_data_vol:
+                    raise RuntimeWarning('inconsistent activity scheduling results: activity window data volume determined from route dvs (%f) is greater than dv from var_act_indic (%f) [dmr: %s, wind: %s]'%(wind.scheduled_data_vol,wind_sched_dv_check[wind],dmr,wind))
+
                 if not wind in updated_winds:
                     # note that the line below seems like it may break the scheduled times for activities by specifying a minimum activity duration. however, this minimum activity duration is already accounted for in scheduling constraints
                     wind.update_duration_from_scheduled_dv (min_duration_s=self.min_act_duration_s[type(wind)])
@@ -666,7 +660,6 @@ class GPActivityScheduling():
         return scheduled_routes_flat
 
     def extract_resource_usage( self, decimation_factor =1, verbose = False):
-        #  note that routes are the same as paths
 
         energy_usage = {}
 
