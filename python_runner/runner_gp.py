@@ -542,7 +542,8 @@ class GlobalPlannerRunner:
         sched_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind = self.io_proc.extract_flat_windows (routes,copy_windows= False)
 
         # 
-        sats_to_include =  [sat_id for sat_id in self.sat_params['sat_id_order']]
+        # sats_to_include =  [sat_id for sat_id in self.sat_params['sat_id_order']]
+        sats_to_include =  [sat_id for sat_id in range(20,30)]
         # sats_to_include = [12,13,14,15,16]
 
         # sats_to_include =  range(20,30)
@@ -749,6 +750,11 @@ class GlobalPlannerRunner:
         #  pickle before step 2 because step 2 doesn't take that long
         if self.pickle_params['pickle_route_selection_results']:
             self.pickle_rtsel_stuff(routes_by_obs,all_stats,route_times_s,obs_indx,obs_winds,dlnk_winds_flat,ecl_winds,window_uid)
+
+        print('np.mean(route_times_s)')
+        print(np.mean(route_times_s))
+        print('np.std(route_times_s)')
+        print(np.std(route_times_s))
 
         passthru = False
         if passthru:
