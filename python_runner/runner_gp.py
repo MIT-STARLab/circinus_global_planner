@@ -15,6 +15,7 @@ import pickle
 import numpy as np
 from copy import deepcopy
 from collections import OrderedDict
+import multiprocessing as mp
 
 
 #  local repo includes. todo:  make this less hackey
@@ -29,6 +30,7 @@ from gp_tools.gp_activity_scheduling import GPActivityScheduling
 from gp_tools.gp_metrics import GPMetrics
 from gp_tools.network_sim.gp_network_sim import GPNetSim
 from gp_tools.routing_objects import DataMultiRoute
+import gp_tools.gp_rs_execution as gp_rs_exec
 
 # TODO: remove this line if not needed
 # from gp_tools.custom_activity_window import ObsWindow
@@ -36,6 +38,7 @@ from gp_tools.routing_objects import DataMultiRoute
 REPO_BASE = os.path.abspath(os.pardir)  # os.pardir aka '..'
 
 OUTPUT_JSON_VER = '0.1'
+
 
 class GlobalPlannerRunner:
     """easy interface for running the global planner scheduling algorithm"""
@@ -273,78 +276,103 @@ class GlobalPlannerRunner:
 
         return all_routes,all_routes_obs,all_stats,route_times_s,obs_indx
 
-    def run_nominal_route_selection_v2_step1( self,obs_winds,dlnk_winds_flat,xlnk_winds):
-        gp_rs = gprsv2.GPDataRouteSelection ( self.params)
+    def run_nominal_route_selection_v2_step1( self,obs_winds,dlnk_winds_flat,xlnk_winds,verbose=False):
 
-        print ('nominal route selection v2 stage 1')
+        if verbose:
+            print ('nominal route selection v2 stage 1')
 
         obs_indx =0
         # dict of all routes, with obs as key
         routes_by_obs ={}
+        indices_by_obs ={}
         all_stats =[]
         route_times_s =[]
+
+        num_obs = sum(len(obs_winds[sat_indx]) for sat_indx in range (self.sat_params['num_sats']))
+
+        t_a = time.time()
+
+        #  run in parallel mode
+        if self.rs_general_params['run_rs_parallel']:
+            #  make the inputs
+            all_obs_inputs = []
+            obs_indx = 0
+            for sat_indx in range( self.sat_params['num_sats']):
+                for sat_obs_index,obs_wind in  enumerate(obs_winds[sat_indx]):
+                    all_obs_inputs.append((obs_wind,obs_indx,sat_indx,sat_obs_index))
+                    obs_indx += 1
+
+            p = mp.Pool(self.rs_general_params['num_parallel_workers'])
+            obs_outputs_list = p.map(gp_rs_exec.ParallelRSWorkerWrapper(gprsv2.GPDataRouteSelection,self.params,dlnk_winds_flat,xlnk_winds,num_obs, verbose=verbose), all_obs_inputs)
+
+            #  unpack all of the outputs from the parallel runs list
+            for output_indx,obs_output in  enumerate(obs_outputs_list):
+                #  unpack items from the output tuple
+                obs_wind,routes,time_elapsed = obs_output
+                routes_by_obs[obs_wind] = routes
+                # todo: should probably make use of this...
+                all_stats.append ( None)
+                route_times_s.append ( time_elapsed)
+                
+                #  same index into the inputs as the outputs
+                _,obs_indx,sat_indx,sat_obs_index = all_obs_inputs[output_indx]
+                indices_by_obs[obs_wind] = [obs_indx,sat_indx,sat_obs_index ]
+
+        #  run in serial mode
+        else:
+            gp_rs = gprsv2.GPDataRouteSelection ( self.params)
+
+            for sat_indx in range( self.sat_params['num_sats']):
+                for  sat_obs_index, obs_wind in  enumerate ( obs_winds[sat_indx]):
+                    if verbose:
+                        gp_rs_exec.print_pre_run_msg(obs_wind, obs_indx, sat_indx, sat_obs_index,num_obs)
+
+                    _,routes,time_elapsed = gp_rs_exec.run_rs_step1(gp_rs,obs_wind,dlnk_winds_flat,xlnk_winds,verbose = False)
+
+                    routes_by_obs[obs_wind] = routes
+                    # todo: should probably make use of this...
+                    all_stats.append ( None)
+                    route_times_s.append ( time_elapsed)
+                    
+                    indices_by_obs[obs_wind] = [obs_indx,sat_indx,sat_obs_index ]
+
+                    obs_indx +=1
+
+                    # print ('len(routes)')
+                    # print (len(routes))
+                    # print ('obs.data_vol, total dlnk dv, ratio')
+                    # print (obs.data_vol,sum(dr.data_vol for dr in routes),sum(dr.data_vol for dr in routes)/obs.data_vol)
+                    # print ('min latency, ave latency, max latency')
+                    # latencies = [(rt.route[-1].end - rt.route[0].end).total_seconds()/60 for rt in  routes]
+                    # if len(latencies) > 0: 
+                    #     print (np.min( latencies),np.mean( latencies),np.max( latencies))
+                    # else:
+                    #     print('no routes found')
+
+        t_b = time.time()
+        time_elapsed = t_b-t_a
 
         # this should be unique across all data routes
         dr_uid = 0
 
-        num_obs = sum(len(obs_winds[sat_indx]) for sat_indx in range (self.sat_params['num_sats']))
-
-        for sat_indx in range( self.sat_params['num_sats']):
-            for  index, obs in  enumerate ( obs_winds[sat_indx]):
-
-                # obs.data_vol = 40000
-
-                # if not (index == 0 and sat_indx == 2):
-                #     continue
-
-                print ("")
-                print ("----------------------------")
-                print ("obs %d/%d"%(obs_indx+1,num_obs))
-                print ("sat_indx: %d"%(sat_indx))
-                print ("obs: %d"%(index))
-
-                # run the route selection algorithm
-                t_a = time.time()
-                routes,dr_uid = gp_rs.run_step1(obs,dlnk_winds_flat,xlnk_winds, dr_uid, verbose = False)
-                t_b = time.time()
-                stats = gp_rs.get_stats(verbose=False )
-
-                time_elapsed = t_b-t_a
-                # end algorithm
-
-                print ('len(routes)')
-                print (len(routes))
-                print ('obs.data_vol, total dlnk dv, ratio')
-                print (obs.data_vol,sum(dr.data_vol for dr in routes),sum(dr.data_vol for dr in routes)/obs.data_vol)
-                print ('min latency, ave latency, max latency')
-                latencies = [(rt.route[-1].end - rt.route[0].end).total_seconds()/60 for rt in  routes]
-                if len(latencies) > 0: 
-                    print (np.min( latencies),np.mean( latencies),np.max( latencies))
-                else:
-                    print('no routes found')
-                print ('time_elapsed')
-                print (time_elapsed)
-
-                routes_by_obs[obs] = routes
-                all_stats.append ( stats)
-                route_times_s.append ( time_elapsed)
-
-                obs_indx +=1
-
-            #     if obs_indx >= 1:
-            #         break
-
-            # if obs_indx >= 1:
-            #     break
-
         # explicitly validate routes 
-        for routes in routes_by_obs:
+        for routes in routes_by_obs.values():
             for dr in routes:
-                dr.validate()
+                #  set the data route ID now, because they were not set uniquely if we were running in parallel
+                dr.ID = dr_uid
+                dr_uid += 1
 
-        print('runtime per rs iteration')
-        print('ave: %fs'%(np.mean(route_times_s)))
-        print('std: %fs'%(np.std(route_times_s)))
+                try:
+                    dr.validate()
+                except:
+                    raise Exception("Couldn't handle dr %s for obs %s (indices %s)"%(dr,dr.get_obs(),indices_by_obs[dr.get_obs()]))
+
+        if verbose:
+            print('total_rs_step1_runtime')
+            print(time_elapsed)
+            print('runtime per rs iteration')
+            print('ave: %fs'%(np.mean(route_times_s)))
+            print('std: %fs'%(np.std(route_times_s)))
 
         return routes_by_obs,all_stats,route_times_s,obs_indx, dr_uid
 
@@ -744,7 +772,7 @@ class GlobalPlannerRunner:
 
         #  otherwise run route selection step 1
         else:
-            routes_by_obs,all_stats,route_times_s, obs_indx, dr_uid  =  self.run_nominal_route_selection_v2_step1(obs_winds,dlnk_winds_flat,xlnk_winds)
+            routes_by_obs,all_stats,route_times_s, obs_indx, dr_uid  =  self.run_nominal_route_selection_v2_step1(obs_winds,dlnk_winds_flat,xlnk_winds,verbose=self.rs_general_params['verbose_step1'])
             # routes_by_obs,all_stats,route_times_s, obs_indx, weights_tups  =  self.run_test_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
 
         #  pickle before step 2 because step 2 doesn't take that long

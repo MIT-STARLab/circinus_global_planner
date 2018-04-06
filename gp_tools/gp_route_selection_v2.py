@@ -308,6 +308,8 @@ class GPDataRouteSelection():
 
         self.latency_params = gp_params['gp_general_params']['other_params']['latency_calculation']
 
+        self.final_route_records = None
+
 
     @staticmethod
     def  filter_windows(dlnk_winds_flat,xlnk_winds,num_sats,start,end_dt_by_sat_indx):
@@ -328,10 +330,14 @@ class GPDataRouteSelection():
 
         return dlink_winds_flat_filtered, xlink_winds_flat_filtered
 
-    def run_step1 ( self,obs_wind,dlnk_winds_flat,xlnk_winds, dr_uid, verbose = False):
+    def run_step1 ( self,obs_wind,dlnk_winds_flat,xlnk_winds, verbose = False):
         #  note that a potential source of slowness in the code below is the creation of new RouteRecord objects for every sat at every time step 
         # TODO: figure out if there's a more efficient way to do this -  for example, we shouldn't have to preserve these objects when they're more than a certain number of time steps in the past
 
+        # clear state before we run
+        self.final_route_records = None
+
+        dr_uid = 0
 
         start_dt = obs_wind.end
         end_dt = min(self.sel_latest_end_dt,start_dt + self.wind_filter_duration)
@@ -342,8 +348,9 @@ class GPDataRouteSelection():
         
         dlnk_winds_flat_filt,xlnk_winds_filt =  self.filter_windows (dlnk_winds_flat,xlnk_winds, self.num_sats, obs_wind.end, end_dt_by_sat_indx )
 
-        print ('Running route selection for obs: %s'%(obs_wind))
-        print ('from %s to %s'%(start_dt, end_dt))
+        if verbose:
+            print ('Running route selection for obs: %s'%(obs_wind))
+            print ('from %s to %s'%(start_dt, end_dt))
 
 
         # construct a set of dance cards for every satellite, 
@@ -404,8 +411,9 @@ class GPDataRouteSelection():
         #  the main loop for the dynamic programming algorithm
         # note: have to get the generator again
         for tp_indx in time_getter_dc.get_tp_indcs ():
-            if tp_indx % 10 == 0:
-                print(('tp_indx: %d/%d')%(tp_indx,time_getter_dc.num_timepoints-1))
+            if verbose:
+                if tp_indx % 10 == 0:
+                    print(('tp_indx: %d/%d')%(tp_indx,time_getter_dc.num_timepoints-1))
 
             #  nothing happens at the first time point index, because that's right at the end of the observation window
             if tp_indx == 0:
@@ -580,10 +588,6 @@ class GPDataRouteSelection():
                                 #  note: release time no longer matters because were not putting this route record back into the dance card.
                                 rr_dlnk = RouteRecord(dv=rr_pre_dlnk.dv,release_time=act.end,routes=[])
                                 
-                                # if sat_indx == 16:
-                                #     import ipdb
-                                #     ipdb.set_trace()
-                                
                                 # available data volume is limited by how much we had at the last route record (sum of all data routes ending at that route record) and the downlink data volume
                                 available_dv = min(rr_pre_dlnk.dv,act.data_vol)
                                 rr_dlnk.dv = available_dv
@@ -624,7 +628,7 @@ class GPDataRouteSelection():
         for dr in all_routes:
             dr.validate()
 
-        return all_routes, dr_uid
+        return all_routes
 
 
     def get_from_sorted(self,sorted_rts,num_rts,min_dmr_candidate_dv,dmr_uid):
@@ -709,8 +713,7 @@ class GPDataRouteSelection():
 
         return selected_rts_by_obs
 
-
-    def get_stats(self,verbose=False):
+    def get_stats(self,final_route_records,verbose=False):
         stats = {}
         # stats['num_dlnk_windows'] = sum([len (self.dlnk_winds_flat[sat_indx]) for sat_indx in range (self.num_sats)])
         # stats['num_xlnk_windows'] = sum([len (self.xlnk_winds[sat_indx][xsat_indx]) for xsat_indx in range (self.num_sats) for sat_indx in range (self.num_sats)])

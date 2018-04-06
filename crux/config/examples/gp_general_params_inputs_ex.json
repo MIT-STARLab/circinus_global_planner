@@ -15,7 +15,10 @@
         "plot_include_xlnk_labels":   true,
         "plot_route_selection_results":       false,
         "adjust_window_timing_post_selection": true,
-        "min_rs_route_dv_Mb" :  50 
+        "min_rs_route_dv_Mb" :  50, 
+        "run_rs_parallel" :  true, 
+        "num_parallel_workers" :  8, 
+        "verbose_step1" :  true 
     },
     "route_selection_params_v1": {
         "num_paths" :  5,
@@ -60,11 +63,11 @@
         "plot_activity_scheduling_results":   false,
         "resource_delta_t_s": 10,
         "resource_margin_num_timepoints": 30,
-        "run_activity_scheduling":  true
+        "run_activity_scheduling":  false
     },
     "pickle_params":  {
-        "unpickle_pre_route_selection":                      true,
-        "pickle_route_selection_results":                   false,
+        "unpickle_pre_route_selection":                      false,
+        "pickle_route_selection_results":                   true,
         "unpickle_pre_act_scheduling":                            false,
         "pickle_act_scheduling_results":                            false,
         "route_selection_pickle": "/Users/ktikennedy/Desktop/circinus_files/4hour/walker30_7gs/rs_orbit_prop_inputs_walker30_7gs_oi144_2018-04-02T04_15_59.848933.pkl",
