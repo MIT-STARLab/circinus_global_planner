@@ -292,6 +292,16 @@ class GlobalPlannerRunner:
 
         t_a = time.time()
 
+        def org_outputs(obs_output,obs_indx,sat_indx,sat_obs_index):
+            #  unpack items from the output tuple
+            obs_wind,routes,time_elapsed = obs_output
+            routes_by_obs[obs_wind] = routes
+            # todo: should probably make use of this...
+            all_stats.append ( None)
+            route_times_s.append ( time_elapsed)
+            indices_by_obs[obs_wind] = [obs_indx,sat_indx,sat_obs_index ]
+
+
         #  run in parallel mode
         if self.rs_general_params['run_rs_parallel']:
             #  make the inputs
@@ -307,16 +317,9 @@ class GlobalPlannerRunner:
 
             #  unpack all of the outputs from the parallel runs list
             for output_indx,obs_output in  enumerate(obs_outputs_list):
-                #  unpack items from the output tuple
-                obs_wind,routes,time_elapsed = obs_output
-                routes_by_obs[obs_wind] = routes
-                # todo: should probably make use of this...
-                all_stats.append ( None)
-                route_times_s.append ( time_elapsed)
-                
                 #  same index into the inputs as the outputs
                 _,obs_indx,sat_indx,sat_obs_index = all_obs_inputs[output_indx]
-                indices_by_obs[obs_wind] = [obs_indx,sat_indx,sat_obs_index ]
+                org_outputs(obs_output,obs_indx,sat_indx,sat_obs_index)
 
         #  run in serial mode
         else:
@@ -327,14 +330,9 @@ class GlobalPlannerRunner:
                     if verbose:
                         gp_rs_exec.print_pre_run_msg(obs_wind, obs_indx, sat_indx, sat_obs_index,num_obs)
 
-                    _,routes,time_elapsed = gp_rs_exec.run_rs_step1(gp_rs,obs_wind,dlnk_winds_flat,xlnk_winds,verbose = False)
+                    obs_output = gp_rs_exec.run_rs_step1(gp_rs,obs_wind,dlnk_winds_flat,xlnk_winds,verbose = False)
 
-                    routes_by_obs[obs_wind] = routes
-                    # todo: should probably make use of this...
-                    all_stats.append ( None)
-                    route_times_s.append ( time_elapsed)
-                    
-                    indices_by_obs[obs_wind] = [obs_indx,sat_indx,sat_obs_index ]
+                    org_outputs(obs_output,obs_indx,sat_indx,sat_obs_index)
 
                     obs_indx +=1
 
