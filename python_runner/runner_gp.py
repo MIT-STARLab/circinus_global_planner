@@ -67,7 +67,7 @@ class GlobalPlannerRunner:
         self.io_proc =GPProcessorIO(self.params)
         self.gp_plot =GPPlotting( self.params)
 
-    def pickle_rtsel_stuff(self,routes_by_obs,all_stats,route_times_s,obs_indx,obs_winds,dlnk_winds_flat,ecl_winds,window_uid):
+    def pickle_rtsel_s1_stuff(self,routes_by_obs,all_stats,route_times_s,obs_indx,obs_winds,dlnk_winds_flat,ecl_winds,window_uid):
 
         pickle_stuff =  {}
         pickle_stuff['routes_by_obs'] = routes_by_obs
@@ -79,9 +79,44 @@ class GlobalPlannerRunner:
         pickle_stuff['dlnk_winds_flat'] = dlnk_winds_flat
         pickle_stuff['ecl_winds'] = ecl_winds
         pickle_stuff['window_uid'] = window_uid
-        pickle_name ='pickles/rs_%s_oi%d_%s' %( self.other_params['new_pickle_file_name_pre'],obs_indx,datetime.utcnow().isoformat().replace (':','_'))
+        pickle_name ='pickles/rs_s1_%s_oi%d_%s' %( self.other_params['new_pickle_file_name_pre'],obs_indx,datetime.utcnow().isoformat().replace (':','_'))
         with open('%s.pkl' % ( pickle_name),'wb') as f:
             pickle.dump(  pickle_stuff,f)
+
+    def unpickle_rtsel_s1_stuff( self):
+        rs_s1_pickle = self.other_params['rs_s1_pickle_input']
+        rs_s1_pickle = rs_s1_pickle if rs_s1_pickle else self.pickle_params['route_selection_step1_pickle']
+
+        p = pickle.load (open ( rs_s1_pickle,'rb'))
+        #  TODO:  uncommon this  if want to reload parameters from file
+        # self.params = p['params']
+
+        return p['routes_by_obs'],p['all_stats'],p['route_times_s'],p['obs_indx'],p['obs_winds'],p['dlnk_winds_flat'],p['ecl_winds'],p['window_uid']
+
+    def pickle_rtsel_s2_stuff(self,xlnk_winds_flat,sel_routes_by_obs,ecl_winds,obs_winds,dlnk_winds_flat,window_uid):
+
+        pickle_stuff =  {}
+        pickle_stuff['xlnk_winds_flat'] = xlnk_winds_flat
+        pickle_stuff['sel_routes_by_obs'] = sel_routes_by_obs
+        pickle_stuff['ecl_winds'] = ecl_winds
+        pickle_stuff['obs_winds'] = obs_winds
+        pickle_stuff['dlnk_winds_flat'] = dlnk_winds_flat
+        pickle_stuff['window_uid'] = window_uid
+        pickle_stuff['params'] =  self.params
+        pickle_name ='pickles/rs_s2_%s_%s' %( self.other_params['new_pickle_file_name_pre'],datetime.utcnow().isoformat().replace (':','_'))
+        with open('%s.pkl' % ( pickle_name),'wb') as f:
+            pickle.dump(  pickle_stuff,f)
+
+    def unpickle_rtsel_s2_stuff( self):
+        rs_s2_pickle = self.other_params['rs_s2_pickle_input']
+        rs_s2_pickle = rs_s2_pickle if rs_s2_pickle else self.pickle_params['route_selection_step2_pickle']
+
+        p = pickle.load (open ( rs_s2_pickle,'rb'))
+        #  TODO:  uncommon this  if want to reload parameters from file
+        # self.params = p['params']
+
+        return p['xlnk_winds_flat'],p['sel_routes_by_obs'],p['ecl_winds'],p['obs_winds'],p['dlnk_winds_flat'],p['window_uid']
+
 
     def pickle_actsc_stuff(self,routes_by_obs,ecl_winds,scheduled_routes,energy_usage,window_uid):
 
@@ -95,15 +130,6 @@ class GlobalPlannerRunner:
         with open('%s.pkl' % ( pickle_name),'wb') as f:
             pickle.dump(  pickle_stuff,f)
 
-    def unpickle_rtsel_stuff( self):
-        rs_pickle = self.other_params['rs_pickle_input']
-        rs_pickle = rs_pickle if rs_pickle else self.pickle_params['route_selection_pickle']
-
-        p = pickle.load (open ( rs_pickle,'rb'))
-        #  TODO:  uncommon this  if want to reload parameters from file
-        # self.params = p['params']
-
-        return p['routes_by_obs'],p['all_stats'],p['route_times_s'],p['obs_indx'],p['obs_winds'],p['dlnk_winds_flat'],p['ecl_winds'],p['window_uid']
 
     def unpickle_actsc_stuff( self):
 
@@ -279,7 +305,7 @@ class GlobalPlannerRunner:
     def run_nominal_route_selection_v2_step1( self,obs_winds,dlnk_winds_flat,xlnk_winds,verbose=False):
 
         if verbose:
-            print ('nominal route selection v2 stage 1')
+            print ('nominal route selection v2 step 1')
 
         obs_indx =0
         # dict of all routes, with obs as key
@@ -761,35 +787,48 @@ class GlobalPlannerRunner:
             print(sum([len(xlnk_winds[i][j]) for i in  range( self.sat_params['num_sats']) for j in  range( self.sat_params['num_sats']) ]))
 
         #################################
-        #  route selection stage
+        #  route selection step 1
         #################################
 
-        #  if  we are loading from file, do that
-        if self.pickle_params['unpickle_pre_route_selection']:
-            routes_by_obs,all_stats,route_times_s,obs_indx,obs_winds,dlnk_winds_flat,ecl_winds,window_uid = self.unpickle_rtsel_stuff()
+        # If we are un pickling at step two, then just continue
+        if not self.pickle_params['unpickle_pre_route_selection_step2']:
 
-        #  otherwise run route selection step 1
+            #  if  we are loading from file, do that
+            if self.pickle_params['unpickle_pre_route_selection_step1']:
+                routes_by_obs,all_stats,route_times_s,obs_indx,obs_winds,dlnk_winds_flat,ecl_winds,window_uid = self.unpickle_rtsel_s1_stuff()
+
+            #  otherwise run route selection step 1
+            else:
+                routes_by_obs,all_stats,route_times_s, obs_indx, dr_uid  =  self.run_nominal_route_selection_v2_step1(obs_winds,dlnk_winds_flat,xlnk_winds,verbose=self.rs_general_params['verbose_step1'])
+                # routes_by_obs,all_stats,route_times_s, obs_indx, weights_tups  =  self.run_test_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
+
+            #  pickle before step 2 because step 2 doesn't take that long
+            if self.pickle_params['pickle_route_selection_step1_results']:
+                self.pickle_rtsel_s1_stuff(routes_by_obs,all_stats,route_times_s,obs_indx,obs_winds,dlnk_winds_flat,ecl_winds,window_uid)
         else:
-            routes_by_obs,all_stats,route_times_s, obs_indx, dr_uid  =  self.run_nominal_route_selection_v2_step1(obs_winds,dlnk_winds_flat,xlnk_winds,verbose=self.rs_general_params['verbose_step1'])
-            # routes_by_obs,all_stats,route_times_s, obs_indx, weights_tups  =  self.run_test_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
+            print('Skipping route selection step one stuff')
 
-        #  pickle before step 2 because step 2 doesn't take that long
-        if self.pickle_params['pickle_route_selection_results']:
-            self.pickle_rtsel_stuff(routes_by_obs,all_stats,route_times_s,obs_indx,obs_winds,dlnk_winds_flat,ecl_winds,window_uid)
 
-        print('np.mean(route_times_s)')
-        print(np.mean(route_times_s))
-        print('np.std(route_times_s)')
-        print(np.std(route_times_s))
+        #################################
+        #  route selection step 2
+        #################################
 
-        passthru = False
-        if passthru:
-            sel_routes_by_obs = {obs:[DataMultiRoute(ID=0,data_routes=[dr]) for dr in rts] for obs,rts in routes_by_obs.items()}
+        if self.pickle_params['unpickle_pre_route_selection_step2']:
+            xlnk_winds_flat,sel_routes_by_obs,ecl_winds,obs_winds,dlnk_winds_flat,window_uid = self.unpickle_rtsel_s2_stuff()
         else:
-            # run step 2. todo:  move this elsewhere
-            sel_routes_by_obs = self.run_nominal_route_selection_v2_step2(routes_by_obs)
+            print('np.mean(route_times_s)')
+            print(np.mean(route_times_s))
+            print('np.std(route_times_s)')
+            print(np.std(route_times_s))
+            passthru = False
+            if passthru:
+                sel_routes_by_obs = {obs:[DataMultiRoute(ID=0,data_routes=[dr]) for dr in rts] for obs,rts in routes_by_obs.items()}
+            else:
+                # run step 2. todo:  move this elsewhere
+                sel_routes_by_obs = self.run_nominal_route_selection_v2_step2(routes_by_obs)
 
-
+        if self.pickle_params['pickle_route_selection_step2_results']:
+            self.pickle_rtsel_s2_stuff(xlnk_winds_flat,sel_routes_by_obs,ecl_winds,obs_winds,dlnk_winds_flat,window_uid)
         
         #################################
         # route selection output stage
@@ -859,7 +898,11 @@ class PipelineRunner:
         gp_data_rates_params = data_rates_inputs
         gp_other_params = {}
         gp_other_params['new_pickle_file_name_pre']  = file_params.get ('orbit_prop_inputs_file' ,'default.json').split ('.')[0]
-        gp_other_params['rs_pickle_input']  = data['rs_pickle']
+        gp_other_params['rs_s1_pickle_input']  = data['rs_s1_pickle']
+        gp_other_params['rs_s2_pickle_input']  = data['rs_s2_pickle']
+
+        if data['rs_s1_pickle'] and data['rs_s2_pickle']:
+            raise Exception('Should only specify 1 input pickle for route selection')
 
         if orbit_prop_inputs['version'] == "0.3": 
             # do some useful transformations while preserving the structure of the inputs ( important for avoiding namespace clashes)
@@ -942,10 +985,15 @@ if __name__ == "__main__":
                     default='orbit_link_inputs_ex.json',
                     help='specify orbit link inputs file from orbit link repo')
 
-    ap.add_argument('--rs_pickle',
+    ap.add_argument('--rs_s1_pickle',
                     type=str,
                     default=None,
-                    help='specify route selection pickle to use')
+                    help='specify route selection step1 pickle to load')
+
+    ap.add_argument('--rs_s2_pickle',
+                    type=str,
+                    default=None,
+                    help='specify route selection step2 pickle to load')
 
     args = ap.parse_args()
 
@@ -975,7 +1023,8 @@ if __name__ == "__main__":
         "gp_instance_params_inputs": gp_instance_params_inputs,
         # "viz_params": viz_params,
         "data_rates_inputs": data_rates_inputs,
-        "rs_pickle": args.rs_pickle,
+        "rs_s1_pickle": args.rs_s1_pickle,
+        "rs_s2_pickle": args.rs_s2_pickle,
         "file_params":  {'orbit_prop_inputs_file': args.prop_inputs_file.split('/')[-1]}
     }
 

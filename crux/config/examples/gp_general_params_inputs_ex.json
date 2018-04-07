@@ -63,14 +63,17 @@
         "plot_activity_scheduling_results":   false,
         "resource_delta_t_s": 10,
         "resource_margin_num_timepoints": 30,
-        "run_activity_scheduling":  false
+        "run_activity_scheduling":  true
     },
     "pickle_params":  {
-        "unpickle_pre_route_selection":                      false,
-        "pickle_route_selection_results":                   true,
+        "unpickle_pre_route_selection_step1":                      true,
+        "pickle_route_selection_step1_results":                   false,
+        "unpickle_pre_route_selection_step2":                      true,
+        "pickle_route_selection_step2_results":                   false,
         "unpickle_pre_act_scheduling":                            false,
         "pickle_act_scheduling_results":                            false,
-        "route_selection_pickle": "/Users/ktikennedy/Desktop/circinus_files/4hour/walker30_7gs/rs_orbit_prop_inputs_walker30_7gs_oi144_2018-04-02T04_15_59.848933.pkl",
+        "route_selection_step1_pickle": "/Users/ktikennedy/Desktop/circinus_files/4hour/walker30_7gs/none.pkl",
+        "route_selection_step2_pickle": "/Users/ktikennedy/Desktop/circinus_files/4hour/walker30_7gs/none.pkl",
         "act_scheduling_pickle": "pickles/as_2018-03-19T20_35_17.004653.pkl"
     },
     "other_params": {

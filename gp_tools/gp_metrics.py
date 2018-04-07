@@ -963,6 +963,7 @@ class GPMetrics():
         if verbose:
             print('------------------------------')
             print('Num obs: %d'%(len(routes_by_obs.keys ())))
+            print('Num routes total: %d'%(sum(rt_cnt)))
             print('Route overlap statistics')
             print("%s: %d"%('total_num_overlaps',stats['total_num_overlaps']))
             print('------ By route')
