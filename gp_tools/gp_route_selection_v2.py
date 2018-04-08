@@ -631,17 +631,24 @@ class GPDataRouteSelection():
         return all_routes
 
 
-    def get_from_sorted(self,sorted_rts,num_rts,min_dmr_candidate_dv,dmr_uid):
+    def get_from_sorted(self,sorted_rts,num_rts,min_dmr_candidate_dv,dmr_uid,drs_taken):
         rt_index = 0
         sel_rts = []
         while rt_index < len(sorted_rts):
-            dmr = DataMultiRoute(ID=dmr_uid,data_routes=[sorted_rts[rt_index]])
-            dmr_uid += 1
+            curr_dr = sorted_rts[rt_index]
 
+            # don't consider the route if it's already spoken for within another dmr.
+            if curr_dr in drs_taken:
+                rt_index += 1
+                continue
+
+            dmr = DataMultiRoute(ID=dmr_uid,data_routes=[curr_dr])
+            dmr_uid += 1
 
             #  if the data route already has enough data volume to meet the minimum requirement for the activity scheduling stage, add it as a selected route
             if dmr.data_vol >= self.min_as_route_dv:
                 sel_rts.append(dmr)
+                for dr in dmr.data_routes: drs_taken.add(dr)
 
             #  otherwise, we need to smoosh routes together in order to meet that requirement
             else:
@@ -650,12 +657,18 @@ class GPDataRouteSelection():
                 next_rt_index = rt_index+1
                 while next_rt_index < len(sorted_rts):
                     next_dr = sorted_rts[next_rt_index]
+
+                    if next_dr in drs_taken:
+                        next_rt_index += 1
+                        continue
+
                     #  add the data route to the data multi-route if possible
                     dmr.accumulate_dr( next_dr,min_dmr_candidate_dv)
 
                     #  check if we are meeting the minimum data volume requirement after the accumulation. if yes include the selected route and  and break out of the loop
                     if dmr.data_vol >= self.min_as_route_dv:
                         sel_rts.append(dmr)
+                        for dr in dmr.data_routes: drs_taken.add(dr)
                         break
 
                     next_rt_index += 1
@@ -665,7 +678,7 @@ class GPDataRouteSelection():
 
             rt_index += 1
 
-        return sel_rts,dmr_uid
+        return sel_rts,dmr_uid,drs_taken
 
     def run_step2(self,routes_by_obs,overlap_cnt_by_route):
 
@@ -697,21 +710,22 @@ class GPDataRouteSelection():
 
         dmr_uid = 0
 
-
-        selected_rts_by_obs = {}
+        # selected data multi routes
+        selected_dmrs_by_obs = {}
+        drs_taken = set()
         for obs in routes_by_obs.keys():
-            selected_rts_by_obs[obs] = []
+            selected_dmrs_by_obs[obs] = []
             
-            sel_rts,dmr_uid = self.get_from_sorted(rts_by_obs_sorted_overlap[obs],num_rts_sel_per_obs_overlap,min_dmr_candidate_dv,dmr_uid)
-            selected_rts_by_obs[obs] += sel_rts
-            sel_rts,dmr_uid = self.get_from_sorted(rts_by_obs_sorted_dv[obs],num_rts_sel_per_obs_dv,min_dmr_candidate_dv,dmr_uid)
-            selected_rts_by_obs[obs] += sel_rts
-            sel_rts,dmr_uid = self.get_from_sorted(rts_by_obs_sorted_lat[obs],num_rts_sel_per_obs_lat,min_dmr_candidate_dv,dmr_uid)
-            selected_rts_by_obs[obs] += sel_rts
+            sel_rts,dmr_uid,drs_taken = self.get_from_sorted(rts_by_obs_sorted_overlap[obs],num_rts_sel_per_obs_overlap,min_dmr_candidate_dv,dmr_uid,drs_taken)
+            selected_dmrs_by_obs[obs] += sel_rts
+            sel_rts,dmr_uid,drs_taken = self.get_from_sorted(rts_by_obs_sorted_dv[obs],num_rts_sel_per_obs_dv,min_dmr_candidate_dv,dmr_uid,drs_taken)
+            selected_dmrs_by_obs[obs] += sel_rts
+            sel_rts,dmr_uid,drs_taken = self.get_from_sorted(rts_by_obs_sorted_lat[obs],num_rts_sel_per_obs_lat,min_dmr_candidate_dv,dmr_uid,drs_taken)
+            selected_dmrs_by_obs[obs] += sel_rts
             # from circinus_tools import debug_tools 
             # debug_tools.debug_breakpt()
 
-        return selected_rts_by_obs
+        return selected_dmrs_by_obs
 
     def get_stats(self,final_route_records,verbose=False):
         stats = {}

@@ -237,13 +237,6 @@ class DataRoute():
     def  sort_windows(self):
         self.route.sort(key=lambda x: x.start)
 
-        # #  do some basic validation that the windows are in order
-        # last_wind_end = const.UNASSIGNED_DT_NEG_INF
-        # for wind in self.route:
-        #     if wind.start <last_wind_end  or wind.end  < last_wind_end:
-        #         raise Exception ('routing_objects.py:  windows are out of order')
-        #     last_wind_end = wind.end
-
     def  get_route_string( self,  time_base= None):
         out_string = "dr %d: "% ( self.ID)
 
@@ -281,6 +274,18 @@ class DataRoute():
         """ getter for internal route by index"""
         return self.route[key]
 
+    def restore_route_objects(self,obs_winds_dict,dlnk_winds_dict,xlnk_winds_dict):
+        """grab the original route objects from the input dicts (using hash lookup)"""
+
+        for windex in range(len(self.route)):
+            wind = self.route[windex]
+            if type(wind) == ObsWindow:
+                self.route[windex] = obs_winds_dict[wind]
+            if type(wind) == DlnkWindow:
+                self.route[windex] = dlnk_winds_dict[wind]
+            elif type(wind) == XlnkWindow:
+                self.route[windex] = xlnk_winds_dict[wind]
+
     def validate (self):
         """ validates timing and ordering of route
         
@@ -294,6 +299,10 @@ class DataRoute():
         obs = self.route[0]
         if not type (obs) is ObsWindow:
             raise Exception('First window on route was not an ObsWindow instance. Route string: %s'%( self.get_route_string()))
+
+        if not self.scheduled_dv <= self.data_vol:
+            string = 'routing_objects.py: scheduled data volume (%f) is more than available data volume (%f). Route string: %s'%( self.scheduled_dv, self.data_vol, self.get_route_string())
+            raise RuntimeError(string)
 
         curr_sat_indx = obs.sat_indx
         next_sat_indx = obs.sat_indx

@@ -221,12 +221,18 @@ class GPMetrics():
         :returns: [description]
         :rtype: {[type]}
         """
+        sched_rts_by_obs = self.get_routes_by_obs (sched_routes)
+        sched_obs = sched_rts_by_obs.keys()
 
         stats = {}
 
         #  for selected routes
-        intial_lat_by_obs_rs =  {}
+        initial_lat_by_obs_rs =  {}
         for obs, rts in rs_routes_by_obs.items ():
+            # want to make this a fair comparison. Only consider latency in rs for those obs that show up in AS
+            if not obs in sched_obs:
+                continue
+
             # start, center, end...whichever we're using for the latency calculation
             time_option = self.latency_params['dlnk']
 
@@ -242,7 +248,11 @@ class GPMetrics():
                 #  if we have reached our minimum required data volume amount to deem the observation downlinked for the purposes of latency calculation...
                 if cum_dv >= self.min_as_route_dv - self.min_as_obs_dv_slop :
 
-                    intial_lat_by_obs_rs[obs] = dr.get_latency(
+                    if dr.get_obs().window_ID == 31:
+                        for dr_u in dr.data_routes:
+                            print(dr_u)
+
+                    initial_lat_by_obs_rs[obs] = dr.get_latency(
                         'minutes',
                         obs_option = self.latency_params['obs'], 
                         dlnk_option = self.latency_params['dlnk']
@@ -252,8 +262,7 @@ class GPMetrics():
                     break
 
         #  for scheduled routes
-        sched_rts_by_obs = self.get_routes_by_obs (sched_routes)
-        intial_lat_by_obs =  {}
+        initial_lat_by_obs =  {}
         final_lat_by_obs =  {}
         for obs, rts in sched_rts_by_obs.items ():
             # start, center, end...whichever we're using for the latency calculation
@@ -265,7 +274,7 @@ class GPMetrics():
             #  figure out the latency for the first route that got downlinked.
             # sanity check that its scheduled data volume meets the minimum requirement
             assert(rts[0].scheduled_dv >= self.min_as_route_dv - self.min_as_obs_dv_slop)
-            intial_lat_by_obs[obs] = rts[0].get_latency(
+            initial_lat_by_obs[obs] = rts[0].get_latency(
                 'minutes',
                 obs_option = self.latency_params['obs'], 
                 dlnk_option = self.latency_params['dlnk']
@@ -278,8 +287,8 @@ class GPMetrics():
                 dlnk_option = self.latency_params['dlnk']
             )
 
-        i_lats_rs = [lat for lat in intial_lat_by_obs_rs. values ()]
-        i_lats = [lat for lat in intial_lat_by_obs. values ()]
+        i_lats_rs = [lat for lat in initial_lat_by_obs_rs. values ()]
+        i_lats = [lat for lat in initial_lat_by_obs. values ()]
         f_lats = [lat for lat in final_lat_by_obs. values ()]
         
         i_valid = len(i_lats) > 0
@@ -301,13 +310,13 @@ class GPMetrics():
         stats['min_obs_final_lat'] = np.min(f_lats) if f_valid else 0
         stats['max_obs_final_lat'] = np.max(f_lats) if f_valid else 0
 
-        stats['intial_lat_by_obs_rs'] = intial_lat_by_obs_rs
-        stats['intial_lat_by_obs'] = intial_lat_by_obs
+        stats['initial_lat_by_obs_rs'] = initial_lat_by_obs_rs
+        stats['initial_lat_by_obs'] = initial_lat_by_obs
         stats['final_lat_by_obs'] = final_lat_by_obs
 
         if verbose:
             print('------------------------------')
-            print('latencies by observation')
+            print('latencies by observation (only considering scheduled obs windows)')
             print("%s: \t\t %f"%('ave_obs_initial_lat_rs',stats['ave_obs_initial_lat_rs']))
             print("%s: \t\t %f"%('std_obs_initial_lat_rs',stats['std_obs_initial_lat_rs']))
             print("%s: %f"%('min_obs_initial_lat_rs',stats['min_obs_initial_lat_rs']))
@@ -321,7 +330,7 @@ class GPMetrics():
             print("%s: %f"%('max_obs_final_lat',stats['max_obs_final_lat']))
 
             # for obs in final_lat_by_obs.keys ():
-            #     i = intial_lat_by_obs.get(obs,99999.0)
+            #     i = initial_lat_by_obs.get(obs,99999.0)
             #     f = final_lat_by_obs.get(obs,99999.0)
             #     print("%s: i %f, f %f"%(obs,i,f))
 
@@ -546,6 +555,8 @@ class GPMetrics():
         return avaoi, aoi_curve
 
     def preprocess_and_get_aoi(self,rts_by_obs,include_routing,dv_option='scheduled_dv'):
+        #  note: I'm not particularly happy with how the code in this function and called by this function turned out ( it's messy). someday should try to re-factor it. TODO: refactor it
+
         av_aoi_by_targID = {}
         aoi_curves_by_targID = {}
 
@@ -558,17 +569,16 @@ class GPMetrics():
         # start, center, end...whichever we're using for the latency calculation
         time_option = self.latency_params['dlnk']
 
+
         for obs_wind,rts in rts_by_obs.items():
 
             for targ_ID in obs_wind.target_IDs:
 
-                # skip ignored targets
+                # skip explicitly ignored targets
                 if targ_ID in  self.targ_id_ignore_list:
                     continue
 
                 targ_indx = self.all_targ_IDs.index(targ_ID)
-
-
 
                 if not include_routing:
                     # add row for this observation. Note: there should be no duplicate observations in obs_winds
@@ -597,8 +607,14 @@ class GPMetrics():
 
 
         for targ_indx in range(self.num_targ):
-            dlnk_obs_times_mat_targ = dlnk_obs_times_mat[targ_indx]
 
+            targ_ID = self.all_targ_IDs[targ_indx]
+
+            # skip explicitly ignored targets
+            if targ_ID in  self.targ_id_ignore_list:
+                continue
+
+            dlnk_obs_times_mat_targ = dlnk_obs_times_mat[targ_indx]
 
             if not include_routing:
                 dlnk_obs_times_mat_targ.sort(key=lambda row: row[1])  # sort by creation time
@@ -610,7 +626,6 @@ class GPMetrics():
 
                 av_aoi,aoi_curve = self.get_av_aoi_routing(dlnk_obs_times_mat_targ,  self.met_start_dt,self.met_end_dt,self.dlnk_same_time_slop_s,aoi_units=self.aoi_units,aoi_plot_t_units=self.aoi_plot_t_units)
             
-            targ_ID = self.all_targ_IDs[targ_indx]
             av_aoi_by_targID[targ_ID] = av_aoi
             aoi_curves_by_targID[targ_ID] = aoi_curve
 
@@ -621,14 +636,18 @@ class GPMetrics():
         sched_rts_by_obs = self.get_routes_by_obs (sched_routes)
 
         include_routing=True
+
+        rs_targIDs_found = list(set([targ_ID for obs in rs_routes_by_obs.keys() for targ_ID in obs.target_IDs]))
+        as_targIDs_found = list(set([targ_ID for obs in sched_rts_by_obs.keys() for targ_ID in obs.target_IDs]))
+
         av_aoi_by_targID_rs,aoi_curves_by_targID_rs = self.preprocess_and_get_aoi(rs_routes_by_obs,include_routing,dv_option='possible_dv')
         av_aoi_by_targID_sched,aoi_curves_by_targID_sched = self.preprocess_and_get_aoi(sched_rts_by_obs,include_routing,dv_option='scheduled_dv')
 
         valid = len(av_aoi_by_targID_rs) > 0
 
         stats =  {}
-        av_aoi_vals_rs = list(av_aoi_by_targID_rs.values())
-        av_aoi_vals_sched = list(av_aoi_by_targID_sched.values())
+        av_aoi_vals_rs = [av_aoi for targID,av_aoi in av_aoi_by_targID_rs.items() if targID in rs_targIDs_found]
+        av_aoi_vals_sched = [av_aoi for targID,av_aoi in av_aoi_by_targID_sched.items() if targID in rs_targIDs_found]
         stats['av_av_aoi_rs'] = np.mean(av_aoi_vals_rs) if valid else None
         stats['av_av_aoi_sched'] = np.mean(av_aoi_vals_sched) if valid else None
         stats['std_av_aoi_rs'] = np.std(av_aoi_vals_rs) if valid else None
@@ -638,6 +657,7 @@ class GPMetrics():
         stats['max_av_aoi_rs'] = np.max(av_aoi_vals_rs) if valid else None
         stats['max_av_aoi_sched'] = np.max(av_aoi_vals_sched) if valid else None
 
+        stats['rs_targIDs_found'] = rs_targIDs_found
         stats['av_aoi_by_targID_rs'] = av_aoi_by_targID_rs
         stats['av_aoi_by_targID_sched'] = av_aoi_by_targID_sched
         stats['aoi_curves_by_targID_rs'] = aoi_curves_by_targID_rs
@@ -645,6 +665,8 @@ class GPMetrics():
 
         if verbose:
             print('------------------------------')
+            print('num rs targ IDs: %d'%(len(rs_targIDs_found)))
+            print('num as targ IDs: %d'%(len(as_targIDs_found)))
             print('AoI values')
             print("%s: \t\t\t\t %f"%('av_av_aoi_rs',stats['av_av_aoi_rs']))
             print("%s: %f"%('std_av_aoi_rs',stats['std_av_aoi_rs']))

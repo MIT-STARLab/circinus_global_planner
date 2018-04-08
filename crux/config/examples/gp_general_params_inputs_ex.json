@@ -10,7 +10,7 @@
     },
     "route_selection_general_params": {
         "wind_filter_duration_s" : 3600,
-        "wind_filter_duration_obs_sat_s" : 7200,
+        "wind_filter_duration_obs_sat_s" : 14400,
         "plot_include_dlnk_labels":    false,
         "plot_include_xlnk_labels":   true,
         "plot_route_selection_results":       false,
@@ -51,30 +51,30 @@
         "min_duration_s": {
             "obs": 3,
             "dlnk": 60,
-            "xlnk": 30
+            "xlnk": 20
         },
         "obj_weights": {
-            "obs_dv": 1.0,
-            "route_latency": 1.0,
-            "energy_storage": 1.0
+            "obs_dv": 10.0,
+            "route_latency": 0.001,
+            "energy_storage": 0.001
         },
         "plot_include_dlnk_labels":    false,
         "plot_include_xlnk_labels":   true,
-        "plot_activity_scheduling_results":   false,
+        "plot_activity_scheduling_results":   true,
         "resource_delta_t_s": 10,
         "resource_margin_num_timepoints": 30,
         "run_activity_scheduling":  true
     },
     "pickle_params":  {
-        "unpickle_pre_route_selection_step1":                      true,
-        "pickle_route_selection_step1_results":                   false,
-        "unpickle_pre_route_selection_step2":                      true,
+        "unpickle_pre_route_selection_step1":                      false,
+        "pickle_route_selection_step1_results":                   true,
+        "unpickle_pre_route_selection_step2":                      false,
         "pickle_route_selection_step2_results":                   false,
         "unpickle_pre_act_scheduling":                            false,
         "pickle_act_scheduling_results":                            false,
         "route_selection_step1_pickle": "/Users/ktikennedy/Desktop/circinus_files/4hour/walker30_7gs/none.pkl",
         "route_selection_step2_pickle": "/Users/ktikennedy/Desktop/circinus_files/4hour/walker30_7gs/none.pkl",
-        "act_scheduling_pickle": "pickles/as_2018-03-19T20_35_17.004653.pkl"
+        "act_scheduling_pickle": "/Users/ktikennedy/Desktop/circinus_files/4hour/walker30_7gs_targs2/as_walker30_7gs_targs2_normal.pkl"
     },
     "other_params": {
         "targ_id_ignore_list": [],

@@ -14,6 +14,8 @@ def print_pre_run_msg(obs_wind,obs_indx,sat_indx,sat_obs_index,num_obs):
     print ("obs: %s"%(obs_wind))
 
 def run_rs_step1(gp_rs,obs_wind,dlnk_winds_flat,xlnk_winds,verbose=False):
+    """For serial call"""
+
     t_a = time.time()
     routes = gp_rs.run_step1(obs_wind,dlnk_winds_flat,xlnk_winds,verbose=False)
     t_b = time.time()
@@ -21,6 +23,11 @@ def run_rs_step1(gp_rs,obs_wind,dlnk_winds_flat,xlnk_winds,verbose=False):
 
     # should be same as 
     return RS_Step1Output(obs_wind,routes,time_elapsed)
+
+def restore_original_wind_obj(routes_by_obs,obs_winds_dict,dlnk_winds_dict,xlnk_winds_dict):
+    for obs,rts in routes_by_obs.items():
+        for dr in rts:
+            dr.restore_route_objects(obs_winds_dict,dlnk_winds_dict,xlnk_winds_dict)
 
 class ParallelRSWorkerWrapper():
     """ wraps a route selection worker in the parallel pool to store its own unique local data for processing"""
@@ -43,6 +50,6 @@ class ParallelRSWorkerWrapper():
         if self.verbose:
             print_pre_run_msg(obs_wind, obs_indx, sat_indx, sat_obs_index, self.num_obs)
 
-        _,routes,time_elapsed = run_rs_step1(self.gp_rs,obs_wind,self.dlnk_winds_flat,self.xlnk_winds,verbose = False)
+        output = run_rs_step1(self.gp_rs,obs_wind,self.dlnk_winds_flat,self.xlnk_winds,verbose = False)
 
-        return RS_Step1Output(obs_wind,routes,time_elapsed)
+        return output

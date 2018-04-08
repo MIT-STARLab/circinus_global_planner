@@ -184,6 +184,8 @@ class GlobalPlannerRunner:
         print(total_throughput_DV_rs_routes)
         print('total_collectible_DV_rs_routes')
         print(total_collectible_DV_rs_routes)
+        print('weights')
+        print(self.as_params['obj_weights'])
         # dv_stats = gp_met.assess_dv_all_routes (sched_routes,verbose = True)
         dv_obs_stats = gp_met.assess_dv_by_obs (rs_routes_by_obs,sched_routes,verbose = True)
         lat_stats = gp_met.assess_latency_all_routes (sched_routes,verbose = True)
@@ -203,6 +205,7 @@ class GlobalPlannerRunner:
 
 
         plot_outputs = {}
+        plot_outputs['rs_targIDs_found'] = aoi_targ_stats['rs_targIDs_found']
         plot_outputs['obs_aoi_curves_by_targID'] = aoi_targ_stats['aoi_curves_by_targID_rs']
         plot_outputs['cmd_aoi_curves_by_sat_indx'] = aoi_sat_cmd_stats['aoi_curves_by_sat_indx']
         plot_outputs['tlm_aoi_curves_by_sat_indx'] = aoi_sat_tlm_stats['aoi_curves_by_sat_indx']
@@ -314,6 +317,11 @@ class GlobalPlannerRunner:
         all_stats =[]
         route_times_s =[]
 
+        # this may seem mildy pointless at first, but what we're doing is making a flat lookup table from the hash of wind to the wind object itself. We'll need this to restore the original winds later after running in parallel.
+        obs_winds_dict = {wind:wind for sat_indx in range (self.sat_params['num_sats']) for wind in obs_winds[sat_indx] }
+        dlnk_winds_dict = {wind:wind for sat_indx in range (self.sat_params['num_sats']) for wind in dlnk_winds_flat[sat_indx] }
+        xlnk_winds_dict = {wind:wind for sat_indx in range (self.sat_params['num_sats']) for xsat_indx in range (self.sat_params['num_sats']) for wind in xlnk_winds[sat_indx][xsat_indx]}
+
         num_obs = sum(len(obs_winds[sat_indx]) for sat_indx in range (self.sat_params['num_sats']))
 
         t_a = time.time()
@@ -346,6 +354,9 @@ class GlobalPlannerRunner:
                 #  same index into the inputs as the outputs
                 _,obs_indx,sat_indx,sat_obs_index = all_obs_inputs[output_indx]
                 org_outputs(obs_output,obs_indx,sat_indx,sat_obs_index)
+
+            # because we duplicated dlnk_winds_flat and xlnk_winds for each parallel worker, need to restore the original window objects in all the routes
+            gp_rs_exec.restore_original_wind_obj(routes_by_obs,obs_winds_dict,dlnk_winds_dict,xlnk_winds_dict)
 
         #  run in serial mode
         else:
@@ -594,8 +605,8 @@ class GlobalPlannerRunner:
         sched_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind = self.io_proc.extract_flat_windows (routes,copy_windows= False)
 
         # 
-        # sats_to_include =  [sat_id for sat_id in self.sat_params['sat_id_order']]
-        sats_to_include =  [sat_id for sat_id in range(20,30)]
+        sats_to_include =  [sat_id for sat_id in self.sat_params['sat_id_order']]
+        # sats_to_include =  [sat_id for sat_id in range(20,30)]
         # sats_to_include = [12,13,14,15,16]
 
         # sats_to_include =  range(20,30)
@@ -651,9 +662,12 @@ class GlobalPlannerRunner:
             fig_name='plots/test_energy.pdf'
         )
 
-        targs_to_include = [targ['id'] for targ in self.obs_params['targets']]
+        found_targIDs = metrics_plot_inputs['rs_targIDs_found']
+        # targs_to_include = [targ['id'] for targ in self.obs_params['targets']]
         # targs_to_include = [0,3,4,7,8]
-        targs_to_include = range(15)
+        # targs_to_include = range(15)
+        targs_to_include = found_targIDs
+
         self.gp_plot.plot_obs_aoi(
             targs_to_include,
             metrics_plot_inputs['obs_aoi_curves_by_targID'],
@@ -858,6 +872,10 @@ class GlobalPlannerRunner:
 
         metrics_plot_inputs = self.calc_activity_scheduling_results (obs_winds,dlnk_winds_flat,sel_routes_by_obs,scheduled_routes, energy_usage)
 
+        # from circinus_tools import debug_tools
+        # debug_tools.debug_breakpt()
+
+
         #################################
         #  Activity scheduling output stage
         #################################
@@ -868,10 +886,14 @@ class GlobalPlannerRunner:
             self.plot_activity_scheduling_results(sel_routes_by_obs,scheduled_routes,energy_usage,ecl_winds,metrics_plot_inputs)
           
 
-        # outputs = None
-        sel_routes_flat = [dr for rts in sel_routes_by_obs.values() for dr in rts]
-        (sel_obs_winds_flat, sel_dlnk_winds_flat, sel_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind) = self.io_proc.extract_flat_windows (sel_routes_flat)
-        outputs= self.io_proc.make_sat_history_outputs (sel_obs_winds_flat, sel_xlnk_winds_flat, sel_dlnk_winds_flat, link_info_by_wind)
+        # if you want to see windows from RS output...
+        # sel_routes_flat = [dr for rts in sel_routes_by_obs.values() for dr in rts]
+        # (sel_obs_winds_flat, sel_dlnk_winds_flat, sel_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind) = self.io_proc.extract_flat_windows (sel_routes_flat)
+        # outputs= self.io_proc.make_sat_history_outputs (sel_obs_winds_flat, sel_xlnk_winds_flat, sel_dlnk_winds_flat, link_info_by_wind)
+
+        (sched_obs_winds_flat, sched_dlnk_winds_flat, sched_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind) = self.io_proc.extract_flat_windows (scheduled_routes)
+        outputs= self.io_proc.make_sat_history_outputs (sched_obs_winds_flat, sched_xlnk_winds_flat, sched_dlnk_winds_flat, link_info_by_wind)
+        
 
         return outputs
 

@@ -14,13 +14,13 @@ from circinus_tools  import time_tools as tt
 from .custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
 from .routing_objects import DataMultiRoute
 from .schedule_objects import Dancecard
+from circinus_tools  import  constants as const
 
 class GPActivityScheduling():
     """docstring for GP activity scheduling"""
     
     # how close a binary variable must be to zero or one to be counted as that
     binary_epsilon = 0.1
-
 
     def __init__(self,gp_params):
         """initializes based on parameters
@@ -87,6 +87,11 @@ class GPActivityScheduling():
         #  this should be as small as possible to prevent ill conditioning, but big enough that score factor constraints are still valid. 
         #  note: the size of this value is checked in make_model() below
         self.big_M_lat = 1e6
+
+
+        # this big M should be conformatably bigger than the duration of any activity. It's used to switch on/off constraints that are related to differences in start/end times of activities, and in the worst case we expect such differences to max out at the legnth of the longest-duration activity. As long as we provide some comfortable margin past that duration, should be fine.
+        # setting to 20 minutes
+        self.big_M_act_t_dur_s = 20*60
 
     def get_stats(self,verbose=True):
         stats = {}
@@ -188,7 +193,7 @@ class GPActivityScheduling():
 
         #  sort the activities, because we'll need that for constructing constraints
         for sat_indx in range (self.num_sats):
-            sat_acts[sat_indx].sort(key=lambda x: x.start)
+            sat_acts[sat_indx].sort(key=lambda x: x.center)
 
         return sat_acts,all_acts_indcs,dmr_indcs_by_act,dv_by_act,all_acts_by_obj,obs_act_indcs,dmr_indcs_by_obs_act,dv_by_obs_act,link_act_indcs,dmr_indcs_by_link_act,dv_by_link_act
                     
@@ -318,7 +323,12 @@ class GPActivityScheduling():
 
         for p,lat_sf in dmr_latency_sf_by_dmr_indx.items():        
             if lat_sf > int_feas_tol*self.big_M_lat:
-                raise RuntimeError('big_M_lat (%f) is not large enough for latency score factor %f and integer feasibility tolerance %f (dmr index %d)'%(self.big_M_lat,lat_sf,int_feas_tol,p))
+                raise RuntimeWarning('big_M_lat (%f) is not large enough for latency score factor %f and integer feasibility tolerance %f (dmr index %d)'%(self.big_M_lat,lat_sf,int_feas_tol,p))
+
+        for act_obj in all_acts_by_obj.keys():
+            if 2*(act_obj.end-act_obj.start).total_seconds() > self.big_M_act_t_dur_s:
+                raise RuntimeWarning('big_M_act_t_dur_s (%f) is not large enough for act of duration %s and integer feasibility tolerance %f (act string %s)'%(self.big_M_act_t_dur_s,act_obj.end-act_obj.start,int_feas_tol,act_obj))
+
 
         ##############################
         #  Make parameters
@@ -411,18 +421,35 @@ class GPActivityScheduling():
             num_sat_acts = len(sat_acts[sat_indx])
             for  first_act_indx in  range (num_sat_acts):
 
+                # from circinus_tools import debug_tools
+                # debug_tools.debug_breakpt()
+
                 act1 = sat_acts[sat_indx][first_act_indx]
                 # get the unique index into model.acts
                 act1_uindx = all_acts_by_obj[act1]
                 length_1 = model.par_act_dv[act1_uindx]*model.var_activity_utilization[act1_uindx]/act1.ave_data_rate
                 model.c5b.add( length_1 >= model.var_act_indic[act1_uindx] * self.min_act_duration_s[type(act1)])
+
+                # if act1.window_ID == 464:
+                # if act1.window_ID == 63:
+                #     print('')
+                #     print(act1)
+                #     print('c5b')
+                #     print('sat_indx %d'%(sat_indx))
+                #     print(model.c5b[len(model.c5b)].expr.to_string())
+
                 
                 for  second_act_indx in  range (first_act_indx+1,num_sat_acts):
                     act2 = sat_acts[sat_indx][ second_act_indx]
                     # get the unique index into model.acts
                     act2_uindx = all_acts_by_obj[act2]
 
+                    # act list should be sorted
+                    assert(act2.center >= act1.center)
+
+
                     # if there is enough transition time between the two activities, no constraint needs to be added
+                    #  note that we are okay even if for some reason Act 2 starts before Act 1 ends, because time deltas return negative total seconds as well
                     if (act2.start - act1.end).total_seconds() >= self.transition_time_s['simple']:
                         #  don't need to do anything,  continue on to next activity pair
                         continue
@@ -432,13 +459,39 @@ class GPActivityScheduling():
                     elif (act2.center - act1.center).total_seconds() <= self.transition_time_s['simple']:
                         model.c4.add( model.var_act_indic[act1_uindx]+ model.var_act_indic[act2_uindx] <= 1)
 
+                        # if act1.window_ID == 464 or act2.window_ID == 464:
+                        # if act1.window_ID == 63 or act2.window_ID == 63:
+                        #     print('')
+                        #     print('found pair')
+                        #     print(act1)
+                        #     print(act2)
+                        #     print('c4')
+                        #     print(model.c4[len(model.c4)].expr.to_string())
+
+                            # from circinus_tools import debug_tools
+                            # debug_tools.debug_breakpt()
+
                     # If they don't overlap in center time, but they do overlap to some amount, then we need to constrain their end and start times to be consistent with one another
                     else:
                         center_time_diff = (act2.center - act1.center).total_seconds()
                         # this is the adjustment added to the center time to get to the start or end of the activity
                         time_adjust_1 = model.par_act_dv[act1_uindx]*model.var_activity_utilization[act1_uindx]/2/act1.ave_data_rate
                         time_adjust_2 = model.par_act_dv[act2_uindx]*model.var_activity_utilization[act2_uindx]/2/act2.ave_data_rate
-                        model.c5.add( center_time_diff - time_adjust_1 - time_adjust_2 >= self.transition_time_s['simple'])
+                        constr_disable_1 = self.big_M_act_t_dur_s*(1-model.var_act_indic[act1_uindx])
+                        constr_disable_2 = self.big_M_act_t_dur_s*(1-model.var_act_indic[act2_uindx])
+                        model.c5.add( center_time_diff - time_adjust_1 - time_adjust_2 + constr_disable_1 + constr_disable_2 >= self.transition_time_s['simple'])
+
+                        # if act1.window_ID == 464 or act2.window_ID == 464:
+                        # if act1.window_ID == 63 or act2.window_ID == 63:
+                        #     print('')
+                        #     print('found pair')
+                        #     print(act1)
+                        #     print(act2)
+                        #     print('c5')
+                        #     print(model.c5[len(model.c5)].expr.to_string())
+
+                            # from circinus_tools import debug_tools
+                            # debug_tools.debug_breakpt()
 
         #  energy constraints [6]
         model.c6  = pe.ConstraintList()
@@ -516,9 +569,12 @@ class GPActivityScheduling():
                     dmr_latency_sf_by_dmr_indx[dmrs_obs[dmr_obs_indx]] + 
                     self.big_M_lat * sum(model.var_dmr_indic[p] for p in dmrs_obs[dmr_obs_indx+1:num_dmrs_obs]) )
 
-                #  note: use constraint body.to_string()  to print out the constraint in a human readable form
+                #  note: use c8[indx].expr.to_string()  to print out the constraint in a human readable form
+                #                ^ USES BASE 1 INDEXING!!! WTF??
                 
 
+        # from circinus_tools import debug_tools
+        # debug_tools.debug_breakpt()
 
         ##############################
         #  Make objective
@@ -608,16 +664,19 @@ class GPActivityScheduling():
         if verbose:
             print ('utilized routes:')
 
-        def copy_choice(route):
-            if copy_routes:
-                return deepcopy(route)
-            else:
-                return route
+        # commenting out for now because I'm not sure this is actually useful, considering we already have to modify the windows below...
+        # def copy_choice(route):
+        #     if copy_routes:
+        #         # this will copy everything but the underlying activity windows. 
+        #         return copy(route)
+        #     else:
+        #         return route
 
         # figure out which dmrs were used, and add the scheduled data volume to each
         for p in self.model.dmrs:
             if pe.value(self.model.var_dmr_indic[p]) >= 1.0 - self.binary_epsilon:
-                scheduled_route =  copy_choice (self.routes_flat[p]) 
+                # scheduled_route =  copy_choice (self.routes_flat[p]) 
+                scheduled_route =  self.routes_flat[p]
                 scheduled_route.set_scheduled_dv_frac(pe.value(self.model.var_dmr_utilization[p]))  #* self.model.par_dmr_dv[p])
                 scheduled_routes_flat. append (scheduled_route)
 
@@ -636,6 +695,12 @@ class GPActivityScheduling():
                 #  initialize this while we're here
                 wind.scheduled_data_vol = 0
 
+            # similar to winds, set dr data vols to 0
+            for dr in dmr.data_routes:
+                # dmrs should not be sharing drs across themselves, so no scheduled dv should be seen yet
+                assert(dr.scheduled_dv == const.UNASSIGNED)
+                dr.scheduled_dv = dmr.scheduled_dv_by_dr[dr] 
+
 
         #  now we want to mark the real scheduled data volume for every window. We need to do this separately because the model.var_act_indic continuous variables only give an upper bound on the data volume for an activity. we only actually need to use as much data volume as the data routes want to push through the window
         #  add data volume for every route passing through every window
@@ -643,13 +708,17 @@ class GPActivityScheduling():
             for wind in dmr.get_winds():
                 wind.scheduled_data_vol += dmr.scheduled_dv_for_wind(wind)
 
+
         # update the window beginning and end times based upon their amount of scheduled data volume
         # keep track of which ones we've updated, because we should only update once
         updated_winds = set()
         for dmr in scheduled_routes_flat:
+            # validate the data multi route (and in turn, the scheduled data vols of all the data routes under it)
+            dmr.validate()
+
             for wind in dmr.get_winds():
                 #  this check should be at least as big as the scheduled data volume as calculated from all of the route data volumes. (it's not constrained from above, so it could be bigger)
-                if wind_sched_dv_check[wind] < wind.scheduled_data_vol:
+                if wind_sched_dv_check[wind] < wind.scheduled_data_vol - self.dv_epsilon:
                     raise RuntimeWarning('inconsistent activity scheduling results: activity window data volume determined from route dvs (%f) is greater than dv from var_act_indic (%f) [dmr: %s, wind: %s]'%(wind.scheduled_data_vol,wind_sched_dv_check[wind],dmr,wind))
 
                 if not wind in updated_winds:
