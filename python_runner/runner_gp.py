@@ -758,6 +758,7 @@ class GlobalPlannerRunner:
         print('Assess route overlap post RS step 2')
         overlap_cnt_by_route,stats_rs2 = gp_met.assess_route_overlap( selected_rts_by_obs,verbose=True)
 
+
         for rts in selected_rts_by_obs.values():
             for dmr in rts:
                 dmr.validate()

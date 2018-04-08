@@ -54,9 +54,9 @@
             "xlnk": 20
         },
         "obj_weights": {
-            "obs_dv": 10.0,
-            "route_latency": 0.001,
-            "energy_storage": 0.001
+            "obs_dv": 1.0,
+            "route_latency": 1.0,
+            "energy_storage": 1.0
         },
         "plot_include_dlnk_labels":    false,
         "plot_include_xlnk_labels":   true,

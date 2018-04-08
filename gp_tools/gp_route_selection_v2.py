@@ -697,7 +697,7 @@ class GPDataRouteSelection():
             #  sort the routes for each observation by overlap count. Prefer routes with less overlap
             rts_by_obs_sorted_overlap[obs] = sorted(rts,key=lambda dr: overlap_cnt_by_route[dr])
             #  sort the routes for each observation by data volume. Prefer routes with more data volume
-            rts_by_obs_sorted_dv[obs] = sorted(rts,key=lambda dr: dr.data_vol)
+            rts_by_obs_sorted_dv[obs] = sorted(rts,key=lambda dr: dr.data_vol,reverse=True)
             #  sort the routes for each observation by latency. Prefer routes with lower latency
             rts_by_obs_sorted_lat[obs] = sorted(rts,key=lambda dr: latency_getter(dr))
 
@@ -715,6 +715,7 @@ class GPDataRouteSelection():
         drs_taken = set()
         for obs in routes_by_obs.keys():
             selected_dmrs_by_obs[obs] = []
+
             
             sel_rts,dmr_uid,drs_taken = self.get_from_sorted(rts_by_obs_sorted_overlap[obs],num_rts_sel_per_obs_overlap,min_dmr_candidate_dv,dmr_uid,drs_taken)
             selected_dmrs_by_obs[obs] += sel_rts
