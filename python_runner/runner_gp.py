@@ -397,10 +397,10 @@ class GlobalPlannerRunner:
                 dr.ID = dr_uid
                 dr_uid += 1
 
-                try:
-                    dr.validate()
-                except:
-                    raise Exception("Couldn't handle dr %s for obs %s (indices %s)"%(dr,dr.get_obs(),indices_by_obs[dr.get_obs()]))
+                # try:
+                dr.validate(dv_epsilon = self.as_params['dv_epsilon_Mb'])
+                # except:
+                #     raise Exception("Couldn't handle dr %s for obs %s (indices %s)"%(dr,dr.get_obs(),indices_by_obs[dr.get_obs()]))
 
         if verbose:
             print('total_rs_step1_runtime')
@@ -761,7 +761,7 @@ class GlobalPlannerRunner:
 
         for rts in selected_rts_by_obs.values():
             for dmr in rts:
-                dmr.validate()
+                dmr.validate(self.as_params['dv_epsilon_Mb'])
 
         return selected_rts_by_obs
 
@@ -865,7 +865,14 @@ class GlobalPlannerRunner:
         if self.pickle_params['unpickle_pre_act_scheduling']:
             sel_routes_by_obs,ecl_winds,scheduled_routes,energy_usage,window_uid = self.unpickle_actsc_stuff()
         else:
-            scheduled_routes,energy_usage = self.run_nominal_activity_scheduling(sel_routes_by_obs,ecl_winds)
+            found_routes = any([len(rts) >0 for rts in sel_routes_by_obs.values()])
+
+            #  to protect against the weird case where we didn't find any routes ( shouldn't happen, unless we're at the very end of the simulation, or you're trying to break things)
+            if found_routes:
+                scheduled_routes,energy_usage = self.run_nominal_activity_scheduling(sel_routes_by_obs,ecl_winds)
+            else:
+                scheduled_routes,energy_usage = ([],None)
+                print('No routes were found in route selection; not running activity selection')
 
         # if we are saving to file, do that
         if self.pickle_params['pickle_act_scheduling_results']:

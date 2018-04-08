@@ -845,7 +845,8 @@ class GPPlotting():
             current_axis = plt.gca()
 
             # the first return value is a handle for our line, everything else can be ignored
-            e_usage_plot,*dummy = plt.plot(energy_usage['time_mins'],energy_usage['e_sats'][sat_indx], label =  plot_labels["e usage"])
+            if energy_usage:
+                e_usage_plot,*dummy = plt.plot(energy_usage['time_mins'],energy_usage['e_sats'][sat_indx], label =  plot_labels["e usage"])
 
             if self.energy_usage_plot_params['include_eclipse_windows']:
                 for ecl_wind in ecl_winds[sat_indx]:

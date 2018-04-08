@@ -105,10 +105,10 @@ class DataMultiRoute():
     def __repr__(self):
         return  '(DataMultiRoute %d, routes: %s)'%(self.ID,{dr.ID: self.data_vol_by_dr[dr] for dr in self.data_routes})
 
-    def validate (self):
+    def validate (self,dv_epsilon):
         for dr in self.data_routes:
             #  validate the data routes individually - this checks for temporal and data volume consistency within those routes
-            dr.validate()
+            dr.validate(dv_epsilon)
             #  validate that they all have the same initial observation and the same final downlink
             assert(dr.get_obs() == self.get_obs())
             assert(dr.get_dlnk() == self.get_dlnk())
@@ -123,7 +123,7 @@ class DataMultiRoute():
 
         #  check that for all of the windows in all of the routes, no window is oversubscribed
         for dv in avail_dv_by_wind.values():
-            assert(dv >= 0)
+            assert(dv >= 0 - dv_epsilon)
 
 
     def accumulate_dr( self, candidate_dr,min_dmr_candidate_dv=0):
@@ -172,7 +172,7 @@ class DataRoute():
 
     # note this route is simple:  there are no forks in the route; there is a simple linear path from an observation to a downlink through which data flows. all windows must be in temporal order.
 
-    def __init__(self, ID, route  =[], window_start_sats={},dv=0):
+    def __init__(self, ID, route  =[], window_start_sats={},dv=0,dv_epsilon=1e-5):
 
         self.ID =  ID
 
@@ -191,7 +191,7 @@ class DataRoute():
         self.sort_windows()   
 
         #  check the timing and satellite indices along the route.  throws an exception if a problem is seen
-        self.validate()
+        self.validate(dv_epsilon)
 
 
 
@@ -286,7 +286,7 @@ class DataRoute():
             elif type(wind) == XlnkWindow:
                 self.route[windex] = xlnk_winds_dict[wind]
 
-    def validate (self):
+    def validate (self,dv_epsilon):
         """ validates timing and ordering of route
         
         [description]

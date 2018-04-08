@@ -203,6 +203,11 @@ class GPMetrics():
         if verbose and valid:
             print('------------------------------')
             print('latency for routes')
+
+            if not valid:
+                print('no routes found, no valid statistics to display')
+                return stats
+
             print("%s: %f"%('ave_lat_mins',stats['ave_lat_mins']))
             print("%s: %f"%('min_lat_mins',stats['min_lat_mins']))
             print("%s: %f"%('max_lat_mins',stats['max_lat_mins']))
@@ -291,6 +296,7 @@ class GPMetrics():
         i_lats = [lat for lat in initial_lat_by_obs. values ()]
         f_lats = [lat for lat in final_lat_by_obs. values ()]
         
+        i_rs_valid = len(i_lats_rs) > 0
         i_valid = len(i_lats) > 0
         f_valid = len(f_lats) > 0
 
@@ -298,17 +304,17 @@ class GPMetrics():
         # debug_tools.debug_breakpt()
 
         #  note that if center times are not used  with both the observation and downlink for calculating latency, then the route selection and scheduled the numbers might differ. this is because the scheduled numbers reflect the updated start and end time for the Windows
-        stats['ave_obs_initial_lat_rs'] = np.mean(i_lats_rs) if i_valid else 0
-        stats['std_obs_initial_lat_rs'] = np.std(i_lats_rs) if i_valid else 0
-        stats['min_obs_initial_lat_rs'] = np.min(i_lats_rs) if i_valid else 0
-        stats['max_obs_initial_lat_rs'] = np.max(i_lats_rs) if i_valid else 0
-        stats['ave_obs_initial_lat'] = np.mean(i_lats) if i_valid else 0
-        stats['std_obs_initial_lat'] = np.std(i_lats) if i_valid else 0
-        stats['min_obs_initial_lat'] = np.min(i_lats) if i_valid else 0
-        stats['max_obs_initial_lat'] = np.max(i_lats) if i_valid else 0
-        stats['ave_obs_final_lat'] = np.mean(f_lats) if f_valid else 0
-        stats['min_obs_final_lat'] = np.min(f_lats) if f_valid else 0
-        stats['max_obs_final_lat'] = np.max(f_lats) if f_valid else 0
+        stats['ave_obs_initial_lat_rs'] = np.mean(i_lats_rs) if i_valid else None
+        stats['std_obs_initial_lat_rs'] = np.std(i_lats_rs) if i_valid else None
+        stats['min_obs_initial_lat_rs'] = np.min(i_lats_rs) if i_valid else None
+        stats['max_obs_initial_lat_rs'] = np.max(i_lats_rs) if i_valid else None
+        stats['ave_obs_initial_lat'] = np.mean(i_lats) if i_valid else None
+        stats['std_obs_initial_lat'] = np.std(i_lats) if i_valid else None
+        stats['min_obs_initial_lat'] = np.min(i_lats) if i_valid else None
+        stats['max_obs_initial_lat'] = np.max(i_lats) if i_valid else None
+        stats['ave_obs_final_lat'] = np.mean(f_lats) if f_valid else None
+        stats['min_obs_final_lat'] = np.min(f_lats) if f_valid else None
+        stats['max_obs_final_lat'] = np.max(f_lats) if f_valid else None
 
         stats['initial_lat_by_obs_rs'] = initial_lat_by_obs_rs
         stats['initial_lat_by_obs'] = initial_lat_by_obs
@@ -317,6 +323,11 @@ class GPMetrics():
         if verbose:
             print('------------------------------')
             print('latencies by observation (only considering scheduled obs windows)')
+
+            if not i_rs_valid:
+                print('no routes found, no valid statistics to display')
+                return stats
+
             print("%s: \t\t %f"%('ave_obs_initial_lat_rs',stats['ave_obs_initial_lat_rs']))
             print("%s: \t\t %f"%('std_obs_initial_lat_rs',stats['std_obs_initial_lat_rs']))
             print("%s: %f"%('min_obs_initial_lat_rs',stats['min_obs_initial_lat_rs']))
@@ -789,29 +800,30 @@ class GPMetrics():
         min_e_margin_prcnt = []
         max_e_margin = []
         max_e_margin_prcnt = []
-        for sat_indx in range (self.num_sats):
-            e_margin = [e - self.sats_emin_Wh[sat_indx] for e in energy_usage['e_sats'][sat_indx]]
-            max_margin = self.sats_emax_Wh[sat_indx]-self.sats_emin_Wh[sat_indx]
-            e_margin_prcnt = [100*(e - self.sats_emin_Wh[sat_indx])/max_margin for e in energy_usage['e_sats'][sat_indx]]
+        if energy_usage:
+            for sat_indx in range (self.num_sats):
+                e_margin = [e - self.sats_emin_Wh[sat_indx] for e in energy_usage['e_sats'][sat_indx]]
+                max_margin = self.sats_emax_Wh[sat_indx]-self.sats_emin_Wh[sat_indx]
+                e_margin_prcnt = [100*(e - self.sats_emin_Wh[sat_indx])/max_margin for e in energy_usage['e_sats'][sat_indx]]
 
-            e_ave = np.mean(e_margin)
-            e_ave_prcnt = np.mean(e_margin_prcnt)
-            e_max = np.max(e_margin)
-            e_max_prcnt = np.max(e_margin_prcnt)
-            e_min = np.min(e_margin)
-            e_min_prcnt = np.min(e_margin_prcnt)
-            e_margin_by_sat_indx[sat_indx] = {
-                "ave": e_ave,
-                "max": e_max,
-                "min": e_min
-            }
+                e_ave = np.mean(e_margin)
+                e_ave_prcnt = np.mean(e_margin_prcnt)
+                e_max = np.max(e_margin)
+                e_max_prcnt = np.max(e_margin_prcnt)
+                e_min = np.min(e_margin)
+                e_min_prcnt = np.min(e_margin_prcnt)
+                e_margin_by_sat_indx[sat_indx] = {
+                    "ave": e_ave,
+                    "max": e_max,
+                    "min": e_min
+                }
 
-            ave_e_margin.append(e_ave)
-            ave_e_margin_prcnt.append(e_ave_prcnt)
-            min_e_margin.append(e_min)
-            min_e_margin_prcnt.append(e_min_prcnt)
-            max_e_margin.append(e_max)
-            max_e_margin_prcnt.append(e_max_prcnt)
+                ave_e_margin.append(e_ave)
+                ave_e_margin_prcnt.append(e_ave_prcnt)
+                min_e_margin.append(e_min)
+                min_e_margin_prcnt.append(e_min_prcnt)
+                max_e_margin.append(e_max)
+                max_e_margin_prcnt.append(e_max_prcnt)
 
         valid = len(ave_e_margin) > 0
 
@@ -831,6 +843,11 @@ class GPMetrics():
         if verbose:
             print('------------------------------')
             print('Sat energy margin values')
+
+            if not valid:
+                print('no routes found, no valid statistics to display')
+                return stats
+
             # print("%s: %f"%('av_ave_e_margin',stats['av_ave_e_margin']))
             print("%s: %f%%"%('av_ave_e_margin_prcnt',stats['av_ave_e_margin_prcnt']))
             # print("%s: %f"%('min_ave_e_margin',stats['min_ave_e_margin']))
@@ -955,30 +972,32 @@ class GPMetrics():
         non_overlap_rt_cnt = [cnt for cnt in non_overlap_rt_cnt_by_obs.values()]
         non_overlap_has_xlnk_rt_cnt = [cnt for cnt in non_overlap_has_xlnk_rt_cnt_by_obs.values()]
 
+        valid = any(rt_cnt)
+
         stats =  {}
         counts = list(overlap_cnt_by_route.values())
         stats['overlap calc time'] = time_elapsed
         stats['total_num_overlaps'] = sum(counts)
-        stats['ave_num_overlaps_by_route'] = np.mean(counts)
-        stats['ave_num_rts_by_obs'] = np.mean(rt_cnt)
-        stats['mdn_num_rts_by_obs'] = np.median(rt_cnt)
-        stats['std_num_rts_by_obs'] = np.std(rt_cnt)
-        stats['min_num_rts_by_obs'] = np.min(rt_cnt)
-        stats['max_num_rts_by_obs'] = np.max(rt_cnt)
-        stats['ave_non_overlap_count_by_obs'] = np.mean(non_overlap_rt_cnt)
-        stats['ave_non_overlap_count_has_xlnk_by_obs'] = np.mean(non_overlap_has_xlnk_rt_cnt)
-        stats['mdn_num_overlaps_by_route'] = np.median(counts)
-        stats['mdn_non_overlap_count_by_obs'] = np.median(non_overlap_rt_cnt)
-        stats['mdn_non_overlap_count_has_xlnk_by_obs'] = np.median(non_overlap_has_xlnk_rt_cnt)
-        stats['std_num_overlaps_by_route'] = np.std(counts)
-        stats['std_non_overlap_count_by_obs'] = np.std(non_overlap_rt_cnt)
-        stats['std_non_overlap_count_has_xlnk_by_obs'] = np.std(non_overlap_has_xlnk_rt_cnt)
-        stats['min_num_overlaps_by_route'] = np.min(counts)
-        stats['min_non_overlap_count_by_obs'] = np.min(non_overlap_rt_cnt)
-        stats['min_non_overlap_count_has_xlnk_by_obs'] = np.min(non_overlap_has_xlnk_rt_cnt)
-        stats['max_num_overlaps_by_route'] = np.max(counts)
-        stats['max_non_overlap_count_by_obs'] = np.max(non_overlap_rt_cnt)
-        stats['max_non_overlap_count_has_xlnk_by_obs'] = np.max(non_overlap_has_xlnk_rt_cnt)
+        stats['ave_num_overlaps_by_route'] = np.mean(counts) if valid else None
+        stats['ave_num_rts_by_obs'] = np.mean(rt_cnt) if valid else None
+        stats['mdn_num_rts_by_obs'] = np.median(rt_cnt) if valid else None
+        stats['std_num_rts_by_obs'] = np.std(rt_cnt) if valid else None
+        stats['min_num_rts_by_obs'] = np.min(rt_cnt) if valid else None
+        stats['max_num_rts_by_obs'] = np.max(rt_cnt) if valid else None
+        stats['ave_non_overlap_count_by_obs'] = np.mean(non_overlap_rt_cnt) if valid else None
+        stats['ave_non_overlap_count_has_xlnk_by_obs'] = np.mean(non_overlap_has_xlnk_rt_cnt) if valid else None
+        stats['mdn_num_overlaps_by_route'] = np.median(counts) if valid else None
+        stats['mdn_non_overlap_count_by_obs'] = np.median(non_overlap_rt_cnt) if valid else None
+        stats['mdn_non_overlap_count_has_xlnk_by_obs'] = np.median(non_overlap_has_xlnk_rt_cnt) if valid else None
+        stats['std_num_overlaps_by_route'] = np.std(counts) if valid else None
+        stats['std_non_overlap_count_by_obs'] = np.std(non_overlap_rt_cnt) if valid else None
+        stats['std_non_overlap_count_has_xlnk_by_obs'] = np.std(non_overlap_has_xlnk_rt_cnt) if valid else None
+        stats['min_num_overlaps_by_route'] = np.min(counts) if valid else None
+        stats['min_non_overlap_count_by_obs'] = np.min(non_overlap_rt_cnt) if valid else None
+        stats['min_non_overlap_count_has_xlnk_by_obs'] = np.min(non_overlap_has_xlnk_rt_cnt) if valid else None
+        stats['max_num_overlaps_by_route'] = np.max(counts) if valid else None
+        stats['max_non_overlap_count_by_obs'] = np.max(non_overlap_rt_cnt) if valid else None
+        stats['max_non_overlap_count_has_xlnk_by_obs'] = np.max(non_overlap_has_xlnk_rt_cnt) if valid else None
         stats['num_obs_no_non_overlaps'] = non_overlap_rt_cnt.count(0)
         stats['num_obs_no_non_overlaps_has_xlnk'] = non_overlap_has_xlnk_rt_cnt.count(0)
 
@@ -987,6 +1006,11 @@ class GPMetrics():
             print('Num obs: %d'%(len(routes_by_obs.keys ())))
             print('Num routes total: %d'%(sum(rt_cnt)))
             print('Route overlap statistics')
+
+            if not valid:
+                print('no routes found, no valid statistics to display')
+                return overlap_cnt_by_route,stats
+
             print("%s: %d"%('total_num_overlaps',stats['total_num_overlaps']))
             print('------ By route')
             print("%s: %f"%('ave_num_overlaps',stats['ave_num_overlaps_by_route']))

@@ -44,6 +44,8 @@ class GPActivityScheduling():
         self.sched_start_utc_dt  = gp_inst_params['start_utc_dt']
         self.sched_end_utc_dt  = gp_inst_params['end_utc_dt']
         self.resource_delta_t_s  =as_params['resource_delta_t_s']
+
+        #  the "effectively zero" number.
         self.dv_epsilon = as_params['dv_epsilon_Mb']
         self.resource_margin_num_timepoints = as_params['resource_margin_num_timepoints']
 
@@ -714,7 +716,7 @@ class GPActivityScheduling():
         updated_winds = set()
         for dmr in scheduled_routes_flat:
             # validate the data multi route (and in turn, the scheduled data vols of all the data routes under it)
-            dmr.validate()
+            dmr.validate(self.dv_epsilon)
 
             for wind in dmr.get_winds():
                 #  this check should be at least as big as the scheduled data volume as calculated from all of the route data volumes. (it's not constrained from above, so it could be bigger)

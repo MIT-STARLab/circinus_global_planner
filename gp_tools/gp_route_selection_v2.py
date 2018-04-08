@@ -301,8 +301,8 @@ class GPDataRouteSelection():
         # minimum data volume that is considered for routes in the activity scheduling stage
         self.min_as_route_dv =as_params['min_as_route_dv_Mb']
         
-        #  the "effectively zero" number. defining in terms of the minimum path data volume for future proofing
-        self.dv_epsilon = self.min_rs_route_dv / 1000
+        #  the "effectively zero" number.
+        self.dv_epsilon = as_params['dv_epsilon_Mb']
         self.wind_filter_duration =  timedelta (seconds =rs_general_params['wind_filter_duration_s'])
         self.wind_filter_duration_obs_sat =  timedelta (seconds =rs_general_params['wind_filter_duration_obs_sat_s'])
 
@@ -375,7 +375,7 @@ class GPDataRouteSelection():
             rr_dancecards[sat_indx][0] = RouteRecord(dv=0,release_time = start_dt,routes=[])
 
         #  observing sat starts with an initial data route that includes only the observation window
-        first_dr = DataRoute(dr_uid, route =[obs_wind], window_start_sats={obs_wind: obs_wind.sat_indx},dv=obs_dv)
+        first_dr = DataRoute(dr_uid, route =[obs_wind], window_start_sats={obs_wind: obs_wind.sat_indx},dv=obs_dv,dv_epsilon =self.dv_epsilon)
         dr_uid += 1
         #  put this initial data route on the first route record for the observing satellite
         rr_dancecards[obs_wind.sat_indx][0] = RouteRecord(dv=obs_dv,release_time = start_dt,routes=[first_dr])
@@ -626,7 +626,7 @@ class GPDataRouteSelection():
 
         all_routes = [dr for rr in final_route_records for dr in rr.routes]
         for dr in all_routes:
-            dr.validate()
+            dr.validate(self.dv_epsilon)
 
         return all_routes
 
