@@ -62,6 +62,7 @@ class GlobalPlannerRunner:
         self.plot_params = self.params['gp_general_params']['plot_params']
         self.general_other_params = self.params['gp_general_params']['other_params']
         self.rs_general_params = gp_params['gp_general_params']['route_selection_general_params']
+        self.rs_v2_params = gp_params['gp_general_params']['route_selection_params_v2']
         self.as_params = self.params['gp_general_params']['activity_scheduling_params']
         self.as_inst_params = self.params['gp_instance_params']['activity_scheduling_params']
         self.io_proc =GPProcessorIO(self.params)
@@ -605,8 +606,8 @@ class GlobalPlannerRunner:
         sched_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind = self.io_proc.extract_flat_windows (routes,copy_windows= False)
 
         # 
-        sats_to_include =  [sat_id for sat_id in self.sat_params['sat_id_order']]
-        # sats_to_include =  [sat_id for sat_id in range(20,30)]
+        # sats_to_include =  [sat_id for sat_id in self.sat_params['sat_id_order']]
+        sats_to_include =  [sat_id for sat_id in range(20,30)]
         # sats_to_include = [12,13,14,15,16]
 
         # sats_to_include =  range(20,30)
@@ -666,7 +667,7 @@ class GlobalPlannerRunner:
         # targs_to_include = [targ['id'] for targ in self.obs_params['targets']]
         # targs_to_include = [0,3,4,7,8]
         # targs_to_include = range(15)
-        targs_to_include = found_targIDs
+        targs_to_include = found_targIDs[0:10]
 
         self.gp_plot.plot_obs_aoi(
             targs_to_include,
@@ -806,7 +807,8 @@ class GlobalPlannerRunner:
         #################################
 
         # If we are un pickling at step two, then just continue
-        if not self.pickle_params['unpickle_pre_route_selection_step2']:
+        run_step_1 = not self.pickle_params['unpickle_pre_route_selection_step2'] and not self.pickle_params['unpickle_pre_act_scheduling']
+        if run_step_1:
 
             #  if  we are loading from file, do that
             if self.pickle_params['unpickle_pre_route_selection_step1']:
@@ -814,7 +816,7 @@ class GlobalPlannerRunner:
 
             #  otherwise run route selection step 1
             else:
-                routes_by_obs,all_stats,route_times_s, obs_indx, dr_uid  =  self.run_nominal_route_selection_v2_step1(obs_winds,dlnk_winds_flat,xlnk_winds,verbose=self.rs_general_params['verbose_step1'])
+                routes_by_obs,all_stats,route_times_s, obs_indx, dr_uid  =  self.run_nominal_route_selection_v2_step1(obs_winds,dlnk_winds_flat,xlnk_winds,verbose=self.rs_v2_params['verbose_step1'])
                 # routes_by_obs,all_stats,route_times_s, obs_indx, weights_tups  =  self.run_test_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
 
             #  pickle before step 2 because step 2 doesn't take that long
@@ -828,22 +830,26 @@ class GlobalPlannerRunner:
         #  route selection step 2
         #################################
 
-        if self.pickle_params['unpickle_pre_route_selection_step2']:
-            xlnk_winds_flat,sel_routes_by_obs,ecl_winds,obs_winds,dlnk_winds_flat,window_uid = self.unpickle_rtsel_s2_stuff()
-        else:
-            print('np.mean(route_times_s)')
-            print(np.mean(route_times_s))
-            print('np.std(route_times_s)')
-            print(np.std(route_times_s))
-            passthru = False
-            if passthru:
-                sel_routes_by_obs = {obs:[DataMultiRoute(ID=0,data_routes=[dr]) for dr in rts] for obs,rts in routes_by_obs.items()}
+        run_step_2 = not self.pickle_params['unpickle_pre_act_scheduling']
+        if run_step_2:
+            if self.pickle_params['unpickle_pre_route_selection_step2']:
+                xlnk_winds_flat,sel_routes_by_obs,ecl_winds,obs_winds,dlnk_winds_flat,window_uid = self.unpickle_rtsel_s2_stuff()
             else:
-                # run step 2. todo:  move this elsewhere
-                sel_routes_by_obs = self.run_nominal_route_selection_v2_step2(routes_by_obs)
+                print('np.mean(route_times_s)')
+                print(np.mean(route_times_s))
+                print('np.std(route_times_s)')
+                print(np.std(route_times_s))
+                passthru = False
+                if passthru:
+                    sel_routes_by_obs = {obs:[DataMultiRoute(ID=0,data_routes=[dr]) for dr in rts] for obs,rts in routes_by_obs.items()}
+                else:
+                    # run step 2. todo:  move this elsewhere
+                    sel_routes_by_obs = self.run_nominal_route_selection_v2_step2(routes_by_obs)
 
-        if self.pickle_params['pickle_route_selection_step2_results']:
-            self.pickle_rtsel_s2_stuff(xlnk_winds_flat,sel_routes_by_obs,ecl_winds,obs_winds,dlnk_winds_flat,window_uid)
+            if self.pickle_params['pickle_route_selection_step2_results']:
+                self.pickle_rtsel_s2_stuff(xlnk_winds_flat,sel_routes_by_obs,ecl_winds,obs_winds,dlnk_winds_flat,window_uid)
+        else:
+            print('Skipping route selection step two stuff')
         
         #################################
         # route selection output stage

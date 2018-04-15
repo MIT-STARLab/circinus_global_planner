@@ -253,10 +253,6 @@ class GPMetrics():
                 #  if we have reached our minimum required data volume amount to deem the observation downlinked for the purposes of latency calculation...
                 if cum_dv >= self.min_as_route_dv - self.min_as_obs_dv_slop :
 
-                    if dr.get_obs().window_ID == 31:
-                        for dr_u in dr.data_routes:
-                            print(dr_u)
-
                     initial_lat_by_obs_rs[obs] = dr.get_latency(
                         'minutes',
                         obs_option = self.latency_params['obs'], 

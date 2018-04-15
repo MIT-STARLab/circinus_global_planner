@@ -50,34 +50,6 @@ class DeconflictedRoute():
     def __repr__( self):
         return 'DeconflictedRoute(%s,%s)'%( self.dr, self.available_dv)
 
-# def no_route_conflict(dr1,dr2):
-#     """ check for route conflicts. implementation specific check to see if a cross-link window in one route both overlaps in time and includes the same satellites as a cross-link window in another route"""
-
-#      # go through all of the windows in route 1 and for each one see if it conflicts with a window in route 2
-#     for wind1 in dr1:
-#         if not type(wind1) == XlnkWindow:
-#             continue
-
-#         for wind2 in dr2:
-#             if not type(wind2) == XlnkWindow:
-#                 continue
-
-#             #  check for overlap
-#             #  if before the start, continue to next window in route 2
-#             if wind1.end <= wind2.start:
-#                 continue
-#             #  if after the end, we've passed a point where wind1 could overlap with a window in route 2.
-#             elif wind1.start >= wind2.end:
-#                 break
-#             # if there's any overlap at all...
-#             else:
-#                 #  I'm sure there's a better way to express this check
-#                 wind2_indcs = [wind2.sat_indx,wind2.xsat_indx]
-#                 if wind1.sat_indx in wind2_indcs or wind1.xsat_indx in wind2_indcs:
-#                     return False
-
-#     return True
-
 class RouteRecord():
     """docstring for RouteRecord"""
     def __init__(self,dv,release_time,routes=[]):
@@ -283,11 +255,15 @@ class GPDataRouteSelection():
         scenario_params = gp_params['gp_orbit_prop_params']['scenario_params']
         sat_params = gp_params['gp_orbit_prop_params']['sat_params']
         rs_general_params = gp_params['gp_general_params']['route_selection_general_params']
-        rs_params = gp_params['gp_general_params']['route_selection_params_v2']
+        rs_v2_params = gp_params['gp_general_params']['route_selection_params_v2']
         as_params = gp_params['gp_general_params']['activity_scheduling_params']
         gp_general_other_params = gp_params['gp_general_params']['other_params']
         link_params = gp_params['gp_orbit_link_params']['general_link_params']
         gp_as_inst_params = gp_params['gp_instance_params']['activity_scheduling_params']
+
+
+        # If including cross-links are not when creating routes
+        self.include_crosslinks =rs_general_params['include_crosslinks']
 
         self.num_sats=sat_params['num_sats']
         #  these times indicate the (largest) window over which we are considering routes
@@ -298,8 +274,14 @@ class GPDataRouteSelection():
 
         #  minimum step1 route data volume -  the minimum data volume a route may have to be considered as a candidate for moving data volume from an observation to a downlink,  when finding routes in step one
         self.min_rs_route_dv =rs_general_params['min_rs_route_dv_Mb']
+
+        # the minimum additional data volume that a data route must be able to add to a data multi route to be considered for adding to that data multi route. Used in accumulate_dr() in routing_objects.py. Not super important, but should be large enough that a DMR doesn't pointlessly add new DRs to it if they don't provide a significant amount of additional DV (considering they add new constraints due to additional windows in the DMR)
+        self.min_dmr_candidate_dv = self.min_rs_route_dv / 2  
+
         # minimum data volume that is considered for routes in the activity scheduling stage
         self.min_as_route_dv =as_params['min_as_route_dv_Mb']
+
+        self.step2_params = rs_v2_params['step2_params']
         
         #  the "effectively zero" number.
         self.dv_epsilon = as_params['dv_epsilon_Mb']
@@ -367,10 +349,12 @@ class GPDataRouteSelection():
 
         for sat_indx in range (self.num_sats): 
             act_dancecards[sat_indx].add_winds_to_dancecard(dlnk_winds_flat_filt[sat_indx])
-            #  cross-link Windows matrix is symmetric ( and upper triangular)
-            for xsat_indx in  range (sat_indx+1, self.num_sats):
-                act_dancecards[sat_indx].add_winds_to_dancecard(xlnk_winds_filt[sat_indx][xsat_indx])
-                act_dancecards[xsat_indx].add_winds_to_dancecard(xlnk_winds_filt[sat_indx][xsat_indx])
+
+            if self.include_crosslinks:
+                #  cross-link Windows matrix is symmetric ( and upper triangular)
+                for xsat_indx in  range (sat_indx+1, self.num_sats):
+                    act_dancecards[sat_indx].add_winds_to_dancecard(xlnk_winds_filt[sat_indx][xsat_indx])
+                    act_dancecards[xsat_indx].add_winds_to_dancecard(xlnk_winds_filt[sat_indx][xsat_indx])
             #  first point for every non-observing satellite has a zero data volume, no path object
             rr_dancecards[sat_indx][0] = RouteRecord(dv=0,release_time = start_dt,routes=[])
 
@@ -702,12 +686,6 @@ class GPDataRouteSelection():
             rts_by_obs_sorted_lat[obs] = sorted(rts,key=lambda dr: latency_getter(dr))
 
             
-        # todo: move to init
-        num_rts_sel_per_obs_overlap = 10
-        num_rts_sel_per_obs_dv = 10
-        num_rts_sel_per_obs_lat = 10
-        min_dmr_candidate_dv = 10 # Mb
-
         dmr_uid = 0
 
         # selected data multi routes
@@ -716,13 +694,14 @@ class GPDataRouteSelection():
         for obs in routes_by_obs.keys():
             selected_dmrs_by_obs[obs] = []
 
-            
-            sel_rts,dmr_uid,drs_taken = self.get_from_sorted(rts_by_obs_sorted_overlap[obs],num_rts_sel_per_obs_overlap,min_dmr_candidate_dv,dmr_uid,drs_taken)
+            # note: Don't need to worry about a data route appearing multiple times across the selected routes returned from get_from_sorted, because each data route map be only used once (enforced with drs_taken)
+            sel_rts,dmr_uid,drs_taken = self.get_from_sorted(rts_by_obs_sorted_overlap[obs],self.step2_params['num_rts_sel_per_obs_overlap'],self.min_dmr_candidate_dv,dmr_uid,drs_taken)
             selected_dmrs_by_obs[obs] += sel_rts
-            sel_rts,dmr_uid,drs_taken = self.get_from_sorted(rts_by_obs_sorted_dv[obs],num_rts_sel_per_obs_dv,min_dmr_candidate_dv,dmr_uid,drs_taken)
+            sel_rts,dmr_uid,drs_taken = self.get_from_sorted(rts_by_obs_sorted_dv[obs],self.step2_params['num_rts_sel_per_obs_dv'],self.min_dmr_candidate_dv,dmr_uid,drs_taken)
             selected_dmrs_by_obs[obs] += sel_rts
-            sel_rts,dmr_uid,drs_taken = self.get_from_sorted(rts_by_obs_sorted_lat[obs],num_rts_sel_per_obs_lat,min_dmr_candidate_dv,dmr_uid,drs_taken)
+            sel_rts,dmr_uid,drs_taken = self.get_from_sorted(rts_by_obs_sorted_lat[obs],self.step2_params['num_rts_sel_per_obs_lat'],self.min_dmr_candidate_dv,dmr_uid,drs_taken)
             selected_dmrs_by_obs[obs] += sel_rts
+
             # from circinus_tools import debug_tools 
             # debug_tools.debug_breakpt()
 

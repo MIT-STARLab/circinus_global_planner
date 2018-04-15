@@ -127,7 +127,7 @@ class DataMultiRoute():
 
 
     def accumulate_dr( self, candidate_dr,min_dmr_candidate_dv=0):
-        """ add a simple data route to this multi-data route
+        """ add a simple data route to this data multi route
         
         [description]
         :param dmrs: data multi routes to combine into a new multiroute

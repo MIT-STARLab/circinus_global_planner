@@ -17,8 +17,8 @@
         "adjust_window_timing_post_selection": true,
         "min_rs_route_dv_Mb" :  50, 
         "run_rs_parallel" :  true, 
-        "num_parallel_workers" :  8, 
-        "verbose_step1" :  true 
+        "num_parallel_workers" :  8,
+        "include_crosslinks" :  false
     },
     "route_selection_params_v1": {
         "num_paths" :  5,
@@ -27,6 +27,12 @@
         "solver_run_remotely" :   false
     },
     "route_selection_params_v2": {
+        "verbose_step1" :  true,
+        "step2_params": {
+            "num_rts_sel_per_obs_overlap": 5,
+            "num_rts_sel_per_obs_dv": 5,
+            "num_rts_sel_per_obs_lat": 5
+        }
     },
     "activity_scheduling_params": {
         "min_as_route_dv_Mb" :  100,
@@ -35,7 +41,7 @@
         "solver_params": {
             "run_remotely" :   false,
             "gurobi": {
-                "max_runtime_s" :  60,
+                "max_runtime_s" :  300,
                 "optimality_gap" :  1e-4,
                 "integer_feasibility_tolerance" :  1e-5,
                 "_helpful_links": [
@@ -59,7 +65,7 @@
             "energy_storage": 1.0
         },
         "plot_include_dlnk_labels":    false,
-        "plot_include_xlnk_labels":   true,
+        "plot_include_xlnk_labels":   false,
         "plot_activity_scheduling_results":   true,
         "resource_delta_t_s": 10,
         "resource_margin_num_timepoints": 30,
@@ -67,14 +73,14 @@
     },
     "pickle_params":  {
         "unpickle_pre_route_selection_step1":                      false,
-        "pickle_route_selection_step1_results":                   true,
+        "pickle_route_selection_step1_results":                   false,
         "unpickle_pre_route_selection_step2":                      false,
         "pickle_route_selection_step2_results":                   false,
-        "unpickle_pre_act_scheduling":                            false,
+        "unpickle_pre_act_scheduling":                            true,
         "pickle_act_scheduling_results":                            false,
         "route_selection_step1_pickle": "/Users/ktikennedy/Desktop/circinus_files/4hour/walker30_7gs/none.pkl",
         "route_selection_step2_pickle": "/Users/ktikennedy/Desktop/circinus_files/4hour/walker30_7gs/none.pkl",
-        "act_scheduling_pickle": "/Users/ktikennedy/Desktop/circinus_files/4hour/walker30_7gs_targs2/as_walker30_7gs_targs2_normal.pkl"
+        "act_scheduling_pickle": "/Users/ktikennedy/Desktop/circinus_files/4hour/walker30_7gs_targs2/crosslink/as_5windsRSstep2_2018-04-09T03_39_01.272682.pkl"
     },
     "other_params": {
         "targ_id_ignore_list": [],
