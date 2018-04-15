@@ -72,15 +72,9 @@
         "run_activity_scheduling":  true
     },
     "pickle_params":  {
-        "unpickle_pre_route_selection_step1":                      false,
         "pickle_route_selection_step1_results":                   false,
-        "unpickle_pre_route_selection_step2":                      false,
         "pickle_route_selection_step2_results":                   false,
-        "unpickle_pre_act_scheduling":                            true,
-        "pickle_act_scheduling_results":                            false,
-        "route_selection_step1_pickle": "/Users/ktikennedy/Desktop/circinus_files/4hour/walker30_7gs/none.pkl",
-        "route_selection_step2_pickle": "/Users/ktikennedy/Desktop/circinus_files/4hour/walker30_7gs/none.pkl",
-        "act_scheduling_pickle": "/Users/ktikennedy/Desktop/circinus_files/4hour/walker30_7gs_targs2/crosslink/as_5windsRSstep2_2018-04-09T03_39_01.272682.pkl"
+        "pickle_act_scheduling_results":                            false
     },
     "other_params": {
         "targ_id_ignore_list": [],
