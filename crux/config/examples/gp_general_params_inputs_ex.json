@@ -51,14 +51,6 @@
                 ]
             }
         },
-        "transition_time_s": {
-            "simple": 0
-        },
-        "min_duration_s": {
-            "obs": 3,
-            "dlnk": 60,
-            "xlnk": 20
-        },
         "obj_weights": {
             "obs_dv": 1.0,
             "route_latency": 1.0,

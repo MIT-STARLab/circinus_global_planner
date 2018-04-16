@@ -40,7 +40,6 @@ class GPActivityScheduling():
         self.solver_params =as_params['solver_params']
         self.min_as_route_dv =as_params['min_as_route_dv_Mb']
         self.num_sats=sat_params['num_sats']
-        self.transition_time_s=as_params['transition_time_s']
         self.sched_start_utc_dt  = gp_inst_params['start_utc_dt']
         self.sched_end_utc_dt  = gp_inst_params['end_utc_dt']
         self.resource_delta_t_s  =as_params['resource_delta_t_s']
@@ -58,6 +57,7 @@ class GPActivityScheduling():
         self.power_params = sat_params['power_params_sorted']
         self.data_storage_params = sat_params['data_storage_params_sorted']
         self.initial_state = sat_params['initial_state_sorted']
+        sat_activity_params = sat_params['activity_params']
 
         # these lists are in order of satellite index because we've sorted 
         self.sats_init_estate_Wh = [sat_state['batt_e_Wh'] for sat_state in self.initial_state]
@@ -88,10 +88,15 @@ class GPActivityScheduling():
             EclipseWindow: 'charging'
         }
 
+        self.act_transition_time_map = {
+            ('intersat',DlnkWindow,DlnkWindow): sat_activity_params['transition_time_s']['inter-sat']['dlnk-dlnk'],
+            "default":  sat_activity_params['transition_time_s']['default']
+        }
+
         self.min_act_duration_s = {
-            ObsWindow: as_params['min_duration_s']['obs'],
-            DlnkWindow: as_params['min_duration_s']['dlnk'],
-            XlnkWindow: as_params['min_duration_s']['xlnk']
+            ObsWindow: sat_activity_params['min_duration_s']['obs'],
+            DlnkWindow: sat_activity_params['min_duration_s']['dlnk'],
+            XlnkWindow: sat_activity_params['min_duration_s']['xlnk']
         }
 
         # this is now less useful than I thought
@@ -475,16 +480,21 @@ class GPActivityScheduling():
                     # act list should be sorted
                     assert(act2.center >= act1.center)
 
+                    # get the transition time requirement between these activities
+                    try:
+                        transition_time_req = self.act_transition_time_map[("intra-sat",type(act1),type(act2))]
+                    except KeyError:
+                        transition_time_req = self.act_transition_time_map["default"]
 
                     # if there is enough transition time between the two activities, no constraint needs to be added
                     #  note that we are okay even if for some reason Act 2 starts before Act 1 ends, because time deltas return negative total seconds as well
-                    if (act2.start - act1.end).total_seconds() >= self.transition_time_s['simple']:
+                    if (act2.start - act1.end).total_seconds() >= transition_time_req:
                         #  don't need to do anything,  continue on to next activity pair
                         continue
 
                     #  if the activities overlap in center time, then it's not possible to have sufficient transition time between them
                     #  add constraint to rule out the possibility of scheduling both of them
-                    elif (act2.center - act1.center).total_seconds() <= self.transition_time_s['simple']:
+                    elif (act2.center - act1.center).total_seconds() <= transition_time_req:
                         model.c4.add( model.var_act_indic[act1_uindx]+ model.var_act_indic[act2_uindx] <= 1)
 
                     # If they don't overlap in center time, but they do overlap to some amount, then we need to constrain their end and start times to be consistent with one another
@@ -495,7 +505,7 @@ class GPActivityScheduling():
                         time_adjust_2 = model.par_act_dv[act2_uindx]*model.var_activity_utilization[act2_uindx]/2/act2.ave_data_rate
                         constr_disable_1 = self.big_M_act_t_dur_s*(1-model.var_act_indic[act1_uindx])
                         constr_disable_2 = self.big_M_act_t_dur_s*(1-model.var_act_indic[act2_uindx])
-                        model.c5.add( center_time_diff - time_adjust_1 - time_adjust_2 + constr_disable_1 + constr_disable_2 >= self.transition_time_s['simple'])
+                        model.c5.add( center_time_diff - time_adjust_1 - time_adjust_2 + constr_disable_1 + constr_disable_2 >= transition_time_req)
 
 
         #  energy constraints [6]
