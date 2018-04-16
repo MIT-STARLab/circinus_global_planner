@@ -109,7 +109,7 @@ class GPActivityScheduling():
 
         # this big M should be conformatably bigger than the duration of any activity. It's used to switch on/off constraints that are related to differences in start/end times of activities, and in the worst case we expect such differences to max out at the legnth of the longest-duration activity. As long as we provide some comfortable margin past that duration, should be fine.
         # setting to 20 minutes
-        self.big_M_act_t_dur_s = 20*60
+        self.big_M_act_t_dur_s = 30*60
 
     def get_stats(self,verbose=True):
         stats = {}

@@ -68,6 +68,11 @@ class GlobalPlannerRunner:
         self.io_proc =GPProcessorIO(self.params)
         self.gp_plot =GPPlotting( self.params)
 
+        if self.as_inst_params['start_utc'] < self.scenario_params['start_utc']:
+            raise RuntimeError("Activity scheduling instance start time (%s) is less than scenario start time (%s)"%(self.as_inst_params['start_utc'],self.scenario_params['start_utc']))
+        if self.as_inst_params['end_utc'] > self.scenario_params['end_utc']:
+            raise RuntimeError("Activity scheduling instance end time (%s) is greater than scenario end time (%s)"%(self.as_inst_params['end_utc'],self.scenario_params['end_utc']))
+
     def pickle_rtsel_s1_stuff(self,routes_by_obs,all_stats,route_times_s,obs_indx,obs_winds,dlnk_winds_flat,ecl_winds,window_uid):
 
         pickle_stuff =  {}
@@ -1038,6 +1043,11 @@ if __name__ == "__main__":
                     default='orbit_link_inputs_ex.json',
                     help='specify orbit link inputs file from orbit link repo')
 
+    ap.add_argument('--gp_inst_inputs_file',
+                    type=str,
+                    default=None,
+                    help='specify global planner instance params file')
+
     ap.add_argument('--rs_s1_pickle',
                     type=str,
                     default=None,
@@ -1070,7 +1080,7 @@ if __name__ == "__main__":
     with open(os.path.join(REPO_BASE,'crux/config/examples/gp_general_params_inputs_ex.json'),'r') as f:
         gp_general_params_inputs = json.load(f)
 
-    with open(os.path.join(REPO_BASE,'crux/config/examples/gp_instance_params_inputs_ex.json'),'r') as f:
+    with open(os.path.join(REPO_BASE,args.gp_inst_inputs_file),'r') as f:
         gp_instance_params_inputs = json.load(f)
 
     data = {

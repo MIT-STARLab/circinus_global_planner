@@ -269,7 +269,7 @@ class GPDataRouteSelection():
         self.include_crosslinks =rs_general_params['include_crosslinks']
 
         self.num_sats=sat_params['num_sats']
-        #  these times indicate the (largest) window over which we are considering routes
+        #  the end of the route selection search window for a given obs will either be the time input from the instance params file, or the end time of the obs plus the filter window length
         self.sel_latest_end_dt  = tt.iso_string_to_dt (gp_as_inst_params['end_utc'])
 
         # get the smallest time step used in orbit link. this is the smallest time step we need to worry about in data route selection
@@ -323,6 +323,10 @@ class GPDataRouteSelection():
         self.final_route_records = None
 
         dr_uid = 0
+
+        # if the obs window ends later than the time prescribed, then we can't find any routes!
+        if obs_wind.end > self.sel_latest_end_dt:
+            return []
 
         start_dt = obs_wind.end
         end_dt = min(self.sel_latest_end_dt,start_dt + self.wind_filter_duration)
