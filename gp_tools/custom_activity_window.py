@@ -178,9 +178,9 @@ class XlnkWindow(CommWindow):
         #  note that tx_sat is NOT meant to be used to keep track of which satellite was decided on as the tx-er for a symmetric window (e.g. after route selection). Should keep track of that in an external data structure (e.g. in a data route object), otherwise there's a lot of potential for problems to crop up from the fact that this cross-link window object may appear in multiple routes
         self.tx_sat = tx_sat
 
-        if symmetric and tx_sat:
+        if symmetric and tx_sat is not None:
             raise RuntimeError('Cross-link window should not be both symmetric and have a transmitting satellite specified')
-        if not symmetric and not tx_sat:
+        if not symmetric and tx_sat is None:
             raise RuntimeError('Cross-link window should either be marked as symmetric or have a transmitting satellite specified')
 
         super(XlnkWindow, self).__init__(start, end, window_ID)

@@ -87,7 +87,9 @@
             "dlnk": "center",
             "obs": "center"
         },
-        "load_windows_from_file":    true
+        "load_windows_from_file":    true,
+        "_comment": "the below switches whether or not xlnk windows are separated out for each crosslink access, into a pair of windows with one sat transmitting in one window, and the other transmitting in the other. Enable to allow both satellites to be sharing a single, unified window, with each using xlnk-tx power setting (removes a bit of RAM/computation overhead, doesn't seem like a big help in practice because route selection cuts down the choices so well)",
+        "use_symmetric_xlnk_windows": false
     },
     "plot_params":  {
         "plot_fig_extension":  "pdf",

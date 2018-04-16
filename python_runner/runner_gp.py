@@ -955,7 +955,7 @@ class PipelineRunner:
         if data['rs_s1_pickle'] and data['rs_s2_pickle']:
             raise Exception('Should only specify 1 input pickle for route selection')
 
-        if orbit_prop_inputs['version'] == "0.3": 
+        if orbit_prop_inputs['version'] == "0.4": 
             # do some useful transformations while preserving the structure of the inputs ( important for avoiding namespace clashes)
             orbit_prop_inputs['scenario_params']['start_utc_dt'] = tt.iso_string_to_dt ( orbit_prop_inputs['scenario_params']['start_utc'])
             orbit_prop_inputs['scenario_params']['end_utc_dt'] = tt.iso_string_to_dt ( orbit_prop_inputs['scenario_params']['end_utc'])

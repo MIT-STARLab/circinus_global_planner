@@ -53,6 +53,8 @@ class GPActivityScheduling():
 
         self.obj_weights =as_params['obj_weights']
 
+        self.use_symmetric_xlnk_windows = gp_params['gp_general_params']['other_params']['use_symmetric_xlnk_windows']
+
         self.power_params = sat_params['power_params_sorted']
         self.data_storage_params = sat_params['data_storage_params_sorted']
         self.initial_state = sat_params['initial_state_sorted']
@@ -73,14 +75,16 @@ class GPActivityScheduling():
             sat_edot_by_act['base'] = p_params['power_consumption_W']['base'][p_params['base_option']]
             sat_edot_by_act['obs'] = p_params['power_consumption_W']['obs'][p_params['obs_option']]
             sat_edot_by_act['dlnk'] = p_params['power_consumption_W']['dlnk'][p_params['dlnk_option']]
-            sat_edot_by_act['xlnk'] = p_params['power_consumption_W']['xlnk'][p_params['xlnk_option']]
+            sat_edot_by_act['xlnk-tx'] = p_params['power_consumption_W']['xlnk-tx'][p_params['xlnk_option']]
+            sat_edot_by_act['xlnk-rx'] = p_params['power_consumption_W']['xlnk-rx'][p_params['xlnk_option']]
             sat_edot_by_act['charging'] = p_params['power_consumption_W']['orbit_insunlight_average_charging'][p_params['charging_option']]
             self.sats_edot_by_act_W.append (sat_edot_by_act)
 
         self.act_type_map = {
             ObsWindow: 'obs',
             DlnkWindow: 'dlnk',
-            XlnkWindow: 'xlnk',
+            'xlnk-tx': 'xlnk-tx',
+            'xlnk-rx': 'xlnk-rx',
             EclipseWindow: 'charging'
         }
 
@@ -90,7 +94,8 @@ class GPActivityScheduling():
             XlnkWindow: as_params['min_duration_s']['xlnk']
         }
 
-        self.standard_activities = [ObsWindow,DlnkWindow,XlnkWindow]
+        # this is now less useful than I thought
+        self.standard_activities = [ObsWindow,DlnkWindow]
 
         #  this should be as small as possible to prevent ill conditioning, but big enough that score factor constraints are still valid. 
         #  note: the size of this value is checked in make_model() below
@@ -523,6 +528,25 @@ class GPActivityScheduling():
                                 act_uindx = all_acts_by_obj[act]
                                 activity_delta_e += (
                                     model.par_sats_edot_by_act[sat_indx][self.act_type_map[type(act)]] 
+                                    * model.var_activity_utilization[act_uindx]
+                                    * model.par_resource_delta_t
+                                )
+
+                            if type(act) == XlnkWindow:
+                                act_uindx = all_acts_by_obj[act]
+
+                                if self.use_symmetric_xlnk_windows:
+                                    xlnk_edot = model.par_sats_edot_by_act[sat_indx]['xlnk-tx']
+                                # note that in the case where we're not using symmetric xlnk windows, both satellites have a copy of each unidirectional window in their list of activity windows, so it'll be added appropriately at each unique sat_indx
+                                else:
+                                    is_rx = act.is_rx(sat_indx)
+                                    if is_rx: 
+                                        xlnk_edot = model.par_sats_edot_by_act[sat_indx]['xlnk-rx']
+                                    else: 
+                                        xlnk_edot = model.par_sats_edot_by_act[sat_indx]['xlnk-tx']
+
+                                activity_delta_e += (
+                                    xlnk_edot 
                                     * model.var_activity_utilization[act_uindx]
                                     * model.par_resource_delta_t
                                 )

@@ -63,6 +63,8 @@ class GPProcessorIO():
 
         self.eclipse_times=gp_data_rates_other_params['eclipse_times']
 
+        self.use_symmetric_xlnk_windows = gp_general_other_params['use_symmetric_xlnk_windows']
+
 
     def merge_sat_obs_windows(self,obs_window_list,next_window_uid):
         '''
@@ -201,7 +203,7 @@ class GPProcessorIO():
                         return next_window_uid+1
 
                     #  if it's a symmetric cross-link only make one window
-                    if symmetric:
+                    if symmetric and self.use_symmetric_xlnk_windows:
                         next_window_uid = make_xlnk_wind(True,None,next_window_uid,rates_mat_dv_indx=1)
                     #  otherwise, we have to make a window for each of the satellites that is transmitting
                     else:
