@@ -29,9 +29,9 @@
     "route_selection_params_v2": {
         "verbose_step1" :  true,
         "step2_params": {
-            "num_rts_sel_per_obs_overlap": 5,
-            "num_rts_sel_per_obs_dv": 5,
-            "num_rts_sel_per_obs_lat": 5
+            "num_rts_sel_per_obs_overlap": 15,
+            "num_rts_sel_per_obs_dv": 15,
+            "num_rts_sel_per_obs_lat": 15
         }
     },
     "activity_scheduling_params": {
@@ -52,7 +52,7 @@
             }
         },
         "obj_weights": {
-            "obs_dv": 1.0,
+            "obs_dv": 100.0,
             "route_latency": 1.0,
             "energy_storage": 1.0
         },
@@ -93,15 +93,15 @@
         "winds_plot_xlnks":  true,
         "winds_plot_xlnks_choices":    true,
         "energy_usage_plot_params": {
-            "plot_bound_e_min_Wh": 13,    
-            "plot_bound_e_max_Wh": 21,
+            "plot_bound_e_min_Wh_delta": -1,    
+            "plot_bound_e_max_Wh_delta": 1,
             "display_e_min_constraint": false,
             "display_e_max_constraint": false,
             "include_eclipse_windows": true
         },
         "data_usage_plot_params": {
-            "plot_bound_d_min_Gbit": -10,    
-            "plot_bound_d_max_Gbit": 110,
+            "plot_bound_d_min_Gb_delta": -1,    
+            "plot_bound_d_max_Gb_delta": 1,
             "display_d_min_constraint": false,
             "display_d_max_constraint": false,
             "include_eclipse_windows": true

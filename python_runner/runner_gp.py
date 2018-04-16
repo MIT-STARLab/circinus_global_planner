@@ -173,13 +173,17 @@ class GlobalPlannerRunner:
     def calc_activity_scheduling_results ( self,obs_winds,dlnk_winds_flat,rs_routes_by_obs,sched_routes, energy_usage):
         gp_met = GPMetrics(self.params)
 
-        total_collectible_DV_all_obs_winds = sum(obs.data_vol for winds in obs_winds for obs in winds)
-        total_dlnkable_DV_all_dlnk_winds = sum(dlnk.data_vol for winds in dlnk_winds_flat for dlnk in winds)
+        def in_sched_window(wind):
+            return wind.start >= self.as_inst_params['start_utc_dt'] and wind.end <= self.as_inst_params['end_utc_dt']
+
+        total_collectible_DV_all_obs_winds = sum(obs.data_vol for winds in obs_winds for obs in winds  if in_sched_window(obs))
+        total_dlnkable_DV_all_dlnk_winds = sum(dlnk.data_vol for winds in dlnk_winds_flat for dlnk in winds if in_sched_window(dlnk))
         rs_output_routes = [rt for rts in rs_routes_by_obs.values() for rt in rts]
-        total_throughput_DV_rs_routes = sum(sum(rt.data_vol for rt in rts) for obs, rts in rs_routes_by_obs.items())
-        total_collectible_DV_rs_routes = sum(min(obs.data_vol,sum(rt.data_vol for rt in rts)) for obs, rts in rs_routes_by_obs.items())
+        total_throughput_DV_rs_routes = sum(sum(rt.data_vol for rt in rts) for obs, rts in rs_routes_by_obs.items() if in_sched_window(obs))
+        total_collectible_DV_rs_routes = sum(min(obs.data_vol,sum(rt.data_vol for rt in rts)) for obs, rts in rs_routes_by_obs.items() if in_sched_window(obs))
 
         print('------------------------------')
+        print('in scheduling window:')
         print('len(rs_output_routes)')
         print(len(rs_output_routes))
         print('len(sched_routes)')
@@ -582,7 +586,7 @@ class GlobalPlannerRunner:
                 )
 
 
-    def  plot_activity_scheduling_results ( self,routes_by_obs,routes,energy_usage,data_usage,ecl_winds,metrics_plot_inputs):
+    def  plot_activity_scheduling_results ( self,all_possible_winds,routes_by_obs,routes,energy_usage,data_usage,ecl_winds,metrics_plot_inputs):
 
         # do a bunch of stuff to extract the windows from all of the routes as indexed by observation
         # note that this stuff is not thewindows from the scheduled routes, but rather the windows from all the route selected in route selection
@@ -617,7 +621,30 @@ class GlobalPlannerRunner:
         # sats_to_include =  [sat_id for sat_id in range(20,30)]
         # sats_to_include = [12,13,14,15,16]
 
-        # sats_to_include =  range(20,30)
+        all_obs_winds,all_dlnk_winds_flat,all_xlnk_winds_flat = all_possible_winds
+
+        # plot all winds
+        self.gp_plot.plot_winds(
+            sats_to_include,
+            all_obs_winds,
+            all_obs_winds,
+            all_dlnk_winds_flat,
+            all_dlnk_winds_flat, 
+            all_xlnk_winds_flat,
+            None,
+            None,
+            self.as_inst_params['start_utc_dt'],
+            # self.as_inst_params['start_utc_dt'] + timedelta( seconds= self.rs_general_params['wind_filter_duration_s']),
+            self.as_inst_params['end_utc_dt'],
+            plot_title = 'All Possible Activities',
+            plot_size_inches = (18,12),
+            plot_include_dlnk_labels = self.as_params['plot_include_dlnk_labels'],
+            plot_include_xlnk_labels = self.as_params['plot_include_xlnk_labels'],
+            show=  False,
+            fig_name='plots/test_all_windows.pdf'
+        )
+
+
         # plot the selected down links and cross-links this
         self.gp_plot.plot_winds(
             sats_to_include,
@@ -916,7 +943,7 @@ class GlobalPlannerRunner:
         print('activity scheduling output stage')
 
         if self.as_params['plot_activity_scheduling_results']:
-            self.plot_activity_scheduling_results(sel_routes_by_obs,scheduled_routes,energy_usage,data_usage,ecl_winds,metrics_plot_inputs)
+            self.plot_activity_scheduling_results((obs_winds,dlnk_winds_flat,xlnk_winds_flat),sel_routes_by_obs,scheduled_routes,energy_usage,data_usage,ecl_winds,metrics_plot_inputs)
           
 
         # if you want to see windows from RS output...

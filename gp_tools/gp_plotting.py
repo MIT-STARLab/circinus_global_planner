@@ -52,6 +52,14 @@ class GPPlotting():
         self.sat_id_order = sat_params['sat_id_order']
         self.all_targ_IDs = [targ['id'] for targ in self.obs_params['targets']]
 
+        self.power_params = sat_params['power_params_sorted']
+        self.data_storage_params = sat_params['data_storage_params_sorted']
+        self.sats_emin_Wh = [p_params['battery_storage_Wh']['e_min'][p_params['battery_option']] for p_params in self.power_params]
+        self.sats_emax_Wh = [p_params['battery_storage_Wh']['e_max'][p_params['battery_option']] for p_params in self.power_params]
+        self.sats_dmin_Gb = [ds_params['data_storage_Gbit']['d_min'][ds_params['storage_option']] for ds_params in self.data_storage_params]
+        self.sats_dmax_Gb = [ds_params['data_storage_Gbit']['d_max'][ds_params['storage_option']] for ds_params in self.data_storage_params]
+
+
     def plot_winds(
         self,
         sats_ids_list,
@@ -249,7 +257,7 @@ class GPPlotting():
             #  plot cross-links first, so that they are the furthest back (lowest z value) on the plot, and observations and downlinks will appear on top ( because there are generally a lot more cross-links than observations and down links)
             if self.winds_plot_xlnks:
                 num_xlnk_exe = 0
-                if len(xlnk_winds_flat) > 0:
+                if xlnk_winds_flat and len(xlnk_winds_flat) > 0:
                     for xlnk_wind in xlnk_winds_flat[sat_indx]:
 
                         xlnk_start = (xlnk_wind.start-plot_start).total_seconds()/time_divisor
@@ -303,7 +311,7 @@ class GPPlotting():
 
             # plot the observations that are actually executed
             if self.winds_plot_obs:
-                if len(obs_winds_flat) > 0:
+                if obs_winds_flat and len(obs_winds_flat) > 0:
                     for obs_wind in obs_winds_flat[sat_indx]:
 
                         obs_start = (obs_wind.start-plot_start).total_seconds()/time_divisor
@@ -327,7 +335,7 @@ class GPPlotting():
             # plot the executed down links
             if self.winds_plot_dlnks:
                 num_dlnk_exe = 0
-                if len(dlnk_winds_flat) > 0:
+                if dlnk_winds_flat and len(dlnk_winds_flat) > 0:
                     for dlnk_wind in dlnk_winds_flat[sat_indx]:
 
                         dlnk_start = (dlnk_wind.start-plot_start).total_seconds()/time_divisor
@@ -839,8 +847,8 @@ class GPPlotting():
             )
 
             # set axis length. Time starts at 0
-            vert_min = self.energy_usage_plot_params['plot_bound_e_min_Wh']
-            vert_max = self.energy_usage_plot_params['plot_bound_e_max_Wh']
+            vert_min = self.energy_usage_plot_params['plot_bound_e_min_Wh_delta']+self.sats_emin_Wh[sat_indx]
+            vert_max = self.energy_usage_plot_params['plot_bound_e_max_Wh_delta']+self.sats_emax_Wh[sat_indx]
             plt.axis((0, time_to_end, vert_min, vert_max))
 
             current_axis = plt.gca()
@@ -854,7 +862,7 @@ class GPPlotting():
                     ecl_wind_start = (ecl_wind.start-plot_start).total_seconds()/time_divisor
                     ecl_wind_end = (ecl_wind.end-plot_start).total_seconds()/time_divisor
 
-                    height = 2
+                    height = vert_max-vert_min
                     ecl_plot = Rectangle((ecl_wind_start, vert_min), ecl_wind_end-ecl_wind_start, vert_min+height,alpha=0.3,fill=True,color='#202020',label= plot_labels["ecl"])
 
                     current_axis.add_patch(ecl_plot)
@@ -950,8 +958,8 @@ class GPPlotting():
             )
 
             # set axis length. Time starts at 0
-            vert_min = self.data_usage_plot_params['plot_bound_d_min_Gbit']
-            vert_max = self.data_usage_plot_params['plot_bound_d_max_Gbit']
+            vert_min = self.data_usage_plot_params['plot_bound_d_min_Gb_delta']+self.sats_dmin_Gb[sat_indx]
+            vert_max = self.data_usage_plot_params['plot_bound_d_max_Gb_delta']+self.sats_dmax_Gb[sat_indx]
             plt.axis((0, time_to_end, vert_min, vert_max))
 
             current_axis = plt.gca()
@@ -967,7 +975,7 @@ class GPPlotting():
                     ecl_wind_start = (ecl_wind.start-plot_start).total_seconds()/time_divisor
                     ecl_wind_end = (ecl_wind.end-plot_start).total_seconds()/time_divisor
 
-                    height = 2
+                    height = vert_max-vert_min
                     ecl_plot = Rectangle((ecl_wind_start, vert_min), ecl_wind_end-ecl_wind_start, vert_min+height,alpha=0.3,fill=True,color='#202020',label= plot_labels["ecl"])
 
                     current_axis.add_patch(ecl_plot)
