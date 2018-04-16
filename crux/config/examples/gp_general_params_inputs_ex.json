@@ -18,7 +18,7 @@
         "min_rs_route_dv_Mb" :  50, 
         "run_rs_parallel" :  true, 
         "num_parallel_workers" :  8,
-        "include_crosslinks" :  false
+        "include_crosslinks" :  true
     },
     "route_selection_params_v1": {
         "num_paths" :  5,
@@ -68,12 +68,14 @@
         "plot_include_xlnk_labels":   false,
         "plot_activity_scheduling_results":   true,
         "resource_delta_t_s": 10,
-        "resource_margin_num_timepoints": 30,
+        "enforce_data_storage_constr": true,
+        "enforce_energy_storage_constr": true,
+        "resource_margin_obj_num_timepoints": 30,
         "run_activity_scheduling":  true
     },
     "pickle_params":  {
-        "pickle_route_selection_step1_results":                   false,
-        "pickle_route_selection_step2_results":                   false,
+        "pickle_route_selection_step1_results":                   true,
+        "pickle_route_selection_step2_results":                   true,
         "pickle_act_scheduling_results":                            false
     },
     "other_params": {
@@ -101,6 +103,13 @@
             "plot_bound_e_max_Wh": 21,
             "display_e_min_constraint": false,
             "display_e_max_constraint": false,
+            "include_eclipse_windows": true
+        },
+        "data_usage_plot_params": {
+            "plot_bound_d_min_Gbit": -10,    
+            "plot_bound_d_max_Gbit": 110,
+            "display_d_min_constraint": false,
+            "display_d_max_constraint": false,
             "include_eclipse_windows": true
         },
         "obs_aoi_metrics_plot_params" : {

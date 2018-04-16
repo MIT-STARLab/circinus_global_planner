@@ -9,7 +9,7 @@ from datetime import timedelta
 from math import floor
 
 class Dancecard(object):
-    def __init__(self, dancecard_start_dt, dancecard_end_dt, tstep_sec, item_init=list,mode='timestep'):
+    def __init__(self, dancecard_start_dt, dancecard_end_dt, tstep_sec, item_init=list,item_type=list,mode='timestep'):
         """ Maintains a time series of objects for use in scheduling problems
 
         Note that N is equal to the total duration of the dance card divided by 
@@ -69,7 +69,7 @@ class Dancecard(object):
                 # this "dancecard" stores a list of objects for a given index
                 self.dancecard = [[] for i in range(num_timepoints)]
             elif item_init == None:
-                # this "dancecard" stores for a given index
+                # this "dancecard" stores an arbitrary object for a given index
                 self.dancecard = [None for i in range(num_timepoints)]
             else:
                 raise NotImplementedError
@@ -83,6 +83,7 @@ class Dancecard(object):
         self.num_timesteps = num_timesteps
         self.num_timepoints = num_timepoints
         self.mode = mode
+        self.item_type = item_type
 
     def __setitem__(self, key, value):
         """ setter for internal dancecard by index"""
@@ -309,17 +310,61 @@ class Dancecard(object):
         if self.mode == 'timepoint':
             raise RuntimeError("this method can't be used in timepoint mode")
 
-        dancecard_last_indx = self.num_timesteps - 1
+        if not self.item_type == list:
+            raise RuntimeError("this method can't be used if this dancecard stores something other than lists")
 
         for wind in winds:
-            act_start_indx = Dancecard.get_ts_indx(wind.start, self.dancecard_start_dt, self.tstep_sec)
-            act_end_indx = Dancecard.get_ts_indx(wind.end, self.dancecard_start_dt, self.tstep_sec)
+            self.add_item_in_interval(wind, wind.start, wind.end)
 
-            act_start_indx = max(0, act_start_indx)
-            act_end_indx = min(dancecard_last_indx, act_end_indx)
+            # act_start_indx = Dancecard.get_ts_indx(wind.start, self.dancecard_start_dt, self.tstep_sec)
+            # act_end_indx = Dancecard.get_ts_indx(wind.end, self.dancecard_start_dt, self.tstep_sec)
 
-            for indx in range(act_start_indx, act_end_indx + 1): # Make sure to include end index
-                self.dancecard[indx].append(wind)  # add object to schedule. Note this is not a deepcopy!
+            # act_start_indx = max(0, act_start_indx)
+            # act_end_indx = min(dancecard_last_indx, act_end_indx)
+
+            # for indx in range(act_start_indx, act_end_indx + 1): # Make sure to include end index
+            #     # add object to schedule. Note this is not a deepcopy!
+
+            #     # if list is not initialized yet
+            #     if not self.dancecard[indx]:
+            #         self.dancecard[indx] = [wind]
+            #     else:
+            #         self.dancecard[indx].append(wind) 
+
+    def add_item_in_interval(self,item,start,end):
+
+        if self.mode == 'timepoint':
+            # round to nearest timepoint in the dancecard
+            # use pre tp indx here to be consistent. Timestep should not be large enough that this will break things
+            start_indx = self.get_tp_indx_pre_t(start)
+            end_indx = self.get_tp_indx_pre_t(end)
+
+
+        elif self.mode == 'timestep':
+            dancecard_last_indx = self.num_timesteps - 1
+
+            # todo: this usage of static method is a little stuffy, should update at some point to look like above code for timepoint
+            start_indx = Dancecard.get_ts_indx(start, self.dancecard_start_dt, self.tstep_sec)
+            end_indx = Dancecard.get_ts_indx(end, self.dancecard_start_dt, self.tstep_sec)
+
+            start_indx = max(0, start_indx)
+            end_indx = min(dancecard_last_indx, end_indx)
+
+
+        for indx in range(start_indx, end_indx + 1): # Make sure to include end index
+            # add object to schedule. Note this is not a deepcopy!
+
+            if self.item_type == list:
+                # if list is not initialized yet - we have None at this index
+                if not self.dancecard[indx]:
+                    self.dancecard[indx] = [item]
+                else:
+                    self.dancecard[indx].append(item) 
+
+            # if it's not a list-based dancecard, just set index equal to item
+            else:
+                self.dancecard[indx] = item
+
 
     def remove_winds_from_dancecard(self, winds, unmodified_yes = False):
         '''

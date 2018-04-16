@@ -44,20 +44,26 @@ class GPActivityScheduling():
         self.sched_start_utc_dt  = gp_inst_params['start_utc_dt']
         self.sched_end_utc_dt  = gp_inst_params['end_utc_dt']
         self.resource_delta_t_s  =as_params['resource_delta_t_s']
+        self.enforce_energy_storage_constr  =as_params['enforce_energy_storage_constr']
+        self.enforce_data_storage_constr  =as_params['enforce_data_storage_constr']
 
         #  the "effectively zero" number.
         self.dv_epsilon = as_params['dv_epsilon_Mb']
-        self.resource_margin_num_timepoints = as_params['resource_margin_num_timepoints']
+        self.resource_margin_obj_num_timepoints = as_params['resource_margin_obj_num_timepoints']
 
         self.obj_weights =as_params['obj_weights']
 
         self.power_params = sat_params['power_params_sorted']
+        self.data_storage_params = sat_params['data_storage_params_sorted']
         self.initial_state = sat_params['initial_state_sorted']
 
         # these lists are in order of satellite index because we've sorted 
         self.sats_init_estate_Wh = [sat_state['batt_e_Wh'] for sat_state in self.initial_state]
         self.sats_emin_Wh = [p_params['battery_storage_Wh']['e_min'][p_params['battery_option']] for p_params in self.power_params]
         self.sats_emax_Wh = [p_params['battery_storage_Wh']['e_max'][p_params['battery_option']] for p_params in self.power_params]
+
+        self.sats_dmin_Mb = [1000*ds_params['data_storage_Gbit']['d_min'][ds_params['storage_option']] for ds_params in self.data_storage_params]
+        self.sats_dmax_Mb = [1000*ds_params['data_storage_Gbit']['d_max'][ds_params['storage_option']] for ds_params in self.data_storage_params]
 
         self.energy_unit = "Wh"
 
@@ -201,6 +207,7 @@ class GPActivityScheduling():
                     
 
     def filter_routes( self,routes_flat):
+        """ todo: should filter routes based on having the observation be within the window of interest for scheduling"""
 
         new_routes = []
         for dmr in routes_flat:
@@ -285,12 +292,27 @@ class GPActivityScheduling():
             # construct a set of dance cards for every satellite, 
             # each of which keeps track of all of the activities of satellite 
             # can possibly execute at any given time slice delta T. 
-            act_dancecards = [Dancecard(self.sched_start_utc_dt,self.sched_end_utc_dt,self.resource_delta_t_s,mode='timestep') for sat_indx in range (self.num_sats)]
+            # this is for constructing energy storage constraints
+            # using resource_delta_t_s because this dancecard is solely for use in constructing resource constraints
+            es_act_dancecards = [Dancecard(self.sched_start_utc_dt,self.sched_end_utc_dt,self.resource_delta_t_s,item_init=None,mode='timestep') for sat_indx in range (self.num_sats)]
             
             for sat_indx in range (self.num_sats): 
-                act_dancecards[sat_indx].add_winds_to_dancecard(sat_acts[sat_indx])
-                act_dancecards[sat_indx].add_winds_to_dancecard(ecl_winds[sat_indx])
-                    
+                es_act_dancecards[sat_indx].add_winds_to_dancecard(sat_acts[sat_indx])
+                es_act_dancecards[sat_indx].add_winds_to_dancecard(ecl_winds[sat_indx])
+
+            # this is for data storage
+            # for each sat/timepoint, we store a list of all those data multi routes that are storing data on the sat at that timepoint
+            ds_route_dancecards = [Dancecard(self.sched_start_utc_dt,self.sched_end_utc_dt,self.resource_delta_t_s,item_init=None,mode='timepoint') for sat_indx in range (self.num_sats)]
+            
+            # add data routes to the dancecard
+            for dmr_indx,dmr in enumerate(routes_flat):
+                # list of type routing_objects.SatStorageInterval
+                dmr_ds_intervs = dmr.get_data_storage_intervals()
+
+                for interv in dmr_ds_intervs:
+                    # store the dmr object at this timepoint
+                    ds_route_dancecards[interv.sat_indx].add_item_in_interval(dmr_indx,interv.start,interv.end)
+
         except IndexError:
             raise RuntimeWarning('sat_indx out of range. Are you sure all of your input files are consistent? (including pickles)')        
 
@@ -310,9 +332,12 @@ class GPActivityScheduling():
 
         # timepoints is the indices, which starts at 0 
         #  NOTE: we assume the same time system for every satellite
-        self.time_getter_dc = act_dancecards[0]
-        num_timepoints = act_dancecards[0].num_timepoints
-        model.timepoint_indcs = pe.Set(initialize=  self.time_getter_dc.get_tp_indcs())
+        self.es_time_getter_dc = es_act_dancecards[0]
+        es_num_timepoints = es_act_dancecards[0].num_timepoints
+        model.es_timepoint_indcs = pe.Set(initialize=  self.es_time_getter_dc.get_tp_indcs())
+
+        self.ds_time_getter_dc = ds_route_dancecards[0]
+        model.ds_timepoint_indcs = pe.Set(initialize=  self.ds_time_getter_dc.get_tp_indcs())
 
         #  unique indices for observation and link acts
         model.obs_acts = pe.Set(initialize= obs_act_indcs)
@@ -370,6 +395,8 @@ class GPActivityScheduling():
         model.par_sats_estore_max = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_emax_Wh)})
         model.par_sats_edot_by_act = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_edot_by_act_W)})
 
+        model.par_sats_dstore_min = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_dmin_Mb)})
+        model.par_sats_dstore_max = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_dmax_Mb)})
 
         ##############################
         #  Make variables
@@ -385,7 +412,10 @@ class GPActivityScheduling():
         model.var_act_indic  = pe.Var (model.acts, within = pe.Binary)
         
         # satellite energy storage
-        model.var_sats_estore  = pe.Var (model.sats,  model.timepoint_indcs,  within = pe.NonNegativeReals)
+        model.var_sats_estore  = pe.Var (model.sats,  model.es_timepoint_indcs,  within = pe.NonNegativeReals)
+
+        # satellite data storage (data buffers)
+        model.var_sats_dstore  = pe.Var (model.sats,  model.ds_timepoint_indcs,  within = pe.NonNegativeReals)
 
         model.var_dmr_latency_sf_by_obs_indx = pe.Var (model.obs_acts,  within = pe.NonNegativeReals)
         
@@ -431,15 +461,6 @@ class GPActivityScheduling():
                 act1_uindx = all_acts_by_obj[act1]
                 length_1 = model.par_act_dv[act1_uindx]*model.var_activity_utilization[act1_uindx]/act1.ave_data_rate
                 model.c5b.add( length_1 >= model.var_act_indic[act1_uindx] * self.min_act_duration_s[type(act1)])
-
-                # if act1.window_ID == 464:
-                # if act1.window_ID == 63:
-                #     print('')
-                #     print(act1)
-                #     print('c5b')
-                #     print('sat_indx %d'%(sat_indx))
-                #     print(model.c5b[len(model.c5b)].expr.to_string())
-
                 
                 for  second_act_indx in  range (first_act_indx+1,num_sat_acts):
                     act2 = sat_acts[sat_indx][ second_act_indx]
@@ -461,18 +482,6 @@ class GPActivityScheduling():
                     elif (act2.center - act1.center).total_seconds() <= self.transition_time_s['simple']:
                         model.c4.add( model.var_act_indic[act1_uindx]+ model.var_act_indic[act2_uindx] <= 1)
 
-                        # if act1.window_ID == 464 or act2.window_ID == 464:
-                        # if act1.window_ID == 63 or act2.window_ID == 63:
-                        #     print('')
-                        #     print('found pair')
-                        #     print(act1)
-                        #     print(act2)
-                        #     print('c4')
-                        #     print(model.c4[len(model.c4)].expr.to_string())
-
-                            # from circinus_tools import debug_tools
-                            # debug_tools.debug_breakpt()
-
                     # If they don't overlap in center time, but they do overlap to some amount, then we need to constrain their end and start times to be consistent with one another
                     else:
                         center_time_diff = (act2.center - act1.center).total_seconds()
@@ -483,24 +492,13 @@ class GPActivityScheduling():
                         constr_disable_2 = self.big_M_act_t_dur_s*(1-model.var_act_indic[act2_uindx])
                         model.c5.add( center_time_diff - time_adjust_1 - time_adjust_2 + constr_disable_1 + constr_disable_2 >= self.transition_time_s['simple'])
 
-                        # if act1.window_ID == 464 or act2.window_ID == 464:
-                        # if act1.window_ID == 63 or act2.window_ID == 63:
-                        #     print('')
-                        #     print('found pair')
-                        #     print(act1)
-                        #     print(act2)
-                        #     print('c5')
-                        #     print(model.c5[len(model.c5)].expr.to_string())
-
-                            # from circinus_tools import debug_tools
-                            # debug_tools.debug_breakpt()
 
         #  energy constraints [6]
         model.c6  = pe.ConstraintList()
         for sat_indx in range (self.num_sats): 
 
             # tp_indx serves as an index into the satellite activity dance cards
-            for tp_indx in model.timepoint_indcs:
+            for tp_indx in model.es_timepoint_indcs:
                 #  constraining first time step to initial energy storage
                 #  continue for loop afterwards because no geq/leq constraints needed for this index
                 if tp_indx == 0:
@@ -511,45 +509,71 @@ class GPActivityScheduling():
                 model.c6.add( model.var_sats_estore[sat_indx,tp_indx] >= model.par_sats_estore_min[sat_indx])
                 model.c6.add( model.var_sats_estore[sat_indx,tp_indx] <= model.par_sats_estore_max[sat_indx])
 
-                # determine activity energy consumption
-                charging = True
-                activity_delta_e = 0 
-                #  get the activities that were active during the time step immediately preceding time point
-                activities = act_dancecards[sat_indx].get_objects_at_ts_pre_tp_indx(tp_indx)
-                for act in activities:
-                    #  if this is a "standard activity" that we can choose to perform or not
-                    if type(act) in self.standard_activities:
-                        act_uindx = all_acts_by_obj[act]
-                        activity_delta_e += (
-                            model.par_sats_edot_by_act[sat_indx][self.act_type_map[type(act)]] 
-                            * model.var_activity_utilization[act_uindx]
-                            * model.par_resource_delta_t
-                        )
+                if self.enforce_energy_storage_constr:
+                    # determine activity energy consumption
+                    charging = True
+                    activity_delta_e = 0 
+                    #  get the activities that were active during the time step immediately preceding time point
+                    activities = es_act_dancecards[sat_indx].get_objects_at_ts_pre_tp_indx(tp_indx)
+                    # activities may be none if nothing is happening at timestep, to minimize RAM usage
+                    if activities:
+                        for act in activities:
+                            #  if this is a "standard activity" that we can choose to perform or not
+                            if type(act) in self.standard_activities:
+                                act_uindx = all_acts_by_obj[act]
+                                activity_delta_e += (
+                                    model.par_sats_edot_by_act[sat_indx][self.act_type_map[type(act)]] 
+                                    * model.var_activity_utilization[act_uindx]
+                                    * model.par_resource_delta_t
+                                )
 
-                    #  if the satellite is not in sunlight then we can't charge
-                    elif type(act) == EclipseWindow:
-                        charging = False
+                            #  if the satellite is not in sunlight then we can't charge
+                            elif type(act) == EclipseWindow:
+                                charging = False
 
-                # add in charging energy contribution ( if possible)
-                charging_delta_e = model.par_sats_edot_by_act[sat_indx]['charging']*model.par_resource_delta_t if charging else 0
+                    # add in charging energy contribution ( if possible)
+                    charging_delta_e = model.par_sats_edot_by_act[sat_indx]['charging']*model.par_resource_delta_t if charging else 0
 
-                #  base-level satellite energy usage (not including additional activities)
-                base_delta_e = model.par_sats_edot_by_act[sat_indx]['base']*model.par_resource_delta_t
+                    #  base-level satellite energy usage (not including additional activities)
+                    base_delta_e = model.par_sats_edot_by_act[sat_indx]['base']*model.par_resource_delta_t
 
-                # maximum bound of energy at current time step based on last time step
-                model.c6.add( model.var_sats_estore[sat_indx,tp_indx] <= 
-                    model.var_sats_estore[sat_indx,tp_indx-1]
-                    + activity_delta_e
-                    + charging_delta_e
-                    + base_delta_e
-                )
+                    # maximum bound of energy at current time step based on last time step
+                    model.c6.add( model.var_sats_estore[sat_indx,tp_indx] <= 
+                        model.var_sats_estore[sat_indx,tp_indx-1]
+                        + activity_delta_e
+                        + charging_delta_e
+                        + base_delta_e
+                    )
 
-                # maximum bound of energy at current time step based on last time step
-                model.c6.add( model.var_sats_estore[sat_indx,tp_indx] >= 
-                    model.var_sats_estore[sat_indx,tp_indx-1]
-                    + activity_delta_e
-                    + base_delta_e
-                )
+                    # maximum bound of energy at current time step based on last time step
+                    model.c6.add( model.var_sats_estore[sat_indx,tp_indx] >= 
+                        model.var_sats_estore[sat_indx,tp_indx-1]
+                        + activity_delta_e
+                        + base_delta_e
+                    )
+
+
+        #  data storage constraints [7]
+        model.c7  = pe.ConstraintList()
+        for sat_indx in range (self.num_sats): 
+
+            # tp_indx serves as an index into the satellite data storage dance cards
+            for tp_indx in model.ds_timepoint_indcs:
+
+                # todo: add in an intital data volume value?
+                #  maximum storage constraints
+                model.c7.add( model.var_sats_dstore[sat_indx,tp_indx] <= model.par_sats_dstore_max[sat_indx])
+
+                if self.enforce_data_storage_constr:
+                    routes_storing = ds_route_dancecards[sat_indx][tp_indx]
+
+                    # todo: this may be too slow to use == below. Change it back to >= and use a better approach to extract real data storage values in extract_resource_usage below?
+                    # constrain the minimum data storage at this tp by the amount of data volume being buffered by each route passing through the sat
+                    if routes_storing:
+                        model.c7.add( model.var_sats_dstore[sat_indx,tp_indx] == sum(model.par_dmr_dv[p]*model.var_dmr_utilization[p] for p in routes_storing))
+                    else:
+                        model.c7.add( model.var_sats_dstore[sat_indx,tp_indx] == 0)
+
 
 
         #  observation latency score factor constraints [8]
@@ -571,7 +595,7 @@ class GPActivityScheduling():
                     dmr_latency_sf_by_dmr_indx[dmrs_obs[dmr_obs_indx]] + 
                     self.big_M_lat * sum(model.var_dmr_indic[p] for p in dmrs_obs[dmr_obs_indx+1:num_dmrs_obs]) )
 
-                #  note: use c8[indx].expr.to_string()  to print out the constraint in a human readable form
+                #  note: use model.c8[indx].expr.to_string()  to print out the constraint in a human readable form
                 #                ^ USES BASE 1 INDEXING!!! WTF??
                 
 
@@ -584,10 +608,10 @@ class GPActivityScheduling():
 
 
         #  determine which time points to use as "spot checks" on resource margin. These are the points that will be used in the objective function for maximizing resource margin
-        timepoint_spacing = ceil(num_timepoints/self.resource_margin_num_timepoints)
+        timepoint_spacing = ceil(es_num_timepoints/self.resource_margin_obj_num_timepoints)
         # need to turn the generator into a list for slicing
         #  note: have to get the generator again
-        decimated_tp_indcs = list(self.time_getter_dc.get_tp_indcs())[::timepoint_spacing]
+        decimated_tp_indcs = list(self.es_time_getter_dc.get_tp_indcs())[::timepoint_spacing]
         rsrc_norm_f = len(decimated_tp_indcs) * len(model.sats)
 
         def obj_rule(model):
@@ -740,7 +764,7 @@ class GPActivityScheduling():
         # TODO: this code feels super inefficient somehow.  make it better?
         for sat_indx, sat in enumerate (self.model.sats):
             last_tp_indx = 0
-            for tp_indx in self.model.timepoint_indcs:
+            for tp_indx in self.model.es_timepoint_indcs:
 
                 if (tp_indx - last_tp_indx) < decimation_factor:
                     continue
@@ -748,11 +772,33 @@ class GPActivityScheduling():
                     e_vals[sat_indx].append(pe.value(self.model.var_sats_estore[sat,tp_indx]))
 
                     if sat_indx == 0:
-                        t_vals.append(self.time_getter_dc.get_tp_from_tp_indx(tp_indx,out_units='minutes'))
+                        t_vals.append(self.es_time_getter_dc.get_tp_from_tp_indx(tp_indx,out_units='minutes'))
 
         energy_usage['time_mins'] = t_vals
         energy_usage['e_sats'] = e_vals
 
-        return  energy_usage
+
+        data_usage = {}
+
+        t_vals = []
+        d_vals = [[] for sat_indx in range ( self.num_sats)]
+
+        # TODO: this code feels super inefficient somehow.  make it better?
+        for sat_indx, sat in enumerate (self.model.sats):
+            last_tp_indx = 0
+            for tp_indx in self.model.ds_timepoint_indcs:
+
+                if (tp_indx - last_tp_indx) < decimation_factor:
+                    continue
+                else:
+                    d_vals[sat_indx].append(pe.value(self.model.var_sats_dstore[sat,tp_indx]))
+
+                    if sat_indx == 0:
+                        t_vals.append(self.ds_time_getter_dc.get_tp_from_tp_indx(tp_indx,out_units='minutes'))
+
+        data_usage['time_mins'] = t_vals
+        data_usage['d_sats'] = d_vals
+
+        return  energy_usage, data_usage
 
 

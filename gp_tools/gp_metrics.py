@@ -653,8 +653,8 @@ class GPMetrics():
         valid = len(av_aoi_by_targID_rs) > 0
 
         stats =  {}
-        av_aoi_vals_rs = [av_aoi for targID,av_aoi in av_aoi_by_targID_rs.items() if targID in as_targIDs_found]
-        av_aoi_vals_sched = [av_aoi for targID,av_aoi in av_aoi_by_targID_sched.items() if targID in as_targIDs_found]
+        av_aoi_vals_rs = [av_aoi for targID,av_aoi in av_aoi_by_targID_rs.items() if targID in rs_targIDs_found]
+        av_aoi_vals_sched = [av_aoi for targID,av_aoi in av_aoi_by_targID_sched.items() if targID in rs_targIDs_found]
         stats['av_av_aoi_rs'] = np.mean(av_aoi_vals_rs) if valid else None
         stats['av_av_aoi_sched'] = np.mean(av_aoi_vals_sched) if valid else None
         stats['std_av_aoi_rs'] = np.std(av_aoi_vals_rs) if valid else None
@@ -672,7 +672,7 @@ class GPMetrics():
 
         if verbose:
             print('------------------------------')
-            print('AoI values (only considering scheduled obs windows)')
+            print('AoI values (considering all obs windows from RS)')
             print('num rs targ IDs: %d'%(len(rs_targIDs_found)))
             print('num as targ IDs: %d'%(len(as_targIDs_found)))
             print("%s: \t\t\t\t %f"%('av_av_aoi_rs',stats['av_av_aoi_rs']))

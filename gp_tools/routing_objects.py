@@ -6,9 +6,12 @@ from copy import copy
 
 from circinus_tools  import  constants as const
 from .custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow
+from collections import namedtuple
 
 DATE_STRING_FORMAT = 'short'
 # DATE_STRING_FORMAT = 'iso'
+
+SatStorageInterval = namedtuple('SatStorageInterval','sat_indx start end')
 
 def short_date_string(dt):
     return dt.strftime("%H:%M:%S")
@@ -163,6 +166,15 @@ class DataMultiRoute():
             return True
         else:
             return False
+
+    def get_data_storage_intervals(self):
+        storage_intervals = []
+
+        # we can do this independently because if this is a valid DMR, then the data volume (or bandwidth usage) for each route is mutex, and we don't have to worry about overlap
+        for dr in self.data_routes:
+            storage_intervals += dr.get_data_storage_intervals()
+
+        return storage_intervals
 
 
 class DataRoute():
@@ -413,6 +425,19 @@ class DataRoute():
                         raise NotImplementedError
 
         return False
+
+    def get_data_storage_intervals(self):
+        storage_intervals = []
+
+        # teehee, I like this variable name...
+        for windex in range(len(self.route)-1):
+            wind1 = self.route[windex]
+            wind2 = self.route[windex+1]
+            # the satellite storing the data is the satellite at which wind2 starts this is true for all cases along a route (wind2 is either an xlnk or a dlnk)
+            # the storage interval we define as being from the start of the first window to the end of the second - this means that the data can arrive on the storage sat anywhere during the first window, and can leave anywhere during the second. Note this is conservative.
+            storage_intervals.append( SatStorageInterval(self.window_start_sats[wind2],wind1.start,wind2.end) )
+
+        return storage_intervals
 
 
 

@@ -126,6 +126,7 @@ class GlobalPlannerRunner:
         pickle_stuff['ecl_winds'] = ecl_winds
         pickle_stuff['scheduled_routes'] = scheduled_routes
         pickle_stuff['energy_usage'] = energy_usage
+        pickle_stuff['data_usage'] = data_usage
         pickle_stuff['window_uid'] = window_uid
         pickle_name ='pickles/as_%s' %(datetime.utcnow().isoformat().replace (':','_'))
         with open('%s.pkl' % ( pickle_name),'wb') as f:
@@ -137,7 +138,7 @@ class GlobalPlannerRunner:
 
         p = pickle.load (open ( as_pickle,'rb'))
 
-        return p['routes_by_obs'],p['ecl_winds'],p['scheduled_routes'],p['energy_usage'],p['window_uid']
+        return p['routes_by_obs'],p['ecl_winds'],p['scheduled_routes'],p['energy_usage'],p['data_usage'],p['window_uid']
 
     
 
@@ -158,11 +159,11 @@ class GlobalPlannerRunner:
         print('extract_routes')
         #  make a copy of the windows in the extracted routes so we don't mess with the original objects ( just to be extra careful)
         routes = gp_as.extract_utilized_routes ( copy_routes = True, verbose  = False)
-        energy_usage = gp_as.extract_resource_usage(  decimation_factor =1)
+        energy_usage,data_usage = gp_as.extract_resource_usage(  decimation_factor =1)
 
         time_elapsed = t_b-t_a
 
-        return  routes, energy_usage
+        return  routes, energy_usage, data_usage
 
     def calc_activity_scheduling_results ( self,obs_winds,dlnk_winds_flat,rs_routes_by_obs,sched_routes, energy_usage):
         gp_met = GPMetrics(self.params)
@@ -208,7 +209,7 @@ class GlobalPlannerRunner:
 
         plot_outputs = {}
         plot_outputs['rs_targIDs_found'] = aoi_targ_stats['rs_targIDs_found']
-        plot_outputs['obs_aoi_curves_by_targID'] = aoi_targ_stats['aoi_curves_by_targID_rs']
+        plot_outputs['obs_aoi_curves_by_targID'] = aoi_targ_stats['aoi_curves_by_targID_sched']
         plot_outputs['cmd_aoi_curves_by_sat_indx'] = aoi_sat_cmd_stats['aoi_curves_by_sat_indx']
         plot_outputs['tlm_aoi_curves_by_sat_indx'] = aoi_sat_tlm_stats['aoi_curves_by_sat_indx']
         return plot_outputs
@@ -576,7 +577,7 @@ class GlobalPlannerRunner:
                 )
 
 
-    def  plot_activity_scheduling_results ( self,routes_by_obs,routes,energy_usage,ecl_winds,metrics_plot_inputs):
+    def  plot_activity_scheduling_results ( self,routes_by_obs,routes,energy_usage,data_usage,ecl_winds,metrics_plot_inputs):
 
         # do a bunch of stuff to extract the windows from all of the routes as indexed by observation
         # note that this stuff is not thewindows from the scheduled routes, but rather the windows from all the route selected in route selection
@@ -607,8 +608,8 @@ class GlobalPlannerRunner:
         sched_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind = self.io_proc.extract_flat_windows (routes,copy_windows= False)
 
         # 
-        # sats_to_include =  [sat_id for sat_id in self.sat_params['sat_id_order']]
-        sats_to_include =  [sat_id for sat_id in range(20,30)]
+        sats_to_include =  [sat_id for sat_id in self.sat_params['sat_id_order']]
+        # sats_to_include =  [sat_id for sat_id in range(20,30)]
         # sats_to_include = [12,13,14,15,16]
 
         # sats_to_include =  range(20,30)
@@ -658,17 +659,30 @@ class GlobalPlannerRunner:
             ecl_winds,
             self.as_inst_params['start_utc_dt'],
             self.as_inst_params['end_utc_dt'],
-            plot_title = 'Energy Utilization',
+            plot_title = 'Energy Storage Utilization',
             plot_size_inches = (18,12),
             show=  False,
             fig_name='plots/test_energy.pdf'
+        )
+
+        self.gp_plot.plot_data_usage(
+            sats_to_include,
+            data_usage,
+            ecl_winds,
+            self.as_inst_params['start_utc_dt'],
+            self.as_inst_params['end_utc_dt'],
+            plot_title = 'Data Storage Utilization',
+            plot_size_inches = (18,12),
+            show=  False,
+            fig_name='plots/test_data.pdf'
         )
 
         found_targIDs = metrics_plot_inputs['rs_targIDs_found']
         # targs_to_include = [targ['id'] for targ in self.obs_params['targets']]
         # targs_to_include = [0,3,4,7,8]
         # targs_to_include = range(15)
-        targs_to_include = found_targIDs[0:10]
+        # targs_to_include = found_targIDs[0:10]
+        targs_to_include = found_targIDs
 
         self.gp_plot.plot_obs_aoi(
             targs_to_include,
@@ -872,25 +886,22 @@ class GlobalPlannerRunner:
             return None
 
         if self.other_params['as_pickle_input']:
-            sel_routes_by_obs,ecl_winds,scheduled_routes,energy_usage,window_uid = self.unpickle_actsc_stuff()
+            sel_routes_by_obs,ecl_winds,scheduled_routes,energy_usage,data_usage, window_uid = self.unpickle_actsc_stuff()
         else:
             found_routes = any([len(rts) >0 for rts in sel_routes_by_obs.values()])
 
             #  to protect against the weird case where we didn't find any routes ( shouldn't happen, unless we're at the very end of the simulation, or you're trying to break things)
             if found_routes:
-                scheduled_routes,energy_usage = self.run_nominal_activity_scheduling(sel_routes_by_obs,ecl_winds)
+                scheduled_routes,energy_usage,data_usage = self.run_nominal_activity_scheduling(sel_routes_by_obs,ecl_winds)
             else:
-                scheduled_routes,energy_usage = ([],None)
+                scheduled_routes,energy_usage,data_usage = ([],None,None)
                 print('No routes were found in route selection; not running activity selection')
 
         # if we are saving to file, do that
         if self.pickle_params['pickle_act_scheduling_results']:
-            self.pickle_actsc_stuff(sel_routes_by_obs,ecl_winds,scheduled_routes,energy_usage,window_uid)
+            self.pickle_actsc_stuff(sel_routes_by_obs,ecl_winds,scheduled_routes,energy_usage,data_usage, window_uid)
 
         metrics_plot_inputs = self.calc_activity_scheduling_results (obs_winds,dlnk_winds_flat,sel_routes_by_obs,scheduled_routes, energy_usage)
-
-        # from circinus_tools import debug_tools
-        # debug_tools.debug_breakpt()
 
 
         #################################
@@ -900,7 +911,7 @@ class GlobalPlannerRunner:
         print('activity scheduling output stage')
 
         if self.as_params['plot_activity_scheduling_results']:
-            self.plot_activity_scheduling_results(sel_routes_by_obs,scheduled_routes,energy_usage,ecl_winds,metrics_plot_inputs)
+            self.plot_activity_scheduling_results(sel_routes_by_obs,scheduled_routes,energy_usage,data_usage,ecl_winds,metrics_plot_inputs)
           
 
         # if you want to see windows from RS output...
@@ -953,10 +964,11 @@ class PipelineRunner:
             orbit_prop_inputs['sat_params']['pl_data_rate'] = orbit_prop_inputs['sat_params']['payload_data_rate_Mbps']
             # orbit_prop_inputs['sat_orbit_params'], dummy = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_orbit_params'],force_duplicate =  True)
             orbit_prop_inputs['sat_params']['power_params'], all_sat_ids1 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['power_params'])
-            orbit_prop_inputs['sat_params']['initial_state'], all_sat_ids2 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['initial_state'])
+            orbit_prop_inputs['sat_params']['data_storage_params'], all_sat_ids2 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['data_storage_params'])
+            orbit_prop_inputs['sat_params']['initial_state'], all_sat_ids3 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['initial_state'])
 
             #  check if  we saw the same list of satellite IDs from each unpacking. if not that's a red flag that the inputs could be wrongly specified
-            if all_sat_ids1 != all_sat_ids2:
+            if all_sat_ids1 != all_sat_ids2 or all_sat_ids1 != all_sat_ids3:
                 raise Exception('Saw differing sat ID orders')
 
             #  grab the list for satellite ID order.  if it's "default", we will create it and save it for future use here
@@ -966,6 +978,7 @@ class PipelineRunner:
             orbit_prop_inputs['sat_params']['sat_id_order'] = sat_id_order
 
             orbit_prop_inputs['sat_params']['power_params_sorted'] = io_tools.sort_input_params_by_sat_IDs(orbit_prop_inputs['sat_params']['power_params'],sat_id_order)
+            orbit_prop_inputs['sat_params']['data_storage_params_sorted'] = io_tools.sort_input_params_by_sat_IDs(orbit_prop_inputs['sat_params']['data_storage_params'],sat_id_order)
             orbit_prop_inputs['sat_params']['initial_state_sorted'] = io_tools.sort_input_params_by_sat_IDs(orbit_prop_inputs['sat_params']['initial_state'],sat_id_order)
         else:
             raise NotImplementedError
