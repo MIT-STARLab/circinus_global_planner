@@ -120,7 +120,6 @@ class DlnkWindow(CommWindow):
         '''
 
         self.sat_indx = sat_indx
-        # TODO: this should be gs_indx, not ID
         self.gs_indx = gs_indx
         self.sat_gs_indx = sat_gs_indx
         self.routed_data_vol = 0

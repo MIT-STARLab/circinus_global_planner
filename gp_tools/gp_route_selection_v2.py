@@ -82,7 +82,7 @@ class RouteRecord():
         :rtype: {list[DeconflictedRoute]}
         """
 
-        # TODO: for future, should add removal of any time conflicts between the routes (e.g. transition times or temporal keep out zones around the activities in self.routes). Would probably add time keep out zones in for dr_1 in self.routes: loop and check them in for dr_2_indx, dr_2 in enumerate (rr_other.routes): loop.
+        # TODO: for future, should add removal of any time conflicts between the routes (e.g. transition times or temporal keep out zones around the activities in self.routes). Would probably add time keep out zones in for dr_1 in self.routes: loop and check them in for dr_2_indx, dr_2 in enumerate (rr_other.routes): loop. (search the todos in this file!)
 
         deconflicted_routes = []
 
@@ -108,6 +108,9 @@ class RouteRecord():
 
             #  now add in the windows found in the other routes, checking as we go if there is enough data volume availability for them to actually be included in the deconflication optimization below
             for dr_2_indx, dr_2 in enumerate (rr_other.routes):
+                # todo: to implement transition time constraints, I'd probably add a check right in here that the new xlnk window being appended to the route starts sufficiently far after the current end of the route
+                # todo: for overlap, I'd check for any disallowed overlap with any of the winds in any of self.routes
+
                 keep_this_indx = True
                 for wind in dr_2:
                     #  if we didn't yet encounter this window in any of the routes in self
@@ -565,6 +568,8 @@ class GPDataRouteSelection():
 
                             #  figure out if we want to use the route record from the last timepoint, or if a cross-linked has delivered more data volume. grab the latter if valid
                             rr_pre_dlnk = get_best_rr(act.start,tp_indx-1,sat_indx)
+
+                            # todo: should check transition time between last xlnk in each of the routes and the start of the downlink - I'd add that check here, or maybe in the loop below
 
                             #  if the route record actually shows some data volume arriving at this satellite, AND we have a downlink, then we have found an optimal route to the downlink. Create a final route record and save for later.
                             if rr_pre_dlnk.dv > 0:
