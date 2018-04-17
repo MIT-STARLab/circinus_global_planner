@@ -878,6 +878,7 @@ class GPActivityScheduling():
         t_vals = []
         e_vals = [[] for sat_indx in range ( self.num_sats)]
 
+        # note that this extraction uses the energy variables from the optimization, which are currently not constrained to be exactly equal to the energy delta from t-1 to t; they are merely bounded by it. Todo: extract concrete values based on activity execution times
         # TODO: this code feels super inefficient somehow.  make it better?
         for sat_indx, sat in enumerate (self.model.sats):
             last_tp_indx = 0

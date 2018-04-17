@@ -72,6 +72,7 @@ class GPPlotting():
         route_indcs_by_wind,
         plot_start,
         plot_end,
+        base_time,
         plot_title = 'Route Plot', 
         plot_size_inches = (12,12),
         plot_include_dlnk_labels = True,
@@ -88,7 +89,9 @@ class GPPlotting():
         if self.time_units == 'minutes':
             time_divisor = 60
         
-        time_to_end = (plot_end-plot_start).total_seconds()/time_divisor
+        # time_to_end = (plot_end-plot_start).total_seconds()/time_divisor
+        start_time = (plot_start-base_time).total_seconds()/time_divisor
+        end_time = (plot_end-base_time).total_seconds()/time_divisor
 
         num_sats = len(sats_ids_list)
 
@@ -142,8 +145,8 @@ class GPPlotting():
             plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
             plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
-            # set axis length. Time starts at 0
-            plt.axis((0, time_to_end, 0, 2))
+            # set axis length.
+            plt.axis((start_time, end_time, 0, 2))
 
             current_axis = plt.gca()
 
@@ -186,8 +189,8 @@ class GPPlotting():
                 if len(all_xlnk_winds_flat) > 0:
                     for xlnk_wind in all_xlnk_winds_flat[sat_indx]:
 
-                        xlnk_wind_start = (xlnk_wind.start-plot_start).total_seconds()/time_divisor
-                        xlnk_wind_end = (xlnk_wind.end-plot_start).total_seconds()/time_divisor
+                        xlnk_wind_start = (xlnk_wind.start-base_time).total_seconds()/time_divisor
+                        xlnk_wind_end = (xlnk_wind.end-base_time).total_seconds()/time_divisor
 
                         # plot the task duration
                         bottom_vert_loc = xlnk_choices_rectangle_rotator
@@ -208,8 +211,8 @@ class GPPlotting():
                 if len(all_obs_winds_flat) > 0:
                     for obs_wind in all_obs_winds_flat[sat_indx]:
 
-                        obs_start = (obs_wind.start-plot_start).total_seconds()/time_divisor
-                        obs_end = (obs_wind.end-plot_start).total_seconds()/time_divisor
+                        obs_start = (obs_wind.start-base_time).total_seconds()/time_divisor
+                        obs_end = (obs_wind.end-base_time).total_seconds()/time_divisor
 
                         # plot the task duration
                         bottom_vert_loc = obs_choices_rectangle_rotator
@@ -230,8 +233,8 @@ class GPPlotting():
                 if len(all_dlnk_winds_flat) > 0:
                     for dlnk_wind in all_dlnk_winds_flat[sat_indx]:
 
-                        dlnk_wind_start = (dlnk_wind.start-plot_start).total_seconds()/time_divisor
-                        dlnk_wind_end = (dlnk_wind.end-plot_start).total_seconds()/time_divisor
+                        dlnk_wind_start = (dlnk_wind.start-base_time).total_seconds()/time_divisor
+                        dlnk_wind_end = (dlnk_wind.end-base_time).total_seconds()/time_divisor
 
                         # plot the task duration
                         bottom_vert_loc = dlnk_choices_rectangle_rotator
@@ -260,8 +263,8 @@ class GPPlotting():
                 if xlnk_winds_flat and len(xlnk_winds_flat) > 0:
                     for xlnk_wind in xlnk_winds_flat[sat_indx]:
 
-                        xlnk_start = (xlnk_wind.start-plot_start).total_seconds()/time_divisor
-                        xlnk_end = (xlnk_wind.end-plot_start).total_seconds()/time_divisor
+                        xlnk_start = (xlnk_wind.start-base_time).total_seconds()/time_divisor
+                        xlnk_end = (xlnk_wind.end-base_time).total_seconds()/time_divisor
 
                         #  update the rotator value if we've already added this window to the plot in the "choices" code above
                         if xlnk_wind in xlnk_choices_rectangle_rotator_hist.keys ():
@@ -314,8 +317,8 @@ class GPPlotting():
                 if obs_winds_flat and len(obs_winds_flat) > 0:
                     for obs_wind in obs_winds_flat[sat_indx]:
 
-                        obs_start = (obs_wind.start-plot_start).total_seconds()/time_divisor
-                        obs_end = (obs_wind.end-plot_start).total_seconds()/time_divisor
+                        obs_start = (obs_wind.start-base_time).total_seconds()/time_divisor
+                        obs_end = (obs_wind.end-base_time).total_seconds()/time_divisor
 
                         #  update the rotator value if we've already added this window to the plot in the "choices" code above
                         if obs_wind in obs_choices_rectangle_rotator_hist.keys ():
@@ -338,8 +341,8 @@ class GPPlotting():
                 if dlnk_winds_flat and len(dlnk_winds_flat) > 0:
                     for dlnk_wind in dlnk_winds_flat[sat_indx]:
 
-                        dlnk_start = (dlnk_wind.start-plot_start).total_seconds()/time_divisor
-                        dlnk_end = (dlnk_wind.end-plot_start).total_seconds()/time_divisor
+                        dlnk_start = (dlnk_wind.start-base_time).total_seconds()/time_divisor
+                        dlnk_end = (dlnk_wind.end-base_time).total_seconds()/time_divisor
 
                         gs_indx = dlnk_wind.gs_indx
 
@@ -431,6 +434,7 @@ class GPPlotting():
         route_indcs_by_wind,
         plot_start,
         plot_end,
+        base_time,
         plot_title = 'Route Data Plot', 
         plot_size_inches = (12,12),
         plot_include_labels = True,
@@ -446,7 +450,9 @@ class GPPlotting():
         if self.time_units == 'minutes':
             time_divisor = 60
         
-        time_to_end = (plot_end-plot_start).total_seconds()/time_divisor
+        # time_to_end = (plot_end-plot_start).total_seconds()/time_divisor
+        start_time = (plot_start-base_time).total_seconds()/time_divisor
+        end_time = (plot_end-base_time).total_seconds()/time_divisor
 
         num_sats = len(sats_ids_list)
 
@@ -498,8 +504,8 @@ class GPPlotting():
                 labelleft='off'
             )
 
-            # set axis length. Time starts at 0
-            plt.axis((0, time_to_end, 0, 2))
+            # set axis length.
+            plt.axis((start_time, end_time, 0, 2))
 
             current_axis = plt.gca()
 
@@ -539,8 +545,8 @@ class GPPlotting():
                 if len(all_obs_winds_flat) > 0:
                     for obs_wind in all_obs_winds_flat[sat_indx]:
 
-                        obs_start = (obs_wind.start-plot_start).total_seconds()/time_divisor
-                        obs_end = (obs_wind.end-plot_start).total_seconds()/time_divisor
+                        obs_start = (obs_wind.start-base_time).total_seconds()/time_divisor
+                        obs_end = (obs_wind.end-base_time).total_seconds()/time_divisor
                         middle = (obs_end + obs_start)/2
 
                         # plot the task duration
@@ -560,8 +566,8 @@ class GPPlotting():
                 if len(obs_winds_flat) > 0:
                     for obs_wind in obs_winds_flat[sat_indx]:
 
-                        obs_start = (obs_wind.start-plot_start).total_seconds()/time_divisor
-                        obs_end = (obs_wind.end-plot_start).total_seconds()/time_divisor
+                        obs_start = (obs_wind.start-base_time).total_seconds()/time_divisor
+                        obs_end = (obs_wind.end-base_time).total_seconds()/time_divisor
                         middle = (obs_end + obs_start)/2
 
                         #  update the rotator value if we've already added this window to the plot in the "choices" code above
@@ -591,8 +597,8 @@ class GPPlotting():
                 if len(all_dlnk_winds_flat) > 0:
                     for dlnk_wind in all_dlnk_winds_flat[sat_indx]:
 
-                        dlnk_wind_start = (dlnk_wind.start-plot_start).total_seconds()/time_divisor
-                        dlnk_wind_end = (dlnk_wind.end-plot_start).total_seconds()/time_divisor
+                        dlnk_wind_start = (dlnk_wind.start-base_time).total_seconds()/time_divisor
+                        dlnk_wind_end = (dlnk_wind.end-base_time).total_seconds()/time_divisor
                         middle = (dlnk_wind_end + dlnk_wind_start)/2
 
                         # plot the task duration
@@ -618,8 +624,8 @@ class GPPlotting():
                 if len(dlnk_winds_flat) > 0:
                     for dlnk_wind in dlnk_winds_flat[sat_indx]:
 
-                        dlnk_start = (dlnk_wind.start-plot_start).total_seconds()/time_divisor
-                        dlnk_end = (dlnk_wind.end-plot_start).total_seconds()/time_divisor
+                        dlnk_start = (dlnk_wind.start-base_time).total_seconds()/time_divisor
+                        dlnk_end = (dlnk_wind.end-base_time).total_seconds()/time_divisor
                         middle = (dlnk_end + dlnk_start)/2
 
                         gs_indx = dlnk_wind.gs_indx
@@ -676,8 +682,8 @@ class GPPlotting():
                 if len(all_xlnk_winds_flat) > 0:
                     for xlnk_wind in all_xlnk_winds_flat[sat_indx]:
 
-                        xlnk_wind_start = (xlnk_wind.start-plot_start).total_seconds()/time_divisor
-                        xlnk_wind_end = (xlnk_wind.end-plot_start).total_seconds()/time_divisor
+                        xlnk_wind_start = (xlnk_wind.start-base_time).total_seconds()/time_divisor
+                        xlnk_wind_end = (xlnk_wind.end-base_time).total_seconds()/time_divisor
                         middle = (xlnk_wind_end + xlnk_wind_start)/2
 
                         # plot the task duration
@@ -701,8 +707,8 @@ class GPPlotting():
                 if len(xlnk_winds_flat) > 0:
                     for xlnk_wind in xlnk_winds_flat[sat_indx]:
 
-                        xlnk_start = (xlnk_wind.start-plot_start).total_seconds()/time_divisor
-                        xlnk_end = (xlnk_wind.end-plot_start).total_seconds()/time_divisor
+                        xlnk_start = (xlnk_wind.start-base_time).total_seconds()/time_divisor
+                        xlnk_end = (xlnk_wind.end-base_time).total_seconds()/time_divisor
                         middle = (xlnk_end + xlnk_start)/2
 
                         #  update the rotator value if we've already added this window to the plot in the "choices" code above
@@ -787,6 +793,7 @@ class GPPlotting():
         ecl_winds,
         plot_start,
         plot_end,
+        base_time,
         plot_title = 'Energy Utilization', 
         plot_size_inches = (12,12),
         show=False,
@@ -804,7 +811,9 @@ class GPPlotting():
         if self.time_units == 'minutes':
             time_divisor = 60
         
-        time_to_end = (plot_end-plot_start).total_seconds()/time_divisor
+        # time_to_end = (plot_end-plot_start).total_seconds()/time_divisor
+        start_time = (plot_start-base_time).total_seconds()/time_divisor
+        end_time = (plot_end-base_time).total_seconds()/time_divisor
 
         num_sats = len(sats_ids_list)
 
@@ -846,21 +855,22 @@ class GPPlotting():
                 labelleft='off'
             )
 
-            # set axis length. Time starts at 0
+            # set axis length.
             vert_min = self.energy_usage_plot_params['plot_bound_e_min_Wh_delta']+self.sats_emin_Wh[sat_indx]
             vert_max = self.energy_usage_plot_params['plot_bound_e_max_Wh_delta']+self.sats_emax_Wh[sat_indx]
-            plt.axis((0, time_to_end, vert_min, vert_max))
+            plt.axis((start_time, end_time, vert_min, vert_max))
 
             current_axis = plt.gca()
 
             # the first return value is a handle for our line, everything else can be ignored
             if energy_usage:
-                e_usage_plot,*dummy = plt.plot(energy_usage['time_mins'],energy_usage['e_sats'][sat_indx], label =  plot_labels["e usage"])
+                e_time = [e_t + start_time for e_t in energy_usage['time_mins']]
+                e_usage_plot,*dummy = plt.plot(e_time,energy_usage['e_sats'][sat_indx], label =  plot_labels["e usage"])
 
             if self.energy_usage_plot_params['include_eclipse_windows']:
                 for ecl_wind in ecl_winds[sat_indx]:
-                    ecl_wind_start = (ecl_wind.start-plot_start).total_seconds()/time_divisor
-                    ecl_wind_end = (ecl_wind.end-plot_start).total_seconds()/time_divisor
+                    ecl_wind_start = (ecl_wind.start- base_time).total_seconds()/time_divisor
+                    ecl_wind_end = (ecl_wind.end-base_time).total_seconds()/time_divisor
 
                     height = vert_max-vert_min
                     ecl_plot = Rectangle((ecl_wind_start, vert_min), ecl_wind_end-ecl_wind_start, vert_min+height,alpha=0.3,fill=True,color='#202020',label= plot_labels["ecl"])
@@ -898,6 +908,7 @@ class GPPlotting():
         ecl_winds,
         plot_start,
         plot_end,
+        base_time,
         plot_title = 'data Utilization', 
         plot_size_inches = (12,12),
         show=False,
@@ -915,7 +926,9 @@ class GPPlotting():
         if self.time_units == 'minutes':
             time_divisor = 60
         
-        time_to_end = (plot_end-plot_start).total_seconds()/time_divisor
+        # time_to_end = (plot_end-plot_start).total_seconds()/time_divisor
+        start_time = (plot_start-base_time).total_seconds()/time_divisor
+        end_time = (plot_end-base_time).total_seconds()/time_divisor
 
         num_sats = len(sats_ids_list)
 
@@ -957,23 +970,24 @@ class GPPlotting():
                 labelleft='off'
             )
 
-            # set axis length. Time starts at 0
+            # set axis length.
             vert_min = self.data_usage_plot_params['plot_bound_d_min_Gb_delta']+self.sats_dmin_Gb[sat_indx]
             vert_max = self.data_usage_plot_params['plot_bound_d_max_Gb_delta']+self.sats_dmax_Gb[sat_indx]
-            plt.axis((0, time_to_end, vert_min, vert_max))
+            plt.axis((start_time, end_time, vert_min, vert_max))
 
             current_axis = plt.gca()
 
             # the first return value is a handle for our line, everything else can be ignored
             if data_usage:
                 # data_usage['d_sats'][sat_indx] is currently in Mb...
+                d_time = [d_t + start_time for d_t in data_usage['time_mins']]
                 sat_data_usage_Gb = [num/1000 for num in data_usage['d_sats'][sat_indx]]
-                d_usage_plot,*dummy = plt.plot(data_usage['time_mins'],sat_data_usage_Gb, label =  plot_labels["d usage"])
+                d_usage_plot,*dummy = plt.plot(d_time,sat_data_usage_Gb, label =  plot_labels["d usage"])
 
             if self.data_usage_plot_params['include_eclipse_windows']:
                 for ecl_wind in ecl_winds[sat_indx]:
-                    ecl_wind_start = (ecl_wind.start-plot_start).total_seconds()/time_divisor
-                    ecl_wind_end = (ecl_wind.end-plot_start).total_seconds()/time_divisor
+                    ecl_wind_start = (ecl_wind.start- base_time).total_seconds()/time_divisor
+                    ecl_wind_end = (ecl_wind.end-base_time).total_seconds()/time_divisor
 
                     height = vert_max-vert_min
                     ecl_plot = Rectangle((ecl_wind_start, vert_min), ecl_wind_end-ecl_wind_start, vert_min+height,alpha=0.3,fill=True,color='#202020',label= plot_labels["ecl"])
@@ -1009,6 +1023,7 @@ class GPPlotting():
         aoi_curves_by_targID,
         plot_start,
         plot_end,
+        base_time,
         plot_title = 'Observation Target AoI', 
         plot_size_inches = (12,12),
         show=False,
@@ -1023,7 +1038,9 @@ class GPPlotting():
         if self.time_units == 'minutes':
             time_divisor = 60
         
-        time_to_end = (plot_end-plot_start).total_seconds()/time_divisor
+        # time_to_end = (plot_end-plot_start).total_seconds()/time_divisor
+        start_time = (plot_start-base_time).total_seconds()/time_divisor
+        end_time = (plot_end-base_time).total_seconds()/time_divisor
 
         num_targs = len(targ_ids_list)
 
@@ -1062,10 +1079,10 @@ class GPPlotting():
                 labelleft='off'
             )
 
-            # set axis length. Time starts at 0
+            # set axis length.
             vert_min = self.obs_aoi_metrics_plot_params['plot_bound_min_aoi_h']
             vert_max = self.obs_aoi_metrics_plot_params['plot_bound_max_aoi_h']
-            plt.axis((0, time_to_end, vert_min, vert_max))
+            plt.axis((start_time, end_time, vert_min, vert_max))
 
             current_axis = plt.gca()
 
@@ -1095,6 +1112,7 @@ class GPPlotting():
         aoi_option,
         plot_start,
         plot_end,
+        base_time,
         plot_title = 'Satellite TLM/CMD Down/Uplink AoI', 
         plot_size_inches = (12,12),
         show=False,
@@ -1109,7 +1127,9 @@ class GPPlotting():
         if self.time_units == 'minutes':
             time_divisor = 60
         
-        time_to_end = (plot_end-plot_start).total_seconds()/time_divisor
+        # time_to_end = (plot_end-plot_start).total_seconds()/time_divisor
+        start_time = (plot_start-base_time).total_seconds()/time_divisor
+        end_time = (plot_end-base_time).total_seconds()/time_divisor
 
         num_sats = len(sats_ids_list)
 
@@ -1148,14 +1168,14 @@ class GPPlotting():
                 labelleft='off'
             )
 
-            # set axis length. Time starts at 0
+            # set axis length.
             if aoi_option == 'cmd':
                 vert_min = self.cmd_aoi_metrics_plot_params['plot_bound_min_aoi_h']
                 vert_max = self.cmd_aoi_metrics_plot_params['plot_bound_max_aoi_h']
             elif aoi_option == 'tlm':
                 vert_min = self.tlm_aoi_metrics_plot_params['plot_bound_min_aoi_h']
                 vert_max = self.tlm_aoi_metrics_plot_params['plot_bound_max_aoi_h']
-            plt.axis((0, time_to_end, vert_min, vert_max))
+            plt.axis((start_time, end_time, vert_min, vert_max))
 
             current_axis = plt.gca()
 

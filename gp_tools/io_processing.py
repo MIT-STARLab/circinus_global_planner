@@ -54,8 +54,19 @@ class GPProcessorIO():
         self.dlnk_times=gp_data_rates_accesses_params['dlnk_times']
         self.dlnk_rates=gp_data_rates_accesses_params['dlnk_rates']
         self.min_allowed_dv_dlnk=gp_general_other_params['min_allowed_dv_dlnk_Mb']
+        self.sat_indcs_disable_dlnk=gp_general_other_params.get('sat_indcs_disable_dlnk',[])
         self.gs_id_ignore_list=gp_general_other_params['gs_id_ignore_list']
         self.all_gs_IDs = [stat['id'] for stat in gs_params['stations']]
+
+        for ID in self.gs_id_ignore_list:
+            if not ID in self.all_gs_IDs:
+                raise RuntimeWarning("couldn't find ignore gs ID %s (type %s) in list of all gs IDs (%s)"%(ID,type(ID),self.all_gs_IDs))
+
+        all_sat_indcs_str = [str(dat_thang) for dat_thang in range(self.num_sats)]
+        for sat_indx in self.sat_indcs_disable_dlnk:
+            if not sat_indx in all_sat_indcs_str:
+                raise RuntimeWarning("couldn't find disable dlnk sat indx %s (type %s) in list of all sat indcs (%s)"%(sat_indx,type(sat_indx),all_sat_indcs_str))
+
 
         self.xlnk_times=gp_data_rates_accesses_params['xlnk_times']
         self.xlnk_rates=gp_data_rates_accesses_params['xlnk_rates']
@@ -228,8 +239,13 @@ class GPProcessorIO():
 
             for gs_indx, dlnk_list in enumerate(all_sat_dlnk):
 
+                # if we're ignoring this GS
                 if self.all_gs_IDs[gs_indx] in self.gs_id_ignore_list:
                     continue
+
+                # if we're disabling dlnk for this sat
+                if str(sat_indx) in self.sat_indcs_disable_dlnk:
+                    break
 
                 for dlnk_indx, dlnk in enumerate(dlnk_list):
 

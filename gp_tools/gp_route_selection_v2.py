@@ -270,7 +270,8 @@ class GPDataRouteSelection():
 
         self.num_sats=sat_params['num_sats']
         #  the end of the route selection search window for a given obs will either be the time input from the instance params file, or the end time of the obs plus the filter window length
-        self.sel_latest_end_dt  = tt.iso_string_to_dt (gp_as_inst_params['end_utc'])
+        self.as_start_dt  = tt.iso_string_to_dt (gp_as_inst_params['start_utc'])
+        self.as_end_dt  = tt.iso_string_to_dt (gp_as_inst_params['end_utc'])
 
         # get the smallest time step used in orbit link. this is the smallest time step we need to worry about in data route selection
         self.act_timestep = min(link_params['xlnk_max_len_s'],link_params['dlnk_max_len_s'])
@@ -325,12 +326,14 @@ class GPDataRouteSelection():
         dr_uid = 0
 
         # if the obs window ends later than the time prescribed, then we can't find any routes!
-        if obs_wind.end > self.sel_latest_end_dt:
+        if obs_wind.end > self.as_end_dt:
+            return []
+        if obs_wind.start < self.as_start_dt:
             return []
 
         start_dt = obs_wind.end
-        end_dt = min(self.sel_latest_end_dt,start_dt + self.wind_filter_duration)
-        end_obs_sat_dt = min(self.sel_latest_end_dt,start_dt + self.wind_filter_duration_obs_sat)
+        end_dt = min(self.as_end_dt,start_dt + self.wind_filter_duration)
+        end_obs_sat_dt = min(self.as_end_dt,start_dt + self.wind_filter_duration_obs_sat)
 
         # crazy looking line, but it's easy... dictionary of end times by sat_indx - end_dt if not observing sat, else end_obs_sat_dt
         end_dt_by_sat_indx = {sat_indx: end_dt if sat_indx != obs_wind.sat_indx else end_obs_sat_dt for sat_indx in range (self.num_sats)}

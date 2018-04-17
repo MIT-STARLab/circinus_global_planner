@@ -17,7 +17,7 @@ def run_rs_step1(gp_rs,obs_wind,dlnk_winds_flat,xlnk_winds,verbose=False):
     """For serial call"""
 
     t_a = time.time()
-    routes = gp_rs.run_step1(obs_wind,dlnk_winds_flat,xlnk_winds,verbose=False)
+    routes = gp_rs.run_step1(obs_wind,dlnk_winds_flat,xlnk_winds,verbose)
     t_b = time.time()
     time_elapsed = t_b-t_a
 
@@ -50,6 +50,6 @@ class ParallelRSWorkerWrapper():
         if self.verbose:
             print_pre_run_msg(obs_wind, obs_indx, sat_indx, sat_obs_index, self.num_obs)
 
-        output = run_rs_step1(self.gp_rs,obs_wind,self.dlnk_winds_flat,self.xlnk_winds,verbose = False)
+        output = run_rs_step1(self.gp_rs,obs_wind,self.dlnk_winds_flat,self.xlnk_winds,self.verbose)
 
         return output

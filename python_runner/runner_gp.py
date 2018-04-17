@@ -3,7 +3,7 @@
 ##
 # Python runner for orbit visualization pipeline
 # @author Kit Kennedy
-# 
+#
 
 import time
 import os.path
@@ -45,7 +45,7 @@ class GlobalPlannerRunner:
 
     def __init__(self, gp_params):
         """initializes based on parameters
-        
+
         initializes based on parameters
         :param gp_params: global namespace parameters created from input files (possibly with some small non-structural modifications to params). The name spaces here should trace up all the way to the input files.
         :type params: dict
@@ -124,7 +124,7 @@ class GlobalPlannerRunner:
         return p['xlnk_winds_flat'],p['sel_routes_by_obs'],p['ecl_winds'],p['obs_winds'],p['dlnk_winds_flat'],p['window_uid']
 
 
-    def pickle_actsc_stuff(self,routes_by_obs,ecl_winds,scheduled_routes,energy_usage,window_uid):
+    def pickle_actsc_stuff(self,routes_by_obs,ecl_winds,scheduled_routes,energy_usage,data_usage,window_uid):
 
         pickle_stuff =  {}
         pickle_stuff['routes_by_obs'] = routes_by_obs
@@ -145,7 +145,7 @@ class GlobalPlannerRunner:
 
         return p['routes_by_obs'],p['ecl_winds'],p['scheduled_routes'],p['energy_usage'],p['data_usage'],p['window_uid']
 
-    
+
 
     def run_nominal_activity_scheduling( self, routes_by_obs,ecl_winds):
         gp_as = GPActivityScheduling ( self.params)
@@ -225,7 +225,7 @@ class GlobalPlannerRunner:
 
     def run_route_selection(self,gp_ps,obs,dlnk_winds_flat,xlnk_winds,obj_weights,dr_uid):
         """[summary]
-        
+
         [description]
         :param gp_ps: [description]
         :type gp_ps: [type]
@@ -243,7 +243,7 @@ class GlobalPlannerRunner:
         :rtype: {[type]}
         """
 
-        
+
 
         return routes,obs,stats,time_elapsed,dr_uid
 
@@ -295,7 +295,7 @@ class GlobalPlannerRunner:
                 print (obs.data_vol,sum(dr.data_vol for dr in routes),sum(dr.data_vol for dr in routes)/obs.data_vol)
                 print ('min latency, ave latency, max latency')
                 latencies = [(rt.route[-1].end - rt.route[0].end).total_seconds()/60 for rt in  routes]
-                if len(latencies) > 0: 
+                if len(latencies) > 0:
                     print (np.min( latencies),np.mean( latencies),np.max( latencies))
                 else:
                     print('no routes found')
@@ -391,7 +391,7 @@ class GlobalPlannerRunner:
                     # print (obs.data_vol,sum(dr.data_vol for dr in routes),sum(dr.data_vol for dr in routes)/obs.data_vol)
                     # print ('min latency, ave latency, max latency')
                     # latencies = [(rt.route[-1].end - rt.route[0].end).total_seconds()/60 for rt in  routes]
-                    # if len(latencies) > 0: 
+                    # if len(latencies) > 0:
                     #     print (np.min( latencies),np.mean( latencies),np.max( latencies))
                     # else:
                     #     print('no routes found')
@@ -402,7 +402,7 @@ class GlobalPlannerRunner:
         # this should be unique across all data routes
         dr_uid = 0
 
-        # explicitly validate routes 
+        # explicitly validate routes
         for routes in routes_by_obs.values():
             for dr in routes:
                 #  set the data route ID now, because they were not set uniquely if we were running in parallel
@@ -437,13 +437,13 @@ class GlobalPlannerRunner:
                 # [13,19,20,26],
                 obs_winds_sel,
                 [],
-                dlnk_winds_flat, 
+                dlnk_winds_flat,
                 [],
                 [],
                 {},
                 self.scenario_params['start_utc_dt'],
                 self.scenario_params['end_utc_dt'],
-                plot_title = 'all obs, dlnks', 
+                plot_title = 'all obs, dlnks',
                 plot_size_inches = (18,12),
                 plot_include_labels = True,
                 show=  False,
@@ -452,13 +452,13 @@ class GlobalPlannerRunner:
 
         return obs_winds_sel
 
-        
+
     def run_test_route_selection( self,obs_winds,dlnk_winds_flat,xlnk_winds):
         gp_rs = GPDataRouteSelection ( self.params)
 
-        total_dv_weights = [0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9] 
-        num_paths_sel_weights = [0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1] 
-        latency_sf_weights = [0.9,0.8,0.7,0.6,0.5,0.4,0.3,0.2,0.1,0] 
+        total_dv_weights = [0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9]
+        num_paths_sel_weights = [0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1]
+        latency_sf_weights = [0.9,0.8,0.7,0.6,0.5,0.4,0.3,0.2,0.1,0]
         weights_tups = zip(total_dv_weights,num_paths_sel_weights,latency_sf_weights)
 
         print ('test route selection')
@@ -515,9 +515,9 @@ class GlobalPlannerRunner:
         return all_routes,all_routes_obs,all_stats,route_times_s,obs_indx,weights_tups
 
     def pareto_plot(all_routes):
-        total_dv_weights = [0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9] 
-        num_paths_sel_weights = [0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1] 
-        latency_sf_weights = [0.9,0.8,0.7,0.6,0.5,0.4,0.3,0.2,0.1,0] 
+        total_dv_weights = [0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9]
+        num_paths_sel_weights = [0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1]
+        latency_sf_weights = [0.9,0.8,0.7,0.6,0.5,0.4,0.3,0.2,0.1,0]
         weights_tups = zip(total_dv_weights,num_paths_sel_weights,latency_sf_weights)
         self.gp_plot.plot_route_latdv_pareto(all_routes,weights_tups,'plots/obs_winds_20_6_pareto.pdf')
 
@@ -565,7 +565,7 @@ class GlobalPlannerRunner:
                     sel_obs_winds_flat,
                     sel_obs_winds_flat,
                     dlnk_winds_flat,
-                    sel_dlnk_winds_flat, 
+                    sel_dlnk_winds_flat,
                     # [],
                     xlnk_winds_flat,
                     sel_xlnk_winds_flat,
@@ -577,7 +577,7 @@ class GlobalPlannerRunner:
                     # self.scenario_params['start_utc_dt'],
                     # self.scenario_params['start_utc_dt'] + timedelta( seconds= self.rs_general_params['wind_filter_duration_s']),
                     # self.scenario_params['end_utc_dt']-timedelta(minutes=200),
-                    plot_title = 'Route Plot', 
+                    plot_title = 'Route Plot',
                     plot_size_inches = (18,12),
                     plot_include_dlnk_labels = self.rs_general_params['plot_include_dlnk_labels'],
                     plot_include_xlnk_labels = self.rs_general_params['plot_include_xlnk_labels'],
@@ -593,7 +593,7 @@ class GlobalPlannerRunner:
         #  start
         sel_obs_winds_flat = [set() for  sat_indx  in range  (self.sat_params['num_sats'])]
         sel_dlnk_winds_flat = [set() for sat_indx  in range (self.sat_params['num_sats'])]
-        sel_xlnk_winds_flat = [set() for sat_indx  in range (self.sat_params['num_sats'])]        
+        sel_xlnk_winds_flat = [set() for sat_indx  in range (self.sat_params['num_sats'])]
 
         for rts_indx, (obs,rts) in enumerate (routes_by_obs.items()):
             obs_winds_rt, dlnk_winds_rt, \
@@ -616,7 +616,7 @@ class GlobalPlannerRunner:
         sched_obs_winds_flat, sched_dlnk_winds_flat, \
         sched_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind = self.io_proc.extract_flat_windows (routes,copy_windows= False)
 
-        # 
+        #
         sats_to_include =  [sat_id for sat_id in self.sat_params['sat_id_order']]
         # sats_to_include =  [sat_id for sat_id in range(20,30)]
         # sats_to_include = [12,13,14,15,16]
@@ -629,13 +629,14 @@ class GlobalPlannerRunner:
             all_obs_winds,
             all_obs_winds,
             all_dlnk_winds_flat,
-            all_dlnk_winds_flat, 
+            all_dlnk_winds_flat,
             all_xlnk_winds_flat,
             None,
             None,
             self.as_inst_params['start_utc_dt'],
             # self.as_inst_params['start_utc_dt'] + timedelta( seconds= self.rs_general_params['wind_filter_duration_s']),
             self.as_inst_params['end_utc_dt'],
+            base_time = self.scenario_params['start_utc_dt'],
             plot_title = 'All Possible Activities',
             plot_size_inches = (18,12),
             plot_include_dlnk_labels = self.as_params['plot_include_dlnk_labels'],
@@ -651,13 +652,14 @@ class GlobalPlannerRunner:
             sel_obs_winds_flat,
             sched_obs_winds_flat,
             sel_dlnk_winds_flat,
-            sched_dlnk_winds_flat, 
+            sched_dlnk_winds_flat,
             sel_xlnk_winds_flat,
             sched_xlnk_winds_flat,
             route_indcs_by_wind,
             self.as_inst_params['start_utc_dt'],
             # self.as_inst_params['start_utc_dt'] + timedelta( seconds= self.rs_general_params['wind_filter_duration_s']),
             self.as_inst_params['end_utc_dt'],
+            base_time = self.scenario_params['start_utc_dt'],
             plot_title = 'Scheduled Activities',
             plot_size_inches = (18,12),
             plot_include_dlnk_labels = self.as_params['plot_include_dlnk_labels'],
@@ -671,13 +673,14 @@ class GlobalPlannerRunner:
         #     sched_obs_winds_flat,
         #     sched_obs_winds_flat,
         #     sched_dlnk_winds_flat,
-        #     sched_dlnk_winds_flat, 
+        #     sched_dlnk_winds_flat,
         #     sched_xlnk_winds_flat,
         #     sched_xlnk_winds_flat,
         #     route_indcs_by_wind,
         #     self.as_inst_params['start_utc_dt'],
         #     # self.as_inst_params['start_utc_dt'] + timedelta( seconds= self.rs_general_params['wind_filter_duration_s']),
         #     self.as_inst_params['end_utc_dt'],
+              # base_time = self.scenario_params['start_utc_dt'],
         #     plot_title = 'Activity Data Volumes',
         #     plot_size_inches = (18,12),
         #     plot_include_labels = self.as_params['plot_include_labels'],
@@ -691,6 +694,7 @@ class GlobalPlannerRunner:
             ecl_winds,
             self.as_inst_params['start_utc_dt'],
             self.as_inst_params['end_utc_dt'],
+            base_time = self.scenario_params['start_utc_dt'],
             plot_title = 'Energy Storage Utilization',
             plot_size_inches = (18,12),
             show=  False,
@@ -703,6 +707,7 @@ class GlobalPlannerRunner:
             ecl_winds,
             self.as_inst_params['start_utc_dt'],
             self.as_inst_params['end_utc_dt'],
+            base_time = self.scenario_params['start_utc_dt'],
             plot_title = 'Data Storage Utilization',
             plot_size_inches = (18,12),
             show=  False,
@@ -721,7 +726,8 @@ class GlobalPlannerRunner:
             metrics_plot_inputs['obs_aoi_curves_by_targID'],
             self.as_inst_params['start_utc_dt'],
             self.as_inst_params['end_utc_dt'],
-            plot_title = 'Observation Target AoI', 
+            base_time = self.scenario_params['start_utc_dt'],
+            plot_title = 'Observation Target AoI',
             plot_size_inches = (18,12),
             show=False,
             fig_name='plots/test_obs_aoi_plot.pdf'
@@ -736,6 +742,7 @@ class GlobalPlannerRunner:
             aoi_option,
             self.as_inst_params['start_utc_dt'],
             self.as_inst_params['end_utc_dt'],
+            base_time = self.scenario_params['start_utc_dt'],
             plot_title = 'Satellite Command Uplink AoI',
             plot_size_inches = (18,12),
             show=False,
@@ -749,12 +756,13 @@ class GlobalPlannerRunner:
             aoi_option,
             self.as_inst_params['start_utc_dt'],
             self.as_inst_params['end_utc_dt'],
+            base_time = self.scenario_params['start_utc_dt'],
             plot_title = 'Satellite Telemetry Downlink AoI',
             plot_size_inches = (18,12),
             show=False,
             fig_name='plots/test_tlm_aoi_plot.pdf'
         )
-        
+
 
     def validate_unique_windows( self,obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds):
         all_wind_ids = set()
@@ -787,7 +795,7 @@ class GlobalPlannerRunner:
     def run_nominal_route_selection_v2_step2(self,routes_by_obs):
         print('num routes')
         print(sum(len(rts) for rts in routes_by_obs.values()))
-        
+
 
         gp_met = GPMetrics(self.params)
         # t_a = time.time()
@@ -853,8 +861,10 @@ class GlobalPlannerRunner:
         #  route selection step 1
         #################################
 
+        pas_a = time.time()
+
         # If we need output from step 1
-        run_step_1 = not self.other_params['rs_s2_pickle_input'] and not self.other_params['as_pickle_input'] 
+        run_step_1 = not self.other_params['rs_s2_pickle_input'] and not self.other_params['as_pickle_input']
         if run_step_1:
 
             #  if  we are loading from file, do that
@@ -879,7 +889,7 @@ class GlobalPlannerRunner:
         #################################
 
         # If we need output from step 2
-        run_step_2 = not self.other_params['as_pickle_input'] 
+        run_step_2 = not self.other_params['as_pickle_input']
         if run_step_2:
             if self.other_params['rs_s2_pickle_input']:
                 print('Unpickling route selection step two stuff')
@@ -900,11 +910,11 @@ class GlobalPlannerRunner:
                 self.pickle_rtsel_s2_stuff(xlnk_winds_flat,sel_routes_by_obs,ecl_winds,obs_winds,dlnk_winds_flat,window_uid)
         else:
             print('Skipping route selection step two stuff')
-        
+
         #################################
         # route selection output stage
         #################################
-        
+
         print('route selection output stage')
 
         if self.rs_general_params['plot_route_selection_results']:
@@ -933,18 +943,24 @@ class GlobalPlannerRunner:
         if self.pickle_params['pickle_act_scheduling_results']:
             self.pickle_actsc_stuff(sel_routes_by_obs,ecl_winds,scheduled_routes,energy_usage,data_usage, window_uid)
 
+
+        pas_b = time.time()
+        total_plan_and_sched_runtime = pas_b - pas_a
+
         metrics_plot_inputs = self.calc_activity_scheduling_results (obs_winds,dlnk_winds_flat,sel_routes_by_obs,scheduled_routes, energy_usage)
 
+        print('total_plan_and_sched_runtime (warning: may include (un)pickling time and RS plot output)')
+        print("%.2f seconds"%(total_plan_and_sched_runtime))
 
         #################################
         #  Activity scheduling output stage
         #################################
-        
+
         print('activity scheduling output stage')
 
         if self.as_params['plot_activity_scheduling_results']:
             self.plot_activity_scheduling_results((obs_winds,dlnk_winds_flat,xlnk_winds_flat),sel_routes_by_obs,scheduled_routes,energy_usage,data_usage,ecl_winds,metrics_plot_inputs)
-          
+
 
         # if you want to see windows from RS output...
         # sel_routes_flat = [dr for rts in sel_routes_by_obs.values() for dr in rts]
@@ -953,7 +969,7 @@ class GlobalPlannerRunner:
 
         (sched_obs_winds_flat, sched_dlnk_winds_flat, sched_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind) = self.io_proc.extract_flat_windows (scheduled_routes)
         outputs= self.io_proc.make_sat_history_outputs (sched_obs_winds_flat, sched_xlnk_winds_flat, sched_dlnk_winds_flat, link_info_by_wind)
-        
+
 
         return outputs
 
@@ -987,7 +1003,7 @@ class PipelineRunner:
         if data['rs_s1_pickle'] and data['rs_s2_pickle']:
             raise Exception('Should only specify 1 input pickle for route selection')
 
-        if orbit_prop_inputs['version'] == "0.4": 
+        if orbit_prop_inputs['version'] == "0.4":
             # do some useful transformations while preserving the structure of the inputs ( important for avoiding namespace clashes)
             orbit_prop_inputs['scenario_params']['start_utc_dt'] = tt.iso_string_to_dt ( orbit_prop_inputs['scenario_params']['start_utc'])
             orbit_prop_inputs['scenario_params']['end_utc_dt'] = tt.iso_string_to_dt ( orbit_prop_inputs['scenario_params']['end_utc'])
@@ -1016,11 +1032,11 @@ class PipelineRunner:
             raise NotImplementedError
 
         #  check that it's the right version
-        if not gp_general_params['version'] == "0.1": 
+        if not gp_general_params['version'] == "0.1":
             raise NotImplementedError
 
         #  check that it's the right version
-        if gp_instance_params['version'] == "0.1": 
+        if gp_instance_params['version'] == "0.1":
             # gp_instance_params['route_selection_params']['start_utc_dt'] = tt.iso_string_to_dt ( gp_instance_params['route_selection_params']['start_utc'])
             gp_instance_params['activity_scheduling_params']['start_utc_dt'] = tt.iso_string_to_dt ( gp_instance_params['activity_scheduling_params']['start_utc'])
             gp_instance_params['metrics_params']['start_utc_dt'] = tt.iso_string_to_dt ( gp_instance_params['metrics_params']['start_utc'])
@@ -1031,7 +1047,7 @@ class PipelineRunner:
             raise NotImplementedError
 
         #  check that it's the right version
-        if not data_rates_inputs['version'] == "0.3": 
+        if not data_rates_inputs['version'] == "0.3":
             raise NotImplementedError
 
         gp_params['gp_orbit_prop_params'] = gp_orbit_prop_params
@@ -1070,6 +1086,11 @@ if __name__ == "__main__":
                     default='orbit_link_inputs_ex.json',
                     help='specify orbit link inputs file from orbit link repo')
 
+    ap.add_argument('--gp_general_inputs_file',
+                    type=str,
+                    default='crux/config/examples/gp_general_params_inputs_ex.json',
+                    help='specify global planner general params file')
+
     ap.add_argument('--gp_inst_inputs_file',
                     type=str,
                     default=None,
@@ -1100,11 +1121,11 @@ if __name__ == "__main__":
 
     with open(os.path.join(REPO_BASE,args.data_rates_file),'r') as f:
         data_rates_inputs = json.load(f)
-        
+
     with open(os.path.join(REPO_BASE, args.link_inputs_file),'r') as f:
         orbit_link_inputs = json.load(f)
 
-    with open(os.path.join(REPO_BASE,'crux/config/examples/gp_general_params_inputs_ex.json'),'r') as f:
+    with open(os.path.join(REPO_BASE,args.gp_general_inputs_file),'r') as f:
         gp_general_params_inputs = json.load(f)
 
     with open(os.path.join(REPO_BASE,args.gp_inst_inputs_file),'r') as f:
