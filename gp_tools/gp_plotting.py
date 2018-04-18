@@ -219,7 +219,7 @@ class GPPlotting():
                         d = Rectangle((obs_start, bottom_vert_loc), obs_end-obs_start, bottom_vert_loc+1,alpha=1,fill=True,color='#BFFFBF')
                         current_axis.add_patch(d)
 
-                        plt.text(obs_end+0.15, bottom_vert_loc+0.1, obs_wind.target_IDs , fontsize=10, color = 'k')
+                        plt.text(obs_start+0.15, bottom_vert_loc+0.4, "%s,dv %d/%d"%(obs_wind.target_IDs,obs_wind.scheduled_data_vol,obs_wind.data_vol) , fontsize=10, color = 'k')
 
                         # save off the rotator choice so that we can look it up again
                         obs_choices_rectangle_rotator_hist[obs_wind] = obs_choices_rectangle_rotator
@@ -241,7 +241,8 @@ class GPPlotting():
                         d_w = Rectangle((dlnk_wind_start, bottom_vert_loc), dlnk_wind_end-dlnk_wind_start, bottom_vert_loc+1,alpha=1,fill=True,color='#BFBFFF')
 
                         current_axis.add_patch(d_w)
-                        plt.text( (dlnk_wind_end+dlnk_wind_start)/2 - 0.30, bottom_vert_loc+0.1, "g%d"%(dlnk_wind.gs_indx) , fontsize=10, color = 'k')
+                        # plt.text( (dlnk_wind_end+dlnk_wind_start)/2 - 0.30, bottom_vert_loc+0.6, "g%d,dv %d/%d"%(dlnk_wind.gs_indx,dlnk_wind.scheduled_data_vol,dlnk_wind.data_vol) , fontsize=10, color = 'k')
+                        plt.text( dlnk_wind_start - 0.30, bottom_vert_loc+0.7, "g%d,dv %d/%d"%(dlnk_wind.gs_indx,dlnk_wind.scheduled_data_vol,dlnk_wind.data_vol) , fontsize=10, color = 'k')
 
                         # plt.text(dlnk_wind_start+0.15, bottom_vert_loc+0.1, dlnk_wind.window_ID , fontsize=10, color = 'k')
 
@@ -276,6 +277,7 @@ class GPPlotting():
                         dr_indx = None
                         if (len(route_indcs_by_wind.keys())) > 0:
                             dr_indx = route_indcs_by_wind[xlnk_wind][self.route_index_to_use]
+                            dr_indcs = route_indcs_by_wind[xlnk_wind]
                             xlnk_color_indx = dr_indx %  self.xlnk_color_rollover
                         #  otherwise just go with the first color
                         else:
@@ -293,12 +295,13 @@ class GPPlotting():
                             other_sat_indx = xlnk_wind.xsat_indx if xlnk_wind.xsat_indx != sat_indx else xlnk_wind.sat_indx
 
                             #   put label in desired vertical spot
-                            left_horizontal_loc = xlnk_start + 0.15
+                            left_horizontal_loc = xlnk_start #+ 0.15
 
                             #  again, if we know route indices include them in label
-                            if dr_indx:
+                            if not dr_indx is None:
                                 label_text = "%d,%d" %(dr_indx,other_sat_indx)
-                            else:                                
+                                label_text = "%s" %(dr_indcs)
+                            else:         
                                 label_text = "%d" %(other_sat_indx)
 
                             # update the rotator value if we've already added this window to the plot in the "choices" code above

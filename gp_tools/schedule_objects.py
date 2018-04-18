@@ -6,7 +6,7 @@
 
 from copy import copy, deepcopy
 from datetime import timedelta
-from math import floor
+from math import floor, ceil
 
 class Dancecard(object):
     def __init__(self, dancecard_start_dt, dancecard_end_dt, tstep_sec, item_init=list,item_type=list,mode='timestep'):
@@ -177,6 +177,27 @@ class Dancecard(object):
         else:
             raise NotImplementedError
 
+    def get_tp_indx_post_t(self,t,in_units='datetime'):
+        """ get closest time point index following time t
+        
+        [description]
+        :param t:  a time within the start and end of the dance card
+        :type t: [specified by in_units]
+        :param in_units: type for t, defaults to 'datetime'
+        :type in_units: str, optional
+        :returns:  time point index
+        :rtype: {int}
+        :raises: NotImplementedError
+        """
+
+        if in_units == 'datetime':
+            if t < self.dancecard_start_dt:
+                raise ValueError('t (%s) is before dancecard start (%s)'%(t.isoformat(),self.dancecard_start_dt.isoformat()))
+
+            return ceil((t - self.dancecard_start_dt).total_seconds() / self.tstep_sec)
+        else:
+            raise NotImplementedError
+
     def get_objects_at_ts_pre_tp_indx(self,tp_indx):
         """ get objects for timestep preceding timepoint index tp_indx
         
@@ -334,9 +355,10 @@ class Dancecard(object):
     def add_item_in_interval(self,item,start,end):
 
         if self.mode == 'timepoint':
-            # round to nearest timepoint in the dancecard
-            # use pre tp indx here to be consistent. Timestep should not be large enough that this will break things
-            start_indx = self.get_tp_indx_pre_t(start)
+            # round to nearest timepoint in the dancecard. Timestep should not be large enough that this will break things
+            # (this is argued from a resource storage perspective) use post tp indx here so that if an activity overlaps at one timepoint with an activity before it, we won't end up overestimating the amount of resource requirement (assumption: two back to back actitivities that overlap at an infinitesimal point do not really overlap)
+            start_indx = self.get_tp_indx_post_t(start)
+            # use pre tp indx here to be consistent with above.
             end_indx = self.get_tp_indx_pre_t(end)
 
 

@@ -68,7 +68,7 @@ class RouteRecord():
     def __repr__( self):
         return 'RouteRecord(%s,%s,%s)'%( self.dv, date_string(self.release_time),self.routes)
 
-    def get_deconflicted_routes(self,rr_other,min_dv=0,verbose = False):
+    def get_deconflicted_routes(self,rr_other,routable_obs_dv_multiplier = 3, min_dv=0,verbose = False):
         """ determines which routes from other route record can be extended to self route record
         
         determines from the set of routes contained in self which routes in rr_other are able to be extended to the satellite and time point for the self route record. determines this by figuring out what data volume is still available in windows to run routes through, and optimally selecting which routes from rr_other are allocated that data volume. optimal here means the allocation that maximizes the data volume available in the de-conflicted routes returned
@@ -95,8 +95,13 @@ class RouteRecord():
             avail_dv_by_wind = {}
             for dr_1 in self.routes:
                 for wind in dr_1:
-                    # subtract off the routes data volume usage from the window's capacity
                     avail_dv_by_wind.setdefault(wind,wind.data_vol)
+
+                    # if this window is the observation, we want to allow more data volume to be spoken for. This is because it's best to allow more througput than the nominal observation dv to be routed to another other satellites so that if there's contention for a set of windows amongst multiple observations, then there are more routes to provide more choices for pushing data through
+                    if type(wind) == ObsWindow:
+                        avail_dv_by_wind[wind] = wind.data_vol * routable_obs_dv_multiplier
+
+                    # subtract off the routes data volume usage from the window's capacity
                     avail_dv_by_wind[wind] -= dr_1.data_vol
 
             #  record any new windows in the other routes, and for each record which routes use those windows
@@ -296,6 +301,9 @@ class GPDataRouteSelection():
 
         self.final_route_records = None
 
+        # specifies how much data volume from a given obs is allowed to be selected for routing to other satellites. Want this to be great than one so that routes account for more than just the exact amount of the obs dv, so that there's more choice in routes to ground 
+        self.routable_obs_dv_multiplier = 3
+
 
     @staticmethod
     def  filter_windows(dlnk_winds_flat,xlnk_winds,num_sats,start,end_dt_by_sat_indx):
@@ -480,7 +488,7 @@ class GPDataRouteSelection():
                         continue
 
                     #  need to figure out what data on the other satellite is data that we have not yet received on sat_indx. this returns a set of de-conflicted routes that all send valid, non-duplicated data to sat_indx
-                    deconf_rts = rr_last_xlnk.get_deconflicted_routes(rr_xsat,min_dv=self.min_rs_route_dv,verbose= False)
+                    deconf_rts = rr_last_xlnk.get_deconflicted_routes(rr_xsat,min_dv=self.min_rs_route_dv,routable_obs_dv_multiplier=self.routable_obs_dv_multiplier,verbose= False)
 
                     #todo: hmm, do we also want to consider other direction, where rr_sat is incumbent and rr_last_xlnk are the routes to deconflict?
 

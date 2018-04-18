@@ -329,12 +329,24 @@ class GlobalPlannerRunner:
         all_stats =[]
         route_times_s =[]
 
+        def filter_obs(obs_winds):
+            obs_winds_filt = [[] for sat_indx in range( self.sat_params['num_sats'])]
+
+            for sat_indx in range( self.sat_params['num_sats']):
+                for sat_obs_index,obs_wind in enumerate(obs_winds[sat_indx]):
+                    if obs_wind.start >= self.as_inst_params['start_utc_dt'] and obs_wind.end <= self.as_inst_params['end_utc_dt']:
+                        obs_winds_filt[sat_indx].append(obs_wind)
+            return obs_winds_filt
+
+
+        obs_winds_filt = filter_obs(obs_winds)
+
         # this may seem mildy pointless at first, but what we're doing is making a flat lookup table from the hash of wind to the wind object itself. We'll need this to restore the original winds later after running in parallel.
-        obs_winds_dict = {wind:wind for sat_indx in range (self.sat_params['num_sats']) for wind in obs_winds[sat_indx] }
+        obs_winds_dict = {wind:wind for sat_indx in range (self.sat_params['num_sats']) for wind in obs_winds_filt[sat_indx] }
         dlnk_winds_dict = {wind:wind for sat_indx in range (self.sat_params['num_sats']) for wind in dlnk_winds_flat[sat_indx] }
         xlnk_winds_dict = {wind:wind for sat_indx in range (self.sat_params['num_sats']) for xsat_indx in range (self.sat_params['num_sats']) for wind in xlnk_winds[sat_indx][xsat_indx]}
 
-        num_obs = sum(len(obs_winds[sat_indx]) for sat_indx in range (self.sat_params['num_sats']))
+        num_obs = sum(len(obs_winds_filt[sat_indx]) for sat_indx in range (self.sat_params['num_sats']))
 
         t_a = time.time()
 
@@ -354,7 +366,7 @@ class GlobalPlannerRunner:
             all_obs_inputs = []
             obs_indx = 0
             for sat_indx in range( self.sat_params['num_sats']):
-                for sat_obs_index,obs_wind in  enumerate(obs_winds[sat_indx]):
+                for sat_obs_index,obs_wind in  enumerate(obs_winds_filt[sat_indx]):
                     all_obs_inputs.append((obs_wind,obs_indx,sat_indx,sat_obs_index))
                     obs_indx += 1
 
@@ -375,7 +387,7 @@ class GlobalPlannerRunner:
             gp_rs = gprsv2.GPDataRouteSelection ( self.params)
 
             for sat_indx in range( self.sat_params['num_sats']):
-                for  sat_obs_index, obs_wind in  enumerate ( obs_winds[sat_indx]):
+                for  sat_obs_index, obs_wind in  enumerate ( obs_winds_filt[sat_indx]):
                     if verbose:
                         gp_rs_exec.print_pre_run_msg(obs_wind, obs_indx, sat_indx, sat_obs_index,num_obs)
 
@@ -663,7 +675,7 @@ class GlobalPlannerRunner:
             plot_title = 'Scheduled Activities',
             plot_size_inches = (18,12),
             plot_include_dlnk_labels = self.as_params['plot_include_dlnk_labels'],
-            plot_include_xlnk_labels = self.as_params['plot_include_xlnk_labels'],
+            plot_include_xlnk_labels = True, #self.as_params['plot_include_xlnk_labels'],
             show=  False,
             fig_name='plots/test_activity_times.pdf'
         )
@@ -701,6 +713,7 @@ class GlobalPlannerRunner:
             fig_name='plots/test_energy.pdf'
         )
 
+        # note that little blips upward that appear in data storage plot for "just passing through" crosslink pairs (looks like _____^_____ . Isn't that some great asciiart?) can be caused by a slight overlap in timepoints at beg/end of two back to back activities. This should not cause any problems
         self.gp_plot.plot_data_usage(
             sats_to_include,
             data_usage,
@@ -883,6 +896,9 @@ class GlobalPlannerRunner:
         else:
             print('Skipping route selection step one stuff')
 
+
+        # from circinus_tools import debug_tools
+        # debug_tools.debug_breakpt()
 
         #################################
         #  route selection step 2
