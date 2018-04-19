@@ -119,19 +119,15 @@ class DataMultiRoute():
         avail_dv_by_wind = {}
         # figure out what window data volume is already occupied by the data routes within self        
         for dr in self.data_routes:
-            # special allowed dv for obs wind in route
-            allowed_obs_dv = dr.get_obs().data_vol * dr.obs_dv_multiplier
             
             for wind in dr.get_winds():
                 #  if we didn't yet encounter this window in any of the routes in self
-                if type(wind) == ObsWindow or type(wind) == DlnkWindow:
-                    avail_dv_by_wind.setdefault(wind,allowed_obs_dv)
-                else:
-                    avail_dv_by_wind.setdefault(wind,wind.data_vol)
+                avail_dv_by_wind.setdefault(wind,wind.data_vol)
 
                 avail_dv_by_wind[wind] -= dr.data_vol
 
         #  check that for all of the windows in all of the routes, no window is oversubscribed
+        #  note the assumption here that every data route's data volume will be less than or equal to the data volume of the observation, all of the cross-links, and the downlink
         for dv in avail_dv_by_wind.values():
             assert(dv >= 0 - dv_epsilon)
 
@@ -210,10 +206,6 @@ class DataRoute():
         self.sort_windows()   
 
         self.obs_dv_multiplier = obs_dv_multiplier
-
-        #  check the timing and satellite indices along the route.  throws an exception if a problem is seen
-        self.validate(dv_epsilon)
-
 
 
     def __copy__(self):
@@ -338,14 +330,10 @@ class DataRoute():
                 string ='routing_objects.py: Found a bad start time at window indx %d in route. Route string: %s'%( windex, self.get_route_string())
                 raise RuntimeError( string)
 
+            #  note the assumption here that every data route's data volume will be less than or equal to the data volume of the observation, all of the cross-links, and the downlink
             if not self.data_vol <= wind.data_vol:
-
-                # if it's an obs window or a dlnk window, the obs dv with multiplier factor is allowed
-                if (type(wind) == ObsWindow or type(wind) ==  DlnkWindow) and self.data_vol <= wind.data_vol*self.obs_dv_multiplier:
-                    pass
-                else:
-                    string ='routing_objects.py: Found bad dv at window indx %d in route. Allowable dv: %f. Route string: %s'%( windex, obs.data_vol*self.obs_dv_multiplier,str(self))
-                    raise RuntimeError( string)
+                string ='routing_objects.py: Found bad dv at window indx %d in route. Allowable dv: %f. Route string: %s'%( windex, obs.data_vol*self.obs_dv_multiplier,str(self))
+                raise RuntimeError( string)
 
             #  note that we manually trace the satellite index through cross-link window here. This is a bit redundant with the functionality of window_start_sats,  but adds a little bit more of a warm, happy, comfortable feeling in the area checking
             if type (wind) is XlnkWindow:

@@ -600,18 +600,19 @@ class GPDataRouteSelection():
                                 #  note: release time no longer matters because were not putting this route record back into the dance card.
                                 rr_dlnk = RouteRecord(dv=rr_pre_dlnk.dv,release_time=act.end,routes=[])
                                 
-                                # available data volume is limited by how much we had at the last route record (sum of all data routes ending at that route record) and the downlink data volume
-                                # available_dv = min(rr_pre_dlnk.dv,act.data_vol)
+                                # available data volume is limited by how much we had at the last route record ( which could be as much as the observation data volume multiplied by the routable_obs_dv_multiplier factor)
                                 available_dv = rr_pre_dlnk.dv
-                                rr_dlnk.dv = available_dv
 
                                 #  now we need to update the routes within the route record to include the downlink window
                                 for dr in rr_pre_dlnk.routes:
-                                    dv_slice = min(dr.data_vol,available_dv)
-                                    # we copied the data route objects with the copy call above, so this is not dangerous
-                                    # if dv_slice < 1:
-                                    #     import ipdb
-                                    #     ipdb.set_trace()
+                                    #  for each route, we will only allocate as much data volume as is deliverable -  the minimum of:
+                                    # - the data volume that we found for the route ( which is constrained by all of the cross-link capacities in the route)
+                                    # - the available data volume from this route record
+                                    # - the observation data volume
+                                    # - the downlink data volume
+                                    # note that it is not necessary in activity scheduling for a data route to conform to all of these limits, because capacity constraints are checked for all of the windows within all the routes. nonetheless, it's good practice to only allocate as much data volume as is really present to every route
+                                    dv_slice = min(dr.data_vol,available_dv,dr.get_obs().data_vol,act.data_vol)
+
                                     new_dr = copy(dr)
                                     new_dr.data_vol = dv_slice
                                     new_dr.ID = dr_uid
@@ -625,11 +626,10 @@ class GPDataRouteSelection():
                                     if available_dv < self.dv_epsilon:
                                         break
 
-                                # available data volume should be 0
-                                assert(available_dv < self.dv_epsilon)
+                                #  sanity check:  make sure that data volume for the route record greater than or equal to the sum of the data volumes for all of the routes
+                                assert(rr_dlnk.dv >= sum(dr.data_vol for dr in rr_dlnk.routes))
 
-                                #  sanity check: also make sure that data volume for the route record is equal to the sum of the sum of the data volumes from all of the routes within it
-                                assert(abs(rr_dlnk.dv - sum(dr.data_vol for dr in rr_dlnk.routes)) < self.dv_epsilon)
+                                rr_dlnk.dv = sum(dr.data_vol for dr in rr_dlnk.routes)
 
                                 final_route_records.append(rr_dlnk)
                                 visited_act_set.add(act)
