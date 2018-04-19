@@ -75,8 +75,8 @@ class GPActivityScheduling():
             sat_edot_by_act['base'] = p_params['power_consumption_W']['base'][p_params['base_option']]
             sat_edot_by_act['obs'] = p_params['power_consumption_W']['obs'][p_params['obs_option']]
             sat_edot_by_act['dlnk'] = p_params['power_consumption_W']['dlnk'][p_params['dlnk_option']]
-            sat_edot_by_act['xlnk-tx'] = p_params['power_consumption_W']['xlnk-tx'][p_params['xlnk_option']]
-            sat_edot_by_act['xlnk-rx'] = p_params['power_consumption_W']['xlnk-rx'][p_params['xlnk_option']]
+            sat_edot_by_act['xlnk-tx'] = p_params['power_consumption_W']['xlnk-tx'][p_params['xlnk_tx_option']]
+            sat_edot_by_act['xlnk-rx'] = p_params['power_consumption_W']['xlnk-rx'][p_params['xlnk_rx_option']]
             sat_edot_by_act['charging'] = p_params['power_consumption_W']['orbit_insunlight_average_charging'][p_params['charging_option']]
             self.sats_edot_by_act_W.append (sat_edot_by_act)
 

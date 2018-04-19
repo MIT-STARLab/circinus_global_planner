@@ -530,10 +530,10 @@ class GPDataRouteSelection():
                     # 0 indx is "new_dv"
                     best_xlnk_cand = max(xlnk_candidates,key= lambda cand: cand[0])
 
-                mini_list= [item[3].window_ID for item in xlnk_candidates]
-                if 6026 in mini_list and obs_wind.window_ID == 39:
-                    from circinus_tools import debug_tools
-                    debug_tools.debug_breakpt()
+                # mini_list= [item[3].window_ID for item in xlnk_candidates]
+                # if 6026 in mini_list and obs_wind.window_ID == 39:
+                #     from circinus_tools import debug_tools
+                #     debug_tools.debug_breakpt()
 
 
 
@@ -627,7 +627,7 @@ class GPDataRouteSelection():
                                         break
 
                                 #  sanity check:  make sure that data volume for the route record greater than or equal to the sum of the data volumes for all of the routes
-                                assert(rr_dlnk.dv >= sum(dr.data_vol for dr in rr_dlnk.routes))
+                                assert(rr_dlnk.dv + self.dv_epsilon >= sum(dr.data_vol for dr in rr_dlnk.routes))
 
                                 rr_dlnk.dv = sum(dr.data_vol for dr in rr_dlnk.routes)
 
