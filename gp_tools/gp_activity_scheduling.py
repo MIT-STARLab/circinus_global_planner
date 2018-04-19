@@ -441,6 +441,7 @@ class GPActivityScheduling():
 
         # TODO: renumber  these with the final numbering
 
+        # note that the observations show up within model.acts as well, so we also constraint route scheduled DV by the real available DV from each observation
         def c1_rule( model,a):
             return (model.par_act_dv[a]*model.var_activity_utilization[a] -
                         sum(model.par_dmr_act_dv[p,a]*model.var_dmr_utilization[p] 

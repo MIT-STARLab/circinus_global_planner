@@ -95,11 +95,12 @@ class RouteRecord():
             avail_dv_by_wind = {}
             for dr_1 in self.routes:
                 for wind in dr_1:
-                    avail_dv_by_wind.setdefault(wind,wind.data_vol)
 
                     # if this window is the observation, we want to allow more data volume to be spoken for. This is because it's best to allow more througput than the nominal observation dv to be routed to another other satellites so that if there's contention for a set of windows amongst multiple observations, then there are more routes to provide more choices for pushing data through
                     if type(wind) == ObsWindow:
-                        avail_dv_by_wind[wind] = wind.data_vol * routable_obs_dv_multiplier
+                        avail_dv_by_wind.setdefault(wind,wind.data_vol * routable_obs_dv_multiplier)
+                    else:
+                        avail_dv_by_wind.setdefault(wind,wind.data_vol)
 
                     # subtract off the routes data volume usage from the window's capacity
                     avail_dv_by_wind[wind] -= dr_1.data_vol
@@ -301,8 +302,8 @@ class GPDataRouteSelection():
 
         self.final_route_records = None
 
-        # specifies how much data volume from a given obs is allowed to be selected for routing to other satellites. Want this to be great than one so that routes account for more than just the exact amount of the obs dv, so that there's more choice in routes to ground 
-        self.routable_obs_dv_multiplier = 3
+        # specifies how much data volume from a given obs is allowed to be selected for routing to other satellites. Want this to be greater than one so that routes account for more than just the exact amount of the obs dv, so that there's more choice in routes to ground 
+        self.routable_obs_dv_multiplier = 4
 
 
     @staticmethod
@@ -363,8 +364,6 @@ class GPDataRouteSelection():
         #  note that even though these dance cards are in different modes, they share the same time points and time steps (both values and indices)
         rr_dancecards = [Dancecard(start_dt,end_dt_by_sat_indx[sat_indx],self.act_timestep,item_init=None,mode='timepoint') for sat_indx in range (self.num_sats)]
 
-        obs_dv = obs_wind.data_vol
-
         for sat_indx in range (self.num_sats): 
             act_dancecards[sat_indx].add_winds_to_dancecard(dlnk_winds_flat_filt[sat_indx])
 
@@ -376,11 +375,14 @@ class GPDataRouteSelection():
             #  first point for every non-observing satellite has a zero data volume, no path object
             rr_dancecards[sat_indx][0] = RouteRecord(dv=0,release_time = start_dt,routes=[])
 
+        allowed_obs_dv = obs_wind.data_vol * self.routable_obs_dv_multiplier
+
         #  observing sat starts with an initial data route that includes only the observation window
-        first_dr = DataRoute(dr_uid, route =[obs_wind], window_start_sats={obs_wind: obs_wind.sat_indx},dv=obs_dv,dv_epsilon =self.dv_epsilon)
+        #  mark this first data route is having the observation data volume with multiplier included. While there is not actually more observation data volume available to route then is present in the observation window, we can still allow the route to be larger. constraints on actual routed data volume will be enforced at activity scheduling
+        first_dr = DataRoute(dr_uid, route =[obs_wind], window_start_sats={obs_wind: obs_wind.sat_indx},dv=allowed_obs_dv,dv_epsilon =self.dv_epsilon,obs_dv_multiplier=self.routable_obs_dv_multiplier)
         dr_uid += 1
         #  put this initial data route on the first route record for the observing satellite
-        rr_dancecards[obs_wind.sat_indx][0] = RouteRecord(dv=obs_dv,release_time = start_dt,routes=[first_dr])
+        rr_dancecards[obs_wind.sat_indx][0] = RouteRecord(dv=allowed_obs_dv,release_time = start_dt,routes=[first_dr])
 
         #  all dancecards here share the same intial timepoint indices (including for sat_indx, though it's longer)
         time_getter_dc = act_dancecards[obs_wind.sat_indx]
@@ -528,6 +530,12 @@ class GPDataRouteSelection():
                     # 0 indx is "new_dv"
                     best_xlnk_cand = max(xlnk_candidates,key= lambda cand: cand[0])
 
+                mini_list= [item[3].window_ID for item in xlnk_candidates]
+                if 6026 in mini_list and obs_wind.window_ID == 39:
+                    from circinus_tools import debug_tools
+                    debug_tools.debug_breakpt()
+
+
 
                 ################
                 #  now, for the best cross-link candidate (if there is one),  make a new route record
@@ -593,7 +601,8 @@ class GPDataRouteSelection():
                                 rr_dlnk = RouteRecord(dv=rr_pre_dlnk.dv,release_time=act.end,routes=[])
                                 
                                 # available data volume is limited by how much we had at the last route record (sum of all data routes ending at that route record) and the downlink data volume
-                                available_dv = min(rr_pre_dlnk.dv,act.data_vol)
+                                # available_dv = min(rr_pre_dlnk.dv,act.data_vol)
+                                available_dv = rr_pre_dlnk.dv
                                 rr_dlnk.dv = available_dv
 
                                 #  now we need to update the routes within the route record to include the downlink window

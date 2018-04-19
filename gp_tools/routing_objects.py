@@ -119,9 +119,16 @@ class DataMultiRoute():
         avail_dv_by_wind = {}
         # figure out what window data volume is already occupied by the data routes within self        
         for dr in self.data_routes:
+            # special allowed dv for obs wind in route
+            allowed_obs_dv = dr.get_obs().data_vol * dr.obs_dv_multiplier
+            
             for wind in dr.get_winds():
                 #  if we didn't yet encounter this window in any of the routes in self
-                avail_dv_by_wind.setdefault(wind,wind.data_vol)
+                if type(wind) == ObsWindow or type(wind) == DlnkWindow:
+                    avail_dv_by_wind.setdefault(wind,allowed_obs_dv)
+                else:
+                    avail_dv_by_wind.setdefault(wind,wind.data_vol)
+
                 avail_dv_by_wind[wind] -= dr.data_vol
 
         #  check that for all of the windows in all of the routes, no window is oversubscribed
@@ -184,7 +191,7 @@ class DataRoute():
 
     # note this route is simple:  there are no forks in the route; there is a simple linear path from an observation to a downlink through which data flows. all windows must be in temporal order.
 
-    def __init__(self, ID, route  =[], window_start_sats={},dv=0,dv_epsilon=1e-5):
+    def __init__(self, ID, route  =[], window_start_sats={},dv=0,dv_epsilon=1e-5,obs_dv_multiplier=1):
 
         self.ID =  ID
 
@@ -202,13 +209,15 @@ class DataRoute():
 
         self.sort_windows()   
 
+        self.obs_dv_multiplier = obs_dv_multiplier
+
         #  check the timing and satellite indices along the route.  throws an exception if a problem is seen
         self.validate(dv_epsilon)
 
 
 
     def __copy__(self):
-        newone = type(self)(self.ID,dv=self.data_vol)
+        newone = type(self)(self.ID,dv=self.data_vol,obs_dv_multiplier=self.obs_dv_multiplier)
         #  make a shallow copy of these container objects -  we want to refer to the same nested objects within the containers, but want a new container in both cases
         newone.route = copy(self.route)
         newone.window_start_sats = copy(self.window_start_sats)
@@ -330,8 +339,13 @@ class DataRoute():
                 raise RuntimeError( string)
 
             if not self.data_vol <= wind.data_vol:
-                string ='routing_objects.py: Found bad dv at window indx %d in route. Route string: %s'%( windex, self.get_route_string())
-                raise RuntimeError( string)
+
+                # if it's an obs window or a dlnk window, the obs dv with multiplier factor is allowed
+                if (type(wind) == ObsWindow or type(wind) ==  DlnkWindow) and self.data_vol <= wind.data_vol*self.obs_dv_multiplier:
+                    pass
+                else:
+                    string ='routing_objects.py: Found bad dv at window indx %d in route. Allowable dv: %f. Route string: %s'%( windex, obs.data_vol*self.obs_dv_multiplier,str(self))
+                    raise RuntimeError( string)
 
             #  note that we manually trace the satellite index through cross-link window here. This is a bit redundant with the functionality of window_start_sats,  but adds a little bit more of a warm, happy, comfortable feeling in the area checking
             if type (wind) is XlnkWindow:
