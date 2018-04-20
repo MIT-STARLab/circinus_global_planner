@@ -111,6 +111,9 @@ class GPActivityScheduling():
         # setting to 20 minutes
         self.big_M_act_t_dur_s = 30*60
 
+        # this big M should be twice as large as any activity data volume 
+        self.big_M_act_dv = 200000 # in Mb
+
     def get_stats(self,verbose=True):
         stats = {}
         stats['num_routes'] = sum([len ( self.routes_flat)])
@@ -217,7 +220,7 @@ class GPActivityScheduling():
             sat_acts[sat_indx].sort(key=lambda x: x.center)
             sat_dlnks[sat_indx].sort(key=lambda x: x.center)
 
-        return sat_acts,sat_dlnks,all_acts_indcs,dmr_indcs_by_act,dv_by_act,all_acts_by_obj,obs_act_indcs,dmr_indcs_by_obs_act,dv_by_obs_act,link_act_indcs,dmr_indcs_by_link_act,dv_by_link_act
+        return sat_acts,sat_dlnks,all_acts_indcs,dmr_indcs_by_act,dv_by_act,all_acts_by_obj,all_acts_by_indx,obs_act_indcs,dmr_indcs_by_obs_act,dv_by_obs_act,link_act_indcs,dmr_indcs_by_link_act,dv_by_link_act
                     
 
     def filter_routes( self,routes_flat):
@@ -291,6 +294,7 @@ class GPActivityScheduling():
                 dmr_indcs_by_act,
                 dv_by_act,
                 all_acts_by_obj,
+                all_acts_by_indx,
                 obs_act_indcs,
                 dmr_indcs_by_obs_act,
                 dv_by_obs_act,
@@ -335,6 +339,7 @@ class GPActivityScheduling():
         self.obs_act_indcs = obs_act_indcs
         self.link_act_indcs = link_act_indcs
         self.all_acts_by_obj = all_acts_by_obj
+        self.all_acts_by_indx = all_acts_by_indx
 
         # these subscripts probably should've been done using the unique IDs for the objects, rather than their arbitrary locations within a list. Live and learn, hélas...
 
@@ -368,8 +373,12 @@ class GPActivityScheduling():
                 raise RuntimeWarning('big_M_lat (%f) is not large enough for latency score factor %f and integer feasibility tolerance %f (dmr index %d)'%(self.big_M_lat,lat_sf,int_feas_tol,p))
 
         for act_obj in all_acts_by_obj.keys():
-            if 2*(act_obj.end-act_obj.start).total_seconds() > self.big_M_act_t_dur_s:
-                raise RuntimeWarning('big_M_act_t_dur_s (%f) is not large enough for act of duration %s and integer feasibility tolerance %f (act string %s)'%(self.big_M_act_t_dur_s,act_obj.end-act_obj.start,int_feas_tol,act_obj))
+            # if 2*(act_obj.end-act_obj.start).total_seconds() > (1-int_feas_tol) *  self.big_M_act_t_dur_s:
+                # raise RuntimeWarning('big_M_act_t_dur_s (%f) is not large enough for act of duration %s and integer feasibility tolerance %f (act string %s)'%(self.big_M_act_t_dur_s,act_obj.end-act_obj.start,int_feas_tol,act_obj))
+
+            if 2*act_obj.data_vol > (1-int_feas_tol) * self.big_M_act_dv:
+                raise RuntimeWarning('big_M_act_dv (%f) is not large enough for act of dv %f and integer feasibility tolerance %f (act string %s)'%(self.big_M_act_dv,act_obj.data_vol,int_feas_tol,act_obj))
+                
 
 
         ##############################
@@ -419,15 +428,20 @@ class GPActivityScheduling():
 
 
         # activity utilization variable indicating how much of an activity's capacity is used [1]
-        model.var_activity_utilization  = pe.Var (model.acts, bounds =(0,1))
+        # model.var_activity_utilization  = pe.Var (model.acts, bounds =(0,1))
+        neg_inf_act_utilization = -15
+        model.var_activity_utilization  = pe.Var (model.acts, bounds=(neg_inf_act_utilization,1))
+        # model.var_act_dv_bound = pe.Var (model.acts,  bounds = (neg_inf_act_utilization* self.big_M_act_dv,0))
+
         # dmr utilization variable indicating how much of a dmr's capacity is used [2]
         model.var_dmr_utilization  = pe.Var (model.dmrs, bounds =(0,1))
         #  indicator variables for whether or not dmrs [3] and activities [4] have been chosen
         model.var_dmr_indic  = pe.Var (model.dmrs, within = pe.Binary)
-        model.var_act_indic  = pe.Var (model.acts, within = pe.Binary)
+        # model.var_act_indic  = pe.Var (model.acts, within = pe.Binary)
         
         # satellite energy storage
         model.var_sats_estore  = pe.Var (model.sats,  model.es_timepoint_indcs,  within = pe.NonNegativeReals)
+        model.var_delta_e_act  = pe.Var (model.sats,  model.es_timepoint_indcs,  within = pe.NonNegativeReals)
 
         # satellite data storage (data buffers)
         model.var_sats_dstore  = pe.Var (model.sats,  model.ds_timepoint_indcs,  within = pe.NonNegativeReals)
@@ -442,20 +456,59 @@ class GPActivityScheduling():
         # TODO: renumber  these with the final numbering
 
         # note that the observations show up within model.acts as well, so we also constraint route scheduled DV by the real available DV from each observation
-        def c1_rule( model,a):
-            return (model.par_act_dv[a]*model.var_activity_utilization[a] -
-                        sum(model.par_dmr_act_dv[p,a]*model.var_dmr_utilization[p] 
-                            for p in model.par_dmr_subscrs_by_act[a]) 
-                    >= 0)
-        model.c1 =pe.Constraint ( model.acts,  rule=c1_rule)
+        # def c1_rule( model,a):
+        #     return (model.par_act_dv[a]*model.var_activity_utilization[a] -
+        #                 sum(model.par_dmr_act_dv[p,a]*model.var_dmr_utilization[p] 
+        #                     for p in model.par_dmr_subscrs_by_act[a]) 
+        #             >= model.var_act_dv_bound[a])
+        # model.c1 =pe.Constraint ( model.acts,  rule=c1_rule)
+
+        # def c1_rule( model,a):
+        #     return (model.par_act_dv[a]*model.var_activity_utilization[a] -
+        #                 sum(model.par_dmr_act_dv[p,a]*model.var_dmr_utilization[p] 
+        #                     for p in model.par_dmr_subscrs_by_act[a]) 
+        #                 >= neg_inf_act_utilization* self.big_M_act_dv * (1-model.var_act_indic[a])
+        #             )
+        # model.c1 =pe.Constraint ( model.acts,  rule=c1_rule)
+
+        model.c1  = pe.ConstraintList()
+        for a in model.acts:
+            act_dmrs = model.par_dmr_subscrs_by_act[a]
+            for p in model.par_dmr_subscrs_by_act[a]:
+                model.c1.add(
+                    model.par_act_dv[a]*model.var_activity_utilization[a] -
+                    sum(model.par_dmr_act_dv[p,a]*model.var_dmr_utilization[p] for p in act_dmrs) 
+                    >= neg_inf_act_utilization * self.big_M_act_dv * (1-model.var_dmr_indic[p])
+                )
+
+        # model.c1b  = pe.ConstraintList()
+        # for a in model.acts:
+        #     for p in model.par_dmr_subscrs_by_act[a]:
+        #         model.c1b.add(model.var_act_indic[a] >= model.var_dmr_indic[p]) 
+
+        # model.c1c  = pe.ConstraintList()
+        # for dmr in self.routes_flat:
+        #     windices = [all_acts_by_obj[wind] for wind in dmr.get_winds()] 
+                
+        #     for windex in windices:
+        #         model.c1c.add(model.var_act_indic[windex] >= model.var_dmr_indic[p]) 
+
+
+
+        # model.c1b  = pe.ConstraintList()
+        # for a in model.acts:
+        #     for p in model.par_dmr_subscrs_by_act[a]:
+        #         # basically we're  saying here that an activity is allowed to stretch its time bounds about as negative as the absolute value of neg_inf_act_utilization (start and end in reverse order, because x_a goes negative) 
+        #         model.c1b.add(model.var_act_dv_bound[a] >= neg_inf_act_utilization* self.big_M_act_dv * (1-model.var_dmr_indic[p])) 
+        
 
         def c2_rule( model,p):
             return model.par_dmr_dv[p]*model.var_dmr_utilization[p] >= model.par_min_as_route_dv*model.var_dmr_indic[p]
         model.c2 =pe.Constraint ( model.dmrs,  rule=c2_rule)
 
-        def c3_rule( model,a):
-            return model.var_act_indic[a] >=  model.var_activity_utilization[a]
-        model.c3 =pe.Constraint ( model.acts,  rule=c3_rule)  
+        # def c3_rule( model,a):
+            # return model.var_act_indic[a] >=  model.var_activity_utilization[a]
+        # model.c3 =pe.Constraint ( model.acts,  rule=c3_rule)  
 
         def c3c_rule( model,p):
             return model.var_dmr_indic[p] >=  model.var_dmr_utilization[p]
@@ -464,127 +517,129 @@ class GPActivityScheduling():
         # keep track of this, so we know to warn user about default transition time usage
         used_default_transition_time = False
 
-        #  intra-satellite activity overlap constraints [4],[5],[5b]
-        model.c4  = pe.ConstraintList()
-        model.c5  = pe.ConstraintList()
-        model.c5b  = pe.ConstraintList()
-        for sat_indx in range (self.num_sats):
-            num_sat_acts = len(sat_acts[sat_indx])
-            for  first_act_indx in  range (num_sat_acts):
+        # #  intra-satellite activity overlap constraints [4],[5],[5b]
+        # # model.c4  = pe.ConstraintList()
+        # model.c5  = pe.ConstraintList()
+        # # model.c5b  = pe.ConstraintList()
+        # for sat_indx in range (self.num_sats):
+        #     num_sat_acts = len(sat_acts[sat_indx])
+        #     for  first_act_indx in  range (num_sat_acts):
 
-                # from circinus_tools import debug_tools
-                # debug_tools.debug_breakpt()
+        #         # from circinus_tools import debug_tools
+        #         # debug_tools.debug_breakpt()
 
-                act1 = sat_acts[sat_indx][first_act_indx]
-                # get the unique index into model.acts
-                act1_uindx = all_acts_by_obj[act1]
-                length_1 = model.par_act_dv[act1_uindx]*model.var_activity_utilization[act1_uindx]/act1.ave_data_rate
-                model.c5b.add( length_1 >= model.var_act_indic[act1_uindx] * self.min_act_duration_s[type(act1)])
+        #         act1 = sat_acts[sat_indx][first_act_indx]
+        #         # get the unique index into model.acts
+        #         act1_uindx = all_acts_by_obj[act1]
+        #         # length_1 = model.par_act_dv[act1_uindx]*model.var_activity_utilization[act1_uindx]/act1.ave_data_rate
+        #         # model.c5b.add( length_1 >= model.var_act_indic[act1_uindx] * self.min_act_duration_s[type(act1)])
                 
-                for  second_act_indx in  range (first_act_indx+1,num_sat_acts):
-                    act2 = sat_acts[sat_indx][ second_act_indx]
-                    # get the unique index into model.acts
-                    act2_uindx = all_acts_by_obj[act2]
+        #         for  second_act_indx in  range (first_act_indx+1,num_sat_acts):
+        #             act2 = sat_acts[sat_indx][ second_act_indx]
+        #             # get the unique index into model.acts
+        #             act2_uindx = all_acts_by_obj[act2]
 
-                    # act list should be sorted
-                    assert(act2.center >= act1.center)
+        #             # act list should be sorted
+        #             assert(act2.center >= act1.center)
 
-                    # get the transition time requirement between these activities
-                    try:
-                        transition_time_req = self.act_transition_time_map[("intra-sat",type(act1),type(act2))]
-                    # if not explicitly specified, go with default transition time requirement
-                    except KeyError:
-                        used_default_transition_time = True
-                        transition_time_req = self.act_transition_time_map["default"]
+        #             # get the transition time requirement between these activities
+        #             try:
+        #                 transition_time_req = self.act_transition_time_map[("intra-sat",type(act1),type(act2))]
+        #             # if not explicitly specified, go with default transition time requirement
+        #             except KeyError:
+        #                 used_default_transition_time = True
+        #                 transition_time_req = self.act_transition_time_map["default"]
 
-                    # if there is enough transition time between the two activities, no constraint needs to be added
-                    #  note that we are okay even if for some reason Act 2 starts before Act 1 ends, because time deltas return negative total seconds as well
-                    if (act2.start - act1.end).total_seconds() >= transition_time_req:
-                        #  don't need to do anything,  continue on to next activity pair
-                        continue
+        #             # if there is enough transition time between the two activities, no constraint needs to be added
+        #             #  note that we are okay even if for some reason Act 2 starts before Act 1 ends, because time deltas return negative total seconds as well
+        #             if (act2.start - act1.end).total_seconds() >= transition_time_req:
+        #                 #  don't need to do anything,  continue on to next activity pair
+        #                 continue
 
-                    #  if the activities overlap in center time, then it's not possible to have sufficient transition time between them
-                    #  add constraint to rule out the possibility of scheduling both of them
-                    elif (act2.center - act1.center).total_seconds() <= transition_time_req:
-                        model.c4.add( model.var_act_indic[act1_uindx]+ model.var_act_indic[act2_uindx] <= 1)
+        #             #  if the activities overlap in center time, then it's not possible to have sufficient transition time between them
+        #             #  add constraint to rule out the possibility of scheduling both of them
+        #             # elif (act2.center - act1.center).total_seconds() <= transition_time_req:
+        #             #     model.c4.add( model.var_act_indic[act1_uindx]+ model.var_act_indic[act2_uindx] <= 1)
 
-                    # If they don't overlap in center time, but they do overlap to some amount, then we need to constrain their end and start times to be consistent with one another
-                    else:
-                        center_time_diff = (act2.center - act1.center).total_seconds()
-                        # this is the adjustment added to the center time to get to the start or end of the activity
-                        time_adjust_1 = model.par_act_dv[act1_uindx]*model.var_activity_utilization[act1_uindx]/2/act1.ave_data_rate
-                        time_adjust_2 = model.par_act_dv[act2_uindx]*model.var_activity_utilization[act2_uindx]/2/act2.ave_data_rate
-                        constr_disable_1 = self.big_M_act_t_dur_s*(1-model.var_act_indic[act1_uindx])
-                        constr_disable_2 = self.big_M_act_t_dur_s*(1-model.var_act_indic[act2_uindx])
-                        model.c5.add( center_time_diff - time_adjust_1 - time_adjust_2 + constr_disable_1 + constr_disable_2 >= transition_time_req)
+        #             # If they don't overlap in center time, but they do overlap to some amount, then we need to constrain their end and start times to be consistent with one another
+        #             else:
+        #                 center_time_diff = (act2.center - act1.center).total_seconds()
+        #                 # this is the adjustment added to the center time to get to the start or end of the activity
+        #                 time_adjust_1 = model.par_act_dv[act1_uindx]*model.var_activity_utilization[act1_uindx]/2/act1.ave_data_rate
+        #                 time_adjust_2 = model.par_act_dv[act2_uindx]*model.var_activity_utilization[act2_uindx]/2/act2.ave_data_rate
+        #                 # constr_disable_1 = self.big_M_act_t_dur_s*(1-model.var_act_indic[act1_uindx])
+        #                 # constr_disable_2 = self.big_M_act_t_dur_s*(1-model.var_act_indic[act2_uindx])
+        #                 # model.c5.add( center_time_diff - time_adjust_1 - time_adjust_2 + constr_disable_1 + constr_disable_2 >= transition_time_req)
+        #                 model.c5.add( center_time_diff - time_adjust_1 - time_adjust_2 >= transition_time_req)
 
 
-        #  inter-satellite downlink overlap constraints [9],[10]
-        model.c9  = pe.ConstraintList()
-        model.c10  = pe.ConstraintList()
-        for sat_indx in range (self.num_sats):
-            num_sat_acts = len(sat_dlnks[sat_indx])
+        # #  inter-satellite downlink overlap constraints [9],[10]
+        # # model.c9  = pe.ConstraintList()
+        # model.c10  = pe.ConstraintList()
+        # for sat_indx in range (self.num_sats):
+        #     num_sat_acts = len(sat_dlnks[sat_indx])
             
-            for other_sat_indx in range (self.num_sats):
-                if other_sat_indx == sat_indx:
-                    continue
+        #     for other_sat_indx in range (self.num_sats):
+        #         if other_sat_indx == sat_indx:
+        #             continue
 
-                num_other_sat_acts = len(sat_dlnks[other_sat_indx])
+        #         num_other_sat_acts = len(sat_dlnks[other_sat_indx])
 
-                for  sat_act_indx in  range (num_sat_acts):
+        #         for  sat_act_indx in  range (num_sat_acts):
 
-                    # from circinus_tools import debug_tools
-                    # debug_tools.debug_breakpt()
+        #             # from circinus_tools import debug_tools
+        #             # debug_tools.debug_breakpt()
 
-                    act1 = sat_dlnks[sat_indx][sat_act_indx]
-                    # get the unique index into model.acts
-                    act1_uindx = all_acts_by_obj[act1]
+        #             act1 = sat_dlnks[sat_indx][sat_act_indx]
+        #             # get the unique index into model.acts
+        #             act1_uindx = all_acts_by_obj[act1]
                     
-                    for  other_sat_act_indx in  range (num_other_sat_acts):
-                        act2 = sat_dlnks[other_sat_indx][other_sat_act_indx]
-                        # get the unique index into model.acts
-                        act2_uindx = all_acts_by_obj[act2]
+        #             for  other_sat_act_indx in  range (num_other_sat_acts):
+        #                 act2 = sat_dlnks[other_sat_indx][other_sat_act_indx]
+        #                 # get the unique index into model.acts
+        #                 act2_uindx = all_acts_by_obj[act2]
 
-                        assert(type(act1) == DlnkWindow and type(act2) == DlnkWindow)
+        #                 assert(type(act1) == DlnkWindow and type(act2) == DlnkWindow)
 
-                        # todo: include!
-                        # # if they're not looking at the same gs, then constraints don't apply
-                        # if not act1.gs_indx == act2.gs_indx:
-                        #     continue
+        #                 # todo: include!
+        #                 # # if they're not looking at the same gs, then constraints don't apply
+        #                 # if not act1.gs_indx == act2.gs_indx:
+        #                 #     continue
 
-                        # we're considering windows across satellites, so they could be out of order temporally. These constraints are only valid if act2 is after act1 (center time). Don't worry, as we loop through satellites, we consider both directions (i.e. act1 and act2 will be swapped in another iteration, and we'll get past this check and impose the required constraints)
-                        if (act2.center - act1.center).total_seconds() < 0:
-                            continue
+        #                 # we're considering windows across satellites, so they could be out of order temporally. These constraints are only valid if act2 is after act1 (center time). Don't worry, as we loop through satellites, we consider both directions (i.e. act1 and act2 will be swapped in another iteration, and we'll get past this check and impose the required constraints)
+        #                 if (act2.center - act1.center).total_seconds() < 0:
+        #                     continue
 
 
-                        # get the transition time requirement between these activities
-                        try:
-                            transition_time_req = self.act_transition_time_map[("inter-sat",DlnkWindow,DlnkWindow)]
-                        # if not explicitly specified, go with default transition time requirement
-                        except KeyError:
-                            used_default_transition_time = True
-                            transition_time_req = self.act_transition_time_map["default"]
+        #                 # get the transition time requirement between these activities
+        #                 try:
+        #                     transition_time_req = self.act_transition_time_map[("inter-sat",DlnkWindow,DlnkWindow)]
+        #                 # if not explicitly specified, go with default transition time requirement
+        #                 except KeyError:
+        #                     used_default_transition_time = True
+        #                     transition_time_req = self.act_transition_time_map["default"]
 
-                        # if there is enough transition time between the two activities, no constraint needs to be added
-                        #  note that we are okay even if for some reason Act 2 starts before Act 1 ends, because time deltas return negative total seconds as well
-                        if (act2.start - act1.end).total_seconds() >= transition_time_req:
-                            #  don't need to do anything,  continue on to next activity pair
-                            continue
+        #                 # if there is enough transition time between the two activities, no constraint needs to be added
+        #                 #  note that we are okay even if for some reason Act 2 starts before Act 1 ends, because time deltas return negative total seconds as well
+        #                 if (act2.start - act1.end).total_seconds() >= transition_time_req:
+        #                     #  don't need to do anything,  continue on to next activity pair
+        #                     continue
 
-                        #  if the activities overlap in center time, then it's not possible to have sufficient transition time between them
-                        #  add constraint to rule out the possibility of scheduling both of them
-                        elif (act2.center - act1.center).total_seconds() <= transition_time_req:
-                            model.c9.add( model.var_act_indic[act1_uindx]+ model.var_act_indic[act2_uindx] <= 1)
+        #                 #  if the activities overlap in center time, then it's not possible to have sufficient transition time between them
+        #                 #  add constraint to rule out the possibility of scheduling both of them
+        #                 # elif (act2.center - act1.center).total_seconds() <= transition_time_req:
+        #                 #     model.c9.add( model.var_act_indic[act1_uindx]+ model.var_act_indic[act2_uindx] <= 1)
 
-                        # If they don't overlap in center time, but they do overlap to some amount, then we need to constrain their end and start times to be consistent with one another
-                        else:
-                            center_time_diff = (act2.center - act1.center).total_seconds()
-                            # this is the adjustment added to the center time to get to the start or end of the activity
-                            time_adjust_1 = model.par_act_dv[act1_uindx]*model.var_activity_utilization[act1_uindx]/2/act1.ave_data_rate
-                            time_adjust_2 = model.par_act_dv[act2_uindx]*model.var_activity_utilization[act2_uindx]/2/act2.ave_data_rate
-                            constr_disable_1 = self.big_M_act_t_dur_s*(1-model.var_act_indic[act1_uindx])
-                            constr_disable_2 = self.big_M_act_t_dur_s*(1-model.var_act_indic[act2_uindx])
-                            model.c10.add( center_time_diff - time_adjust_1 - time_adjust_2 + constr_disable_1 + constr_disable_2 >= transition_time_req)
+        #                 # If they don't overlap in center time, but they do overlap to some amount, then we need to constrain their end and start times to be consistent with one another
+        #                 else:
+        #                     center_time_diff = (act2.center - act1.center).total_seconds()
+        #                     # this is the adjustment added to the center time to get to the start or end of the activity
+        #                     time_adjust_1 = model.par_act_dv[act1_uindx]*model.var_activity_utilization[act1_uindx]/2/act1.ave_data_rate
+        #                     time_adjust_2 = model.par_act_dv[act2_uindx]*model.var_activity_utilization[act2_uindx]/2/act2.ave_data_rate
+        #                     # constr_disable_1 = self.big_M_act_t_dur_s*(1-model.var_act_indic[act1_uindx])
+        #                     # constr_disable_2 = self.big_M_act_t_dur_s*(1-model.var_act_indic[act2_uindx])
+        #                     # model.c10.add( center_time_diff - time_adjust_1 - time_adjust_2 + constr_disable_1 + constr_disable_2 >= transition_time_req)
+        #                     model.c10.add( center_time_diff - time_adjust_1 - time_adjust_2 >= transition_time_req)
 
 
         if verbose:
@@ -594,6 +649,7 @@ class GPActivityScheduling():
 
         #  energy constraints [6]
         model.c6  = pe.ConstraintList()
+        model.c6b  = pe.ConstraintList()
         for sat_indx in range (self.num_sats): 
 
             # tp_indx serves as an index into the satellite activity dance cards
@@ -620,13 +676,19 @@ class GPActivityScheduling():
                             #  if this is a "standard activity" that we can choose to perform or not
                             if type(act) in self.standard_activities:
                                 act_uindx = all_acts_by_obj[act]
-                                activity_delta_e += (
+
+                                # activity_delta_e += (
+                                #     model.par_sats_edot_by_act[sat_indx][self.act_type_map[type(act)]] 
+                                #     * model.var_activity_utilization[act_uindx]
+                                #     * model.par_resource_delta_t
+                                # )
+                                model.c6b.add(model.var_delta_e_act[sat_indx,tp_indx] >=
                                     model.par_sats_edot_by_act[sat_indx][self.act_type_map[type(act)]] 
                                     * model.var_activity_utilization[act_uindx]
                                     * model.par_resource_delta_t
                                 )
 
-                            if type(act) == XlnkWindow:
+                            elif type(act) == XlnkWindow:
                                 act_uindx = all_acts_by_obj[act]
 
                                 if self.use_symmetric_xlnk_windows:
@@ -639,11 +701,16 @@ class GPActivityScheduling():
                                     else: 
                                         xlnk_edot = model.par_sats_edot_by_act[sat_indx]['xlnk-tx']
 
-                                activity_delta_e += (
+                                model.c6b.add(model.var_delta_e_act[sat_indx,tp_indx] >=
                                     xlnk_edot 
                                     * model.var_activity_utilization[act_uindx]
                                     * model.par_resource_delta_t
                                 )
+                                # activity_delta_e += (
+                                #     xlnk_edot 
+                                #     * model.var_activity_utilization[act_uindx]
+                                #     * model.par_resource_delta_t
+                                # )
 
                             #  if the satellite is not in sunlight then we can't charge
                             elif type(act) == EclipseWindow:
@@ -658,15 +725,25 @@ class GPActivityScheduling():
                     # maximum bound of energy at current time step based on last time step
                     model.c6.add( model.var_sats_estore[sat_indx,tp_indx] <= 
                         model.var_sats_estore[sat_indx,tp_indx-1]
-                        + activity_delta_e
+                        + model.var_delta_e_act[sat_indx,tp_indx]
+                        # + activity_delta_e
                         + charging_delta_e
                         + base_delta_e
                     )
 
+                    # # another max energy constraint - activity energy usage is replaced with zero, to guard against the case where activity utilization variable goes negative
+                    # model.c6.add( model.var_sats_estore[sat_indx,tp_indx] <= 
+                    #     model.var_sats_estore[sat_indx,tp_indx-1]
+                    #     + 0
+                    #     + charging_delta_e
+                    #     + base_delta_e
+                    # )
+
                     # maximum bound of energy at current time step based on last time step
                     model.c6.add( model.var_sats_estore[sat_indx,tp_indx] >= 
                         model.var_sats_estore[sat_indx,tp_indx-1]
-                        + activity_delta_e
+                        + model.var_delta_e_act[sat_indx,tp_indx]
+                        # + activity_delta_e
                         + base_delta_e
                     )
 
@@ -785,7 +862,7 @@ class GPActivityScheduling():
                 varobject = getattr(self.model, str(v))
                 for index in varobject:
                     val  = varobject[index].value
-                    print (" ",index, val)
+                    print (" %d %0.3f  %s"%(index, val, self.all_acts_by_indx[index]))
 
             elif str (v) =='var_dmr_utilization': 
                 print ("Variable",v)
@@ -835,7 +912,8 @@ class GPActivityScheduling():
             # wind may get set multiple times due to Windows appearing across routes, but that's not really a big deal
             for wind in dmr.get_winds():
                 act_indx = self.all_acts_by_obj[wind]
-                wind_sched_dv_check[wind] = wind.data_vol * pe.value(self.model.var_act_indic[act_indx])
+                # wind_sched_dv_check[wind] = wind.data_vol * pe.value(self.model.var_act_indic[act_indx])
+                wind_sched_dv_check[wind] = wind.data_vol * pe.value(self.model.var_activity_utilization[act_indx])
                 #  initialize this while we're here
                 wind.scheduled_data_vol = 0
 
