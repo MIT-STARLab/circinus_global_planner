@@ -113,6 +113,9 @@ class GPActivityScheduling():
         # setting to 20 minutes
         self.big_M_act_t_dur_s = 30*60
 
+        # this big M should be twice as large as any activity data volume 
+        self.big_M_act_dv = 200000 # in Mb
+
     def get_stats(self,verbose=True):
 
         num_winds_per_route = [len(dmr.get_winds()) for dmr in self.routes_flat]
@@ -251,7 +254,7 @@ class GPActivityScheduling():
             sat_acts[sat_indx].sort(key=lambda x: x.center)
             sat_dlnks[sat_indx].sort(key=lambda x: x.center)
 
-        return sat_acts,sat_dlnks,all_acts_indcs,dmr_indcs_by_act,dv_by_act,all_acts_by_obj,obs_act_indcs,dmr_indcs_by_obs_act,dv_by_obs_act,link_act_indcs,dmr_indcs_by_link_act,dv_by_link_act
+        return sat_acts,sat_dlnks,all_acts_indcs,dmr_indcs_by_act,dv_by_act,all_acts_by_obj,all_acts_by_indx,obs_act_indcs,dmr_indcs_by_obs_act,dv_by_obs_act,link_act_indcs,dmr_indcs_by_link_act,dv_by_link_act
                     
 
     def filter_routes( self,routes_flat):
@@ -263,6 +266,9 @@ class GPActivityScheduling():
             dmr_end = dmr.get_dlnk().end
 
             if dmr_start < self.sched_start_utc_dt or dmr_end > self.sched_end_utc_dt:
+                pass
+            if dmr.get_dlnk().duration.total_seconds() < self.min_act_duration_s[DlnkWindow]:
+                print('discarding too short dlnk window')
                 pass
             else:
                 new_routes.append (dmr)
@@ -325,6 +331,7 @@ class GPActivityScheduling():
                 dmr_indcs_by_act,
                 dv_by_act,
                 all_acts_by_obj,
+                all_acts_by_indx,
                 obs_act_indcs,
                 dmr_indcs_by_obs_act,
                 dv_by_obs_act,
@@ -369,6 +376,7 @@ class GPActivityScheduling():
         self.obs_act_indcs = obs_act_indcs
         self.link_act_indcs = link_act_indcs
         self.all_acts_by_obj = all_acts_by_obj
+        self.all_acts_by_indx = all_acts_by_indx
 
         # these subscripts probably should've been done using the unique IDs for the objects, rather than their arbitrary locations within a list. Live and learn, hélas...
 
@@ -392,8 +400,8 @@ class GPActivityScheduling():
         model.obs_acts = pe.Set(initialize= obs_act_indcs)
         model.link_acts = pe.Set(initialize= link_act_indcs)
 
-        if self.solver_name == 'gurobi':
-            int_feas_tol = self.solver_params['gurobi']['integer_feasibility_tolerance']
+        if self.solver_name == 'gurobi' or self.solver_name == 'cplex':
+            int_feas_tol = self.solver_params['integer_feasibility_tolerance']
         else:
             raise NotImplementedError
 
@@ -404,6 +412,12 @@ class GPActivityScheduling():
         for act_obj in all_acts_by_obj.keys():
             if 2*(act_obj.end-act_obj.start).total_seconds() > self.big_M_act_t_dur_s:
                 raise RuntimeWarning('big_M_act_t_dur_s (%f) is not large enough for act of duration %s and integer feasibility tolerance %f (act string %s)'%(self.big_M_act_t_dur_s,act_obj.end-act_obj.start,int_feas_tol,act_obj))
+            # if 2*(act_obj.end-act_obj.start).total_seconds() > (1-int_feas_tol) *  self.big_M_act_t_dur_s:
+                # raise RuntimeWarning('big_M_act_t_dur_s (%f) is not large enough for act of duration %s and integer feasibility tolerance %f (act string %s)'%(self.big_M_act_t_dur_s,act_obj.end-act_obj.start,int_feas_tol,act_obj))
+
+            if 2*act_obj.data_vol > (1-int_feas_tol) * self.big_M_act_dv:
+                raise RuntimeWarning('big_M_act_dv (%f) is not large enough for act of dv %f and integer feasibility tolerance %f (act string %s)'%(self.big_M_act_dv,act_obj.data_vol,int_feas_tol,act_obj))
+                
 
 
         ##############################
@@ -800,6 +814,15 @@ class GPActivityScheduling():
         solver = po.SolverFactory(self.solver_name)
         if self.solver_name == 'gurobi':
             # note default for this is 1e-4, or 0.01%
+            solver.options['TimeLimit'] = self.solver_params['max_runtime_s']
+            solver.options['MIPGap'] = self.solver_params['optimality_gap']
+            solver.options['IntFeasTol'] = self.solver_params['integer_feasibility_tolerance']
+        elif self.solver_name == 'cplex':
+            solver.options['timelimit'] = self.solver_params['max_runtime_s']
+            solver.options['mip_tolerances_mipgap'] = self.solver_params['optimality_gap']
+            solver.options['mip_tolerances_integrality'] = self.solver_params['integer_feasibility_tolerance']
+
+
             solver.options['TimeLimit'] = 100 #self.solver_params['gurobi']['max_runtime_s']
             solver.options['MIPGap'] = self.solver_params['gurobi']['optimality_gap']
             solver.options['IntFeasTol'] = self.solver_params['gurobi']['integer_feasibility_tolerance']
@@ -839,7 +862,7 @@ class GPActivityScheduling():
                 varobject = getattr(self.model, str(v))
                 for index in varobject:
                     val  = varobject[index].value
-                    print (" ",index, val)
+                    print (" %d %0.3f  %s"%(index, val, self.all_acts_by_indx[index]))
 
             elif str (v) =='var_dmr_utilization': 
                 print ("Variable",v)
@@ -889,7 +912,8 @@ class GPActivityScheduling():
             # wind may get set multiple times due to Windows appearing across routes, but that's not really a big deal
             for wind in dmr.get_winds():
                 act_indx = self.all_acts_by_obj[wind]
-                wind_sched_dv_check[wind] = wind.data_vol * pe.value(self.model.var_act_indic[act_indx])
+                # wind_sched_dv_check[wind] = wind.data_vol * pe.value(self.model.var_act_indic[act_indx])
+                wind_sched_dv_check[wind] = wind.data_vol * pe.value(self.model.var_activity_utilization[act_indx])
                 #  initialize this while we're here
                 wind.scheduled_data_vol = 0
 
@@ -912,7 +936,7 @@ class GPActivityScheduling():
         updated_winds = set()
         for dmr in scheduled_routes_flat:
             # validate the data multi route (and in turn, the scheduled data vols of all the data routes under it)
-            dmr.validate(self.dv_epsilon)
+            dmr.validate()
 
             for wind in dmr.get_winds():
                 #  this check should be at least as big as the scheduled data volume as calculated from all of the route data volumes. (it's not constrained from above, so it could be bigger)

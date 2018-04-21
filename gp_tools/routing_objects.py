@@ -32,7 +32,7 @@ class DataMultiRoute():
     note that it is still valid to multiply the entire data volume of this route by a single utilization number from 0 to 1 to represent how much data volume is used from this multi-route. When constructing the multi-route, we ensure that no data volume from any given activity window is spoken for by multiple DataRoute objects within the multi-route; i.e.,  It's perfectly allowable to schedule all of the data routes within from a throughput perspective. the utilization number effectively carries through to multiply the data volumes of the individual data route objects.
     """
 
-    def __init__(self,ID,data_routes):
+    def __init__(self,ID,data_routes,dv_epsilon=1e-5):
         self.ID = ID
         #  all of the "simple"  data route objects contained within this multi-route
         self.data_routes = data_routes
@@ -40,6 +40,8 @@ class DataMultiRoute():
         self.data_vol_by_dr = {dr:dr.data_vol for dr in data_routes}
         self.scheduled_dv_by_dr = {dr:const.UNASSIGNED for dr in data_routes}
         self.has_scheduled_dv = False
+
+        self.dv_epsilon=dv_epsilon
 
         for dr in data_routes:
             if not type(dr) == DataRoute:
@@ -108,10 +110,10 @@ class DataMultiRoute():
     def __repr__(self):
         return  '(DataMultiRoute %d, routes: %s)'%(self.ID,{dr.ID: self.data_vol_by_dr[dr] for dr in self.data_routes})
 
-    def validate (self,dv_epsilon):
+    def validate (self):
         for dr in self.data_routes:
             #  validate the data routes individually - this checks for temporal and data volume consistency within those routes
-            dr.validate(dv_epsilon)
+            dr.validate()
             #  validate that they all have the same initial observation and the same final downlink
             assert(dr.get_obs() == self.get_obs())
             assert(dr.get_dlnk() == self.get_dlnk())
@@ -129,7 +131,7 @@ class DataMultiRoute():
         #  check that for all of the windows in all of the routes, no window is oversubscribed
         #  note the assumption here that every data route's data volume will be less than or equal to the data volume of the observation, all of the cross-links, and the downlink
         for dv in avail_dv_by_wind.values():
-            assert(dv >= 0 - dv_epsilon)
+            assert(dv >= 0 - self.dv_epsilon)
 
 
     def accumulate_dr( self, candidate_dr,min_dmr_candidate_dv=0):
@@ -206,6 +208,8 @@ class DataRoute():
         self.sort_windows()   
 
         self.obs_dv_multiplier = obs_dv_multiplier
+
+        self.dv_epsilon = dv_epsilon
 
 
     def __copy__(self):
@@ -299,12 +303,18 @@ class DataRoute():
             elif type(wind) == XlnkWindow:
                 self.route[windex] = xlnk_winds_dict[wind]
 
-    def validate (self,dv_epsilon):
+    def validate (self):
         """ validates timing and ordering of route
         
         [description]
         :raises: Exception, Exception, Exception
         """
+
+        # todo: remove this hack! It's for dealing with already-pickled RS outputs
+        try:
+            self.dv_epsilon
+        except AttributeError:
+            self.dv_epsilon = 1
 
         if len( self.route) == 0:
             return
@@ -313,7 +323,7 @@ class DataRoute():
         if not type (obs) is ObsWindow:
             raise Exception('First window on route was not an ObsWindow instance. Route string: %s'%( self.get_route_string()))
 
-        if not self.scheduled_dv <= self.data_vol:
+        if not self.scheduled_dv <= self.data_vol + self.dv_epsilon:
             string = 'routing_objects.py: scheduled data volume (%f) is more than available data volume (%f). Route string: %s'%( self.scheduled_dv, self.data_vol, self.get_route_string())
             raise RuntimeError(string)
 
@@ -331,7 +341,7 @@ class DataRoute():
                 raise RuntimeError( string)
 
             #  note the assumption here that every data route's data volume will be less than or equal to the data volume of the observation, all of the cross-links, and the downlink
-            if not self.data_vol <= wind.data_vol:
+            if not self.data_vol <= wind.data_vol + self.dv_epsilon:
                 string ='routing_objects.py: Found bad dv at window indx %d in route. Allowable dv: %f. Route string: %s'%( windex, obs.data_vol*self.obs_dv_multiplier,str(self))
                 raise RuntimeError( string)
 

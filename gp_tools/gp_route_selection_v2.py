@@ -639,7 +639,7 @@ class GPDataRouteSelection():
 
         all_routes = [dr for rr in final_route_records for dr in rr.routes]
         for dr in all_routes:
-            dr.validate(self.dv_epsilon)
+            dr.validate()
 
         return all_routes
 
@@ -655,7 +655,7 @@ class GPDataRouteSelection():
                 rt_index += 1
                 continue
 
-            dmr = DataMultiRoute(ID=dmr_uid,data_routes=[curr_dr])
+            dmr = DataMultiRoute(ID=dmr_uid,data_routes=[curr_dr],dv_epsilon=self.dv_epsilon)
             dmr_uid += 1
 
             #  if the data route already has enough data volume to meet the minimum requirement for the activity scheduling stage, add it as a selected route
