@@ -219,7 +219,7 @@ class GPPlotting():
                         d = Rectangle((obs_start, bottom_vert_loc), obs_end-obs_start, bottom_vert_loc+1,alpha=1,fill=True,color='#BFFFBF')
                         current_axis.add_patch(d)
 
-                        plt.text(obs_start+0.15, bottom_vert_loc+0.4, "%s,dv %d/%d"%(obs_wind.target_IDs,obs_wind.scheduled_data_vol,obs_wind.data_vol) , fontsize=10, color = 'k')
+                        # plt.text(obs_start+0.15, bottom_vert_loc+0.4, "%s,dv %d/%d"%(obs_wind.target_IDs,obs_wind.scheduled_data_vol,obs_wind.data_vol) , fontsize=10, color = 'k')
 
                         # save off the rotator choice so that we can look it up again
                         obs_choices_rectangle_rotator_hist[obs_wind] = obs_choices_rectangle_rotator
@@ -242,7 +242,7 @@ class GPPlotting():
 
                         current_axis.add_patch(d_w)
                         # plt.text( (dlnk_wind_end+dlnk_wind_start)/2 - 0.30, bottom_vert_loc+0.6, "g%d,dv %d/%d"%(dlnk_wind.gs_indx,dlnk_wind.scheduled_data_vol,dlnk_wind.data_vol) , fontsize=10, color = 'k')
-                        plt.text( dlnk_wind_start - 0.30, bottom_vert_loc+0.7, "g%d,dv %d/%d"%(dlnk_wind.gs_indx,dlnk_wind.scheduled_data_vol,dlnk_wind.data_vol) , fontsize=10, color = 'k')
+                        # plt.text( dlnk_wind_start - 0.30, bottom_vert_loc+0.7, "g%d,dv %d/%d"%(dlnk_wind.gs_indx,dlnk_wind.scheduled_data_vol,dlnk_wind.data_vol) , fontsize=10, color = 'k')
 
                         # plt.text(dlnk_wind_start+0.15, bottom_vert_loc+0.1, dlnk_wind.window_ID , fontsize=10, color = 'k')
 

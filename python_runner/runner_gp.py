@@ -422,7 +422,7 @@ class GlobalPlannerRunner:
                 dr_uid += 1
 
                 # try:
-                dr.validate(dv_epsilon = self.as_params['dv_epsilon_Mb'])
+                dr.validate()
                 # except:
                 #     raise Exception("Couldn't handle dr %s for obs %s (indices %s)"%(dr,dr.get_obs(),indices_by_obs[dr.get_obs()]))
 
@@ -675,7 +675,7 @@ class GlobalPlannerRunner:
             plot_title = 'Scheduled Activities',
             plot_size_inches = (18,12),
             plot_include_dlnk_labels = self.as_params['plot_include_dlnk_labels'],
-            plot_include_xlnk_labels = True, #self.as_params['plot_include_xlnk_labels'],
+            plot_include_xlnk_labels = False, #self.as_params['plot_include_xlnk_labels'],
             show=  False,
             fig_name='plots/test_activity_times.pdf'
         )
@@ -830,7 +830,7 @@ class GlobalPlannerRunner:
 
         for rts in selected_rts_by_obs.values():
             for dmr in rts:
-                dmr.validate(self.as_params['dv_epsilon_Mb'])
+                dmr.validate()
 
         return selected_rts_by_obs
 

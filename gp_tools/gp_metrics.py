@@ -113,14 +113,31 @@ class GPMetrics():
 
         sched_rts_by_obs = self.get_routes_by_obs (sched_routes)
 
-        rs_dvs_by_obs =  {}
+        dlnk_dv_check = {}
+
+        rs_collectible_dvs_by_obs =  {}
+        rs_collectible_dlnkable_dvs_by_obs =  {}
         sched_dvs_by_obs =  {}
         num_sched_obs = 0
         num_rs_obs_dv_not_zero = 0
         for obs in rs_routes_by_obs.keys ():
-            rs_dvs_by_obs[obs] = min(obs.data_vol,sum (rt.data_vol for rt in rs_routes_by_obs[obs]))
-            if rs_dvs_by_obs[obs] > 0:
+            rs_collectible_dvs_by_obs[obs] = min(obs.data_vol,sum (rt.data_vol for rt in rs_routes_by_obs[obs]))
+            if rs_collectible_dvs_by_obs[obs] > 0:
                 num_rs_obs_dv_not_zero += 1
+
+            # todo: figure out what's up with this
+            cum_dv_dlnkable = 0
+            for rt in rs_routes_by_obs[obs]:
+                dlnk =rt.get_dlnk()
+                dlnk_dv_check.setdefault(dlnk,dlnk.data_vol)
+                dv_dlnkable = min(dlnk_dv_check[dlnk],rt.data_vol)
+
+                cum_dv_dlnkable += dv_dlnkable
+                dlnk_dv_check[dlnk] -= dv_dlnkable
+
+            rs_collectible_dlnkable_dvs_by_obs[obs] = min(obs.data_vol,cum_dv_dlnkable)
+
+
             if obs in sched_rts_by_obs.keys():
                 sched_dvs_by_obs[obs] = sum (rt.scheduled_dv for rt in sched_rts_by_obs[obs])
                 num_sched_obs +=1
@@ -128,7 +145,8 @@ class GPMetrics():
                 sched_dvs_by_obs[obs] = 0
 
 
-        rs_dvs = [dv for dv in rs_dvs_by_obs. values ()]
+        rs_dvs = [dv for dv in rs_collectible_dvs_by_obs. values ()]
+        rs_real_dvs = [dv for dv in rs_collectible_dlnkable_dvs_by_obs. values ()]
         sched_dvs = [dv for dv in sched_dvs_by_obs. values ()]
         
         valid = len(rs_dvs) > 0
@@ -137,6 +155,7 @@ class GPMetrics():
         stats['num_obs_rs_pos_dv'] = num_rs_obs_dv_not_zero
         stats['num_obs_sched'] = num_sched_obs
         stats['total_collectible_dv'] = sum(rs_dvs) if valid else 0
+        stats['total_collect&dlnkable_dv'] = sum(rs_real_dvs) if valid else 0
         stats['total_sched_dv'] = sum(sched_dvs) if valid else 0
         stats['ave_obs_dv_rs'] = np.mean(rs_dvs) if valid else 0
         stats['ave_obs_dv_sched'] = np.mean(sched_dvs) if valid else 0
@@ -147,7 +166,7 @@ class GPMetrics():
         stats['max_obs_dv_rs'] = np.max(rs_dvs) if valid else 0
         stats['max_obs_dv_sched'] = np.max(sched_dvs) if valid else 0
 
-        stats['rs_dvs_by_obs'] = rs_dvs_by_obs
+        stats['rs_collectible_dvs_by_obs'] = rs_collectible_dvs_by_obs
 
         if verbose:
             print('------------------------------')
@@ -156,6 +175,7 @@ class GPMetrics():
             print("%s: \t\t\t %f"%('num_obs_rs_pos_dv',stats['num_obs_rs_pos_dv']))
             print("%s: \t\t\t\t %f"%('num_obs_sched',stats['num_obs_sched']))
             print("%s: \t\t\t %f"%('total_collectible_dv',stats['total_collectible_dv']))
+            print("%s: \t\t\t %f"%('total_collect&dlnkable_dv',stats['total_collect&dlnkable_dv']))
             print("%s: \t\t\t %f"%('total_sched_dv',stats['total_sched_dv']))
             print("%s: %f"%('ave_obs_dv_rs',stats['ave_obs_dv_rs']))
             print("%s: %f"%('std_obs_dv_rs',stats['std_obs_dv_rs']))
