@@ -490,6 +490,13 @@ class GPActivityScheduling():
             for p in model.par_dmr_subscrs_by_act[a]:
                 model.c1b.add(model.var_act_indic[a] >= model.var_dmr_indic[p]) 
 
+        model.c1c  = pe.ConstraintList()
+        for act in sat_acts:
+            if type(act) == DlnkWindow:
+                act_uindx = all_acts_by_obj[act]
+                for p in model.par_dmr_subscrs_by_act[act_uindx]:
+                    model.c1c.add(model.var_act_indic[act_uindx] >= model.var_dmr_indic[p]) 
+
         def c2_rule( model,p):
             return model.par_dmr_dv[p]*model.var_dmr_utilization[p] >= model.par_min_as_route_dv*model.var_dmr_indic[p]
         model.c2 =pe.Constraint ( model.dmrs,  rule=c2_rule)
