@@ -10,6 +10,8 @@ from math import ceil
 from pyomo import environ  as pe
 from pyomo import opt  as po
 
+import numpy as np
+
 from circinus_tools  import time_tools as tt
 from .custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
 from .routing_objects import DataMultiRoute
@@ -112,20 +114,52 @@ class GPActivityScheduling():
         self.big_M_act_t_dur_s = 30*60
 
     def get_stats(self,verbose=True):
+
+        num_winds_per_route = [len(dmr.get_winds()) for dmr in self.routes_flat]
+        num_routes_by_act = {act:len(self.dmr_indcs_by_act[act_indx]) for act,act_indx in self.all_acts_by_obj.items()}
+
         stats = {}
         stats['num_routes'] = sum([len ( self.routes_flat)])
         stats['num_acts'] = sum([len ( self.all_acts_indcs)])
         stats['num_obs_acts'] = sum([len ( self.obs_act_indcs)])
         stats['num_link_acts'] = sum([len ( self.link_act_indcs)])
+        stats['ave_num_winds_per_route'] = np.mean(num_winds_per_route)
+        stats['max_num_winds_per_route'] = np.max(num_winds_per_route)
+        stats['med_num_winds_per_route'] = np.median(num_winds_per_route)
         stats['num_variables'] = self.model.nvariables ()
         stats['num_nobjectives'] = self.model.nobjectives ()
         stats['num_nconstraints'] = self.model.nconstraints ()
+        stats['num_dlnks'] = sum([1 for act in num_routes_by_act.keys() if type(act) == DlnkWindow])
+        stats['num_xlnks'] = sum([1 for act in num_routes_by_act.keys() if type(act) == XlnkWindow])
+
+        stats['ave_num_routes_per_act'] = np.mean(list(num_routes_by_act.values()))
+        stats['ave_num_routes_per_obs'] = np.mean([num for act,num in num_routes_by_act.items() if type(act) == ObsWindow])
+        stats['ave_num_routes_per_dlnk'] = np.mean([num for act,num in num_routes_by_act.items() if type(act) == DlnkWindow])
+        stats['max_num_routes_per_dlnk'] = np.max([num for act,num in num_routes_by_act.items() if type(act) == DlnkWindow])
+        stats['min_num_routes_per_dlnk'] = np.min([num for act,num in num_routes_by_act.items() if type(act) == DlnkWindow])
+        stats['med_num_routes_per_dlnk'] = np.median([num for act,num in num_routes_by_act.items() if type(act) == DlnkWindow])
+        stats['ave_num_routes_per_xlnk'] = np.mean([num for act,num in num_routes_by_act.items() if type(act) == XlnkWindow])
+        stats['max_num_routes_per_xlnk'] = np.max([num for act,num in num_routes_by_act.items() if type(act) == XlnkWindow])
+
 
         if verbose:
             print ( "Considering %d routes" % (stats['num_routes']))
             print ( "Considering %d activity windows" % (stats['num_acts']))
             print ( "Considering %d observation windows" % (stats['num_obs_acts']))
             print ( "Considering %d link windows" % (stats['num_link_acts']))
+            print ( "Considering %d xlink windows" % (stats['num_xlnks']))
+            print ( "Considering %d dlink windows" % (stats['num_dlnks']))
+            print ( "ave_num_winds_per_route: %0.2f"%(stats['ave_num_winds_per_route']))
+            print ( "max_num_winds_per_route: %0.2f"%(stats['max_num_winds_per_route']))
+            print ( "med_num_winds_per_route: %0.2f"%(stats['med_num_winds_per_route']))
+            print ( "ave_num_routes_per_act: %0.2f"%(stats['ave_num_routes_per_act']))
+            print ( "ave_num_routes_per_obs: %0.2f"%(stats['ave_num_routes_per_obs']))
+            print ( "ave_num_routes_per_dlnk: %0.2f"%(stats['ave_num_routes_per_dlnk']))
+            print ( "max_num_routes_per_dlnk: %0.2f"%(stats['max_num_routes_per_dlnk']))
+            print ( "min_num_routes_per_dlnk: %0.2f"%(stats['min_num_routes_per_dlnk']))
+            print ( "med_num_routes_per_dlnk: %0.2f"%(stats['med_num_routes_per_dlnk']))
+            print ( "ave_num_routes_per_xlnk: %0.2f"%(stats['ave_num_routes_per_xlnk']))
+            print ( "max_num_routes_per_xlnk: %0.2f"%(stats['max_num_routes_per_xlnk']))
             print ( 'self.model.nvariables ()')
             print ( self.model.nvariables ())
             print ( 'self.model.nobjectives ()')
@@ -330,7 +364,7 @@ class GPActivityScheduling():
 
         except IndexError:
             raise RuntimeWarning('sat_indx out of range. Are you sure all of your input files are consistent? (including pickles)')        
-
+        self.dmr_indcs_by_act = dmr_indcs_by_act
         self.all_acts_indcs = all_acts_indcs
         self.obs_act_indcs = obs_act_indcs
         self.link_act_indcs = link_act_indcs
@@ -424,7 +458,9 @@ class GPActivityScheduling():
         model.var_dmr_utilization  = pe.Var (model.dmrs, bounds =(0,1))
         #  indicator variables for whether or not dmrs [3] and activities [4] have been chosen
         model.var_dmr_indic  = pe.Var (model.dmrs, within = pe.Binary)
+        # model.var_dmr_indic  = pe.Var (model.dmrs, bounds =(0,1))
         model.var_act_indic  = pe.Var (model.acts, within = pe.Binary)
+        # model.var_act_indic  = pe.Var (model.acts, bounds =(0,1))
         
         # satellite energy storage
         model.var_sats_estore  = pe.Var (model.sats,  model.es_timepoint_indcs,  within = pe.NonNegativeReals)
@@ -448,6 +484,11 @@ class GPActivityScheduling():
                             for p in model.par_dmr_subscrs_by_act[a]) 
                     >= 0)
         model.c1 =pe.Constraint ( model.acts,  rule=c1_rule)
+
+        model.c1b  = pe.ConstraintList()
+        for a in model.acts:
+            for p in model.par_dmr_subscrs_by_act[a]:
+                model.c1b.add(model.var_act_indic[a] >= model.var_dmr_indic[p]) 
 
         def c2_rule( model,p):
             return model.par_dmr_dv[p]*model.var_dmr_utilization[p] >= model.par_min_as_route_dv*model.var_dmr_indic[p]
@@ -519,7 +560,7 @@ class GPActivityScheduling():
                         model.c5.add( center_time_diff - time_adjust_1 - time_adjust_2 + constr_disable_1 + constr_disable_2 >= transition_time_req)
 
 
-        #  inter-satellite downlink overlap constraints [9],[10]
+        # inter-satellite downlink overlap constraints [9],[10]
         model.c9  = pe.ConstraintList()
         model.c10  = pe.ConstraintList()
         for sat_indx in range (self.num_sats):
@@ -585,6 +626,9 @@ class GPActivityScheduling():
                             constr_disable_1 = self.big_M_act_t_dur_s*(1-model.var_act_indic[act1_uindx])
                             constr_disable_2 = self.big_M_act_t_dur_s*(1-model.var_act_indic[act2_uindx])
                             model.c10.add( center_time_diff - time_adjust_1 - time_adjust_2 + constr_disable_1 + constr_disable_2 >= transition_time_req)
+
+        # from circinus_tools import debug_tools
+        # debug_tools.debug_breakpt()
 
 
         if verbose:
@@ -749,9 +793,12 @@ class GPActivityScheduling():
         solver = po.SolverFactory(self.solver_name)
         if self.solver_name == 'gurobi':
             # note default for this is 1e-4, or 0.01%
-            solver.options['TimeLimit'] = self.solver_params['gurobi']['max_runtime_s']
+            solver.options['TimeLimit'] = 100 #self.solver_params['gurobi']['max_runtime_s']
             solver.options['MIPGap'] = self.solver_params['gurobi']['optimality_gap']
             solver.options['IntFeasTol'] = self.solver_params['gurobi']['integer_feasibility_tolerance']
+            # solver.options['Cuts'] = 0
+            # solver.options['MIPFocus'] = 1 #for finding feasible solutions quickly
+            # solver.options['MIPFocus'] = 3 #for lowering the mip gap
 
         # if we're running things remotely, then we will use the NEOS server (https://neos-server.org/neos/)
         if self.solver_params['run_remotely']:

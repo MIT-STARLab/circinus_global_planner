@@ -153,6 +153,9 @@ class GlobalPlannerRunner:
         # flatten the list of all routes, which currently has nested lists for each observation
         routes_flat = [rt for rts in routes_by_obs.values() for rt in rts]
 
+        # from circinus_tools import debug_tools
+        # debug_tools.debug_breakpt()
+
         print('make activity scheduling model')
         gp_as.make_model (routes_flat, ecl_winds,verbose = True)
         stats =gp_as.get_stats (verbose = True)
@@ -863,6 +866,7 @@ class GlobalPlannerRunner:
 
             # todo:  probably ought to delete the input times and rates matrices to free up space
 
+            print('In windows loaded from file:')
             print('obs_winds')
             print(sum([len(p) for p in obs_winds]))
             print('dlnk_win')
@@ -887,6 +891,7 @@ class GlobalPlannerRunner:
 
             #  otherwise run route selection step 1
             else:
+                print('Run route selection step 1')
                 routes_by_obs,all_stats,route_times_s, obs_indx, dr_uid  =  self.run_nominal_route_selection_v2_step1(obs_winds,dlnk_winds_flat,xlnk_winds,verbose=self.rs_v2_params['verbose_step1'])
                 # routes_by_obs,all_stats,route_times_s, obs_indx, weights_tups  =  self.run_test_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
 
