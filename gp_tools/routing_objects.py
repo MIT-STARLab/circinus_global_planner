@@ -111,6 +111,13 @@ class DataMultiRoute():
         return  '(DataMultiRoute %d, routes: %s)'%(self.ID,{dr.ID: self.data_vol_by_dr[dr] for dr in self.data_routes})
 
     def validate (self):
+
+        # todo: remove this hack! It's for dealing with already-pickled RS outputs
+        try:
+            self.dv_epsilon
+        except AttributeError:
+            self.dv_epsilon = 1  # Mb
+
         for dr in self.data_routes:
             #  validate the data routes individually - this checks for temporal and data volume consistency within those routes
             dr.validate()

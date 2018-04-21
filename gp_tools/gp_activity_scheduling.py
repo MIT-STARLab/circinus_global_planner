@@ -576,8 +576,9 @@ class GPActivityScheduling():
                         # this is the adjustment added to the center time to get to the start or end of the activity
                         time_adjust_1 = model.par_act_dv[act1_uindx]*model.var_activity_utilization[act1_uindx]/2/act1.ave_data_rate
                         time_adjust_2 = model.par_act_dv[act2_uindx]*model.var_activity_utilization[act2_uindx]/2/act2.ave_data_rate
-                        constr_disable_1 = self.big_M_act_t_dur_s*(1-model.var_act_indic[act1_uindx])
-                        constr_disable_2 = self.big_M_act_t_dur_s*(1-model.var_act_indic[act2_uindx])
+                        M = max(act1.duration,act2.duration).total_seconds()
+                        constr_disable_1 = M*(1-model.var_act_indic[act1_uindx])
+                        constr_disable_2 = M*(1-model.var_act_indic[act2_uindx])
                         model.c5.add( center_time_diff - time_adjust_1 - time_adjust_2 + constr_disable_1 + constr_disable_2 >= transition_time_req)
 
 
@@ -644,8 +645,9 @@ class GPActivityScheduling():
                             # this is the adjustment added to the center time to get to the start or end of the activity
                             time_adjust_1 = model.par_act_dv[act1_uindx]*model.var_activity_utilization[act1_uindx]/2/act1.ave_data_rate
                             time_adjust_2 = model.par_act_dv[act2_uindx]*model.var_activity_utilization[act2_uindx]/2/act2.ave_data_rate
-                            constr_disable_1 = self.big_M_act_t_dur_s*(1-model.var_act_indic[act1_uindx])
-                            constr_disable_2 = self.big_M_act_t_dur_s*(1-model.var_act_indic[act2_uindx])
+                            M = max(act1.duration,act2.duration).total_seconds()
+                            constr_disable_1 = M*(1-model.var_act_indic[act1_uindx])
+                            constr_disable_2 = M*(1-model.var_act_indic[act2_uindx])
                             model.c10.add( center_time_diff - time_adjust_1 - time_adjust_2 + constr_disable_1 + constr_disable_2 >= transition_time_req)
 
         # from circinus_tools import debug_tools
