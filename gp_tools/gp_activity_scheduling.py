@@ -141,8 +141,10 @@ class GPActivityScheduling():
         stats['max_num_routes_per_dlnk'] = np.max([num for act,num in num_routes_by_act.items() if type(act) == DlnkWindow])
         stats['min_num_routes_per_dlnk'] = np.min([num for act,num in num_routes_by_act.items() if type(act) == DlnkWindow])
         stats['med_num_routes_per_dlnk'] = np.median([num for act,num in num_routes_by_act.items() if type(act) == DlnkWindow])
-        stats['ave_num_routes_per_xlnk'] = np.mean([num for act,num in num_routes_by_act.items() if type(act) == XlnkWindow])
-        stats['max_num_routes_per_xlnk'] = np.max([num for act,num in num_routes_by_act.items() if type(act) == XlnkWindow])
+        num_routes_xlnk = [num for act,num in num_routes_by_act.items() if type(act) == XlnkWindow]
+        stats['ave_num_routes_per_xlnk'] = np.mean(num_routes_xlnk) if len(num_routes_xlnk) > 0 else const.UNASSIGNED
+        stats['max_num_routes_per_xlnk'] = np.max(num_routes_xlnk) if len(num_routes_xlnk) > 0 else const.UNASSIGNED
+
 
 
         if verbose:
@@ -475,6 +477,7 @@ class GPActivityScheduling():
         # model.var_dmr_indic  = pe.Var (model.dmrs, bounds =(0,1))
         model.var_act_indic  = pe.Var (model.acts, within = pe.Binary)
         # model.var_act_indic  = pe.Var (model.acts, bounds =(0,1))
+
         
         # satellite energy storage
         model.var_sats_estore  = pe.Var (model.sats,  model.es_timepoint_indcs,  within = pe.NonNegativeReals)
@@ -484,6 +487,18 @@ class GPActivityScheduling():
 
         model.var_dmr_latency_sf_by_obs_indx = pe.Var (model.obs_acts,  within = pe.NonNegativeReals)
         
+        allow_act_timing_constr_violations = True
+        #  variables for handling the allowance of inter-activity timing constraint violations. these are only generated if allow_act_timing_constr_violations is True
+        model.var_intra_sat_act_constr_violations = pe.VarList()
+        model.var_inter_sat_act_constr_violations = pe.VarList()
+        # model.indcs_intra_sat_act_constr_violations = pe.Set(initialize= [])
+        # model.indcs_inter_sat_act_constr_violations = pe.Set(initialize= [])
+        # model.var_intra_sat_act_constr_violations = pe.Var(model.indcs_intra_sat_act_constr_violations)
+        # model.var_inter_sat_act_constr_violations = pe.Var(model.indcs_inter_sat_act_constr_violations)
+
+        #  stores all of the lower bounds of the constraint violation variables, for use in normalization for objective function
+        min_var_intra_sat_act_constr_violation_list = [] 
+        min_var_inter_sat_act_constr_violation_list = [] 
 
         ##############################
         #  Make constraints
@@ -524,12 +539,68 @@ class GPActivityScheduling():
         model.c3c =pe.Constraint ( model.dmrs,  rule=c3c_rule)
 
         # keep track of this, so we know to warn user about default transition time usage
+        #  note: this is not a parameter! it's merely helpful for reporting warnings
         used_default_transition_time = False
 
+        def gen_inter_act_constraint(var_list,constr_list,transition_time_req,act1,act2,act1_uindx,act2_uindx):
+
+            var_constr_violation = None
+            min_constr_violation = None
+
+            center_time_diff = (act2.center - act1.center).total_seconds()
+            time_adjust_1 = model.par_act_dv[act1_uindx]*model.var_activity_utilization[act1_uindx]/2/act1.ave_data_rate
+            time_adjust_2 = model.par_act_dv[act2_uindx]*model.var_activity_utilization[act2_uindx]/2/act2.ave_data_rate
+            max_time_adjust_1 = model.par_act_dv[act1_uindx]*1/2/act1.ave_data_rate
+            max_time_adjust_2 = model.par_act_dv[act2_uindx]*1/2/act2.ave_data_rate
+
+            if not allow_act_timing_constr_violations:
+                #  if the activities overlap in center time (including  transition time), then it's not possible to have sufficient transition time between them.  only allow one
+                if (act2.center - act1.center).total_seconds() <= transition_time_req:
+                    constr = model.var_act_indic[act1_uindx]+ model.var_act_indic[act2_uindx] <= 1
+                else:
+                    M = max(act1.duration,act2.duration).total_seconds()
+                    constr_disable_1 = M*(1-model.var_act_indic[act1_uindx])
+                    constr_disable_2 = M*(1-model.var_act_indic[act2_uindx])
+        
+                    constr = center_time_diff - time_adjust_1 - time_adjust_2 + constr_disable_1 + constr_disable_2 >= transition_time_req
+
+            else:
+                # time_adjust_N can go as low as zero, so the constraint violation can be this at its lowest
+                min_constr_violation = center_time_diff - max_time_adjust_1 - max_time_adjust_2 - transition_time_req
+
+                assert(min_constr_violation < 0)
+
+                # want the constraint violation only to go to zero at its maximum, because we don't want to reward times where there is no constraint violation, only penalize
+                # var_constr_violation = pe.Var (bounds = (min_constr_violation,0))
+
+                # deal with adding a variable to represent this constraint violation. ( I hate that I have to do it this way, deep within this function, but it seems like the approach you have to use for dynamically generating variable lists in pyomo, bizarrely. refer to: https://projects.coin-or.org/Coopr/browser/pyomo/trunk/pyomo/core/base/var.py?rev=11067, https://groups.google.com/forum/#!topic/pyomo-forum/modS1VkPxW0
+                var_list.add()
+                var_constr_violation = var_list[len(var_list)]
+                # new_var_indx = len(var_indcs)+1
+                # var_indcs.add(new_var_indx)
+                # var_constr_violation = var_obj[new_var_indx]
+
+                var_constr_violation.setlb(min_constr_violation)
+                var_constr_violation.setub(0)
+
+                #  bounds on range of constraint violation variable
+                # constr_list.add(var_constr_violation <= 0)
+                # constr_list.add(var_constr_violation >= min_constr_violation)
+
+
+                #  the actual time constraint that bounds the constraint violation
+                constr = center_time_diff - time_adjust_1 - time_adjust_2 - transition_time_req >= var_constr_violation
+
+            return constr, var_constr_violation, min_constr_violation
+
+
         #  intra-satellite activity overlap constraints [4],[5],[5b]
-        model.c4  = pe.ConstraintList()
-        model.c5  = pe.ConstraintList()
+        #  well, 5B is activity minimum time duration
+        # model.c4  = pe.ConstraintList()
+        model.c5  = pe.ConstraintList() # this now contains all of the activity overlap constraints
         model.c5b  = pe.ConstraintList()
+        model.intra_sat_act_constr_bounds  = pe.ConstraintList()
+        self.intra_sat_act_constr_violation_acts_list = []
         for sat_indx in range (self.num_sats):
             num_sat_acts = len(sat_acts[sat_indx])
             for  first_act_indx in  range (num_sat_acts):
@@ -567,24 +638,46 @@ class GPActivityScheduling():
 
                     #  if the activities overlap in center time, then it's not possible to have sufficient transition time between them
                     #  add constraint to rule out the possibility of scheduling both of them
-                    elif (act2.center - act1.center).total_seconds() <= transition_time_req:
-                        model.c4.add( model.var_act_indic[act1_uindx]+ model.var_act_indic[act2_uindx] <= 1)
+                    # elif (act2.center - act1.center).total_seconds() <= transition_time_req:
+                        # model.c4.add( model.var_act_indic[act1_uindx]+ model.var_act_indic[act2_uindx] <= 1)
 
                     # If they don't overlap in center time, but they do overlap to some amount, then we need to constrain their end and start times to be consistent with one another
                     else:
-                        center_time_diff = (act2.center - act1.center).total_seconds()
+                        # center_time_diff = (act2.center - act1.center).total_seconds()
                         # this is the adjustment added to the center time to get to the start or end of the activity
-                        time_adjust_1 = model.par_act_dv[act1_uindx]*model.var_activity_utilization[act1_uindx]/2/act1.ave_data_rate
-                        time_adjust_2 = model.par_act_dv[act2_uindx]*model.var_activity_utilization[act2_uindx]/2/act2.ave_data_rate
-                        M = max(act1.duration,act2.duration).total_seconds()
-                        constr_disable_1 = M*(1-model.var_act_indic[act1_uindx])
-                        constr_disable_2 = M*(1-model.var_act_indic[act2_uindx])
-                        model.c5.add( center_time_diff - time_adjust_1 - time_adjust_2 + constr_disable_1 + constr_disable_2 >= transition_time_req)
+                        # time_adjust_1 = model.par_act_dv[act1_uindx]*model.var_activity_utilization[act1_uindx]/2/act1.ave_data_rate
+                        # time_adjust_2 = model.par_act_dv[act2_uindx]*model.var_activity_utilization[act2_uindx]/2/act2.ave_data_rate
+                        # M = max(act1.duration,act2.duration).total_seconds()
+                        # constr_disable_1 = M*(1-model.var_act_indic[act1_uindx])
+                        # constr_disable_2 = M*(1-model.var_act_indic[act2_uindx])
+                        # model.c5.add( center_time_diff - time_adjust_1 - time_adjust_2 + constr_disable_1 + constr_disable_2 >= transition_time_req)
+
+                        constr, var_constr_violation, min_constr_violation = gen_inter_act_constraint(
+                            model.var_intra_sat_act_constr_violations,
+                            # model.indcs_intra_sat_act_constr_violations,
+                            model.intra_sat_act_constr_bounds,
+                            transition_time_req,
+                            act1,
+                            act2,
+                            act1_uindx,
+                            act2_uindx
+                        )
+
+                        #  add the constraint, regardless of whether or not it's a "big M" constraint, or a constraint violation constraint - they're handled the same
+                        model.c5.add( constr )
+
+                        #  if it's a constraint violation constraint, then we have a variable to deal with
+                        if not min_constr_violation is None:
+                            # model.var_intra_sat_act_constr_violations.add(var_constr_violation)
+                            min_var_intra_sat_act_constr_violation_list.append(min_constr_violation)
+                            self.intra_sat_act_constr_violation_acts_list.append((act1,act2))
 
 
         # inter-satellite downlink overlap constraints [9],[10]
         model.c9  = pe.ConstraintList()
         model.c10  = pe.ConstraintList()
+        model.inter_sat_act_constr_bounds  = pe.ConstraintList()
+        self.inter_sat_act_constr_violation_acts_list = []
         for sat_indx in range (self.num_sats):
             num_sat_acts = len(sat_dlnks[sat_indx])
             
@@ -609,6 +702,10 @@ class GPActivityScheduling():
                         act2_uindx = all_acts_by_obj[act2]
 
                         assert(type(act1) == DlnkWindow and type(act2) == DlnkWindow)
+
+                        # this line is pretty important - only consider overlap if they're looking at the same GS. I forgot to add this before and spent days wondering why the optimization process was progressing so slowly (hint: it's really freaking constrained and there's not much guidance for finding a good objective value if no downlink can overlap in time with any other downlink)
+                        if act1.gs_indx != act2.gs_indx:
+                            continue
 
                         # todo: include!
                         # # if they're not looking at the same gs, then constraints don't apply
@@ -636,19 +733,42 @@ class GPActivityScheduling():
 
                         #  if the activities overlap in center time, then it's not possible to have sufficient transition time between them
                         #  add constraint to rule out the possibility of scheduling both of them
-                        elif (act2.center - act1.center).total_seconds() <= transition_time_req:
-                            model.c9.add( model.var_act_indic[act1_uindx]+ model.var_act_indic[act2_uindx] <= 1)
+                        # elif (act2.center - act1.center).total_seconds() <= transition_time_req:
+                        #     model.c9.add( model.var_act_indic[act1_uindx]+ model.var_act_indic[act2_uindx] <= 1)
 
-                        # If they don't overlap in center time, but they do overlap to some amount, then we need to constrain their end and start times to be consistent with one another
+                        # # If they don't overlap in center time, but they do overlap to some amount, then we need to constrain their end and start times to be consistent with one another
+                        # else:
+                        #     center_time_diff = (act2.center - act1.center).total_seconds()
+                        #     # this is the adjustment added to the center time to get to the start or end of the activity
+                        #     time_adjust_1 = model.par_act_dv[act1_uindx]*model.var_activity_utilization[act1_uindx]/2/act1.ave_data_rate
+                        #     time_adjust_2 = model.par_act_dv[act2_uindx]*model.var_activity_utilization[act2_uindx]/2/act2.ave_data_rate
+                        #     M = max(act1.duration,act2.duration).total_seconds()
+                        #     constr_disable_1 = M*(1-model.var_act_indic[act1_uindx])
+                        #     constr_disable_2 = M*(1-model.var_act_indic[act2_uindx])
+                        #     model.c10.add( center_time_diff - time_adjust_1 - time_adjust_2 + constr_disable_1 + constr_disable_2 >= transition_time_req)
+
                         else:
-                            center_time_diff = (act2.center - act1.center).total_seconds()
-                            # this is the adjustment added to the center time to get to the start or end of the activity
-                            time_adjust_1 = model.par_act_dv[act1_uindx]*model.var_activity_utilization[act1_uindx]/2/act1.ave_data_rate
-                            time_adjust_2 = model.par_act_dv[act2_uindx]*model.var_activity_utilization[act2_uindx]/2/act2.ave_data_rate
-                            M = max(act1.duration,act2.duration).total_seconds()
-                            constr_disable_1 = M*(1-model.var_act_indic[act1_uindx])
-                            constr_disable_2 = M*(1-model.var_act_indic[act2_uindx])
-                            model.c10.add( center_time_diff - time_adjust_1 - time_adjust_2 + constr_disable_1 + constr_disable_2 >= transition_time_req)
+                            # constr, var_constr_violation, min_constr_violation = gen_inter_act_constraint(transition_time_req,act1,act2,act1_uindx,act2_uindx)
+                            constr, var_constr_violation, min_constr_violation = gen_inter_act_constraint(
+                                model.var_inter_sat_act_constr_violations,
+                                # model.indcs_inter_sat_act_constr_violations,
+                                model.inter_sat_act_constr_bounds,
+                                transition_time_req,
+                                act1,
+                                act2,
+                                act1_uindx,
+                                act2_uindx
+                            )
+
+                            #  add the constraint, regardless of whether or not it's a "big M" constraint, or a constraint violation constraint - they're handled the same
+                            model.c10.add( constr )
+
+                            #  if it's a constraint violation constraint, then we have a variable to deal with
+                            if not min_constr_violation is None:
+                                # model.var_inter_sat_act_constr_violations.add(var_constr_violation)
+                                min_var_inter_sat_act_constr_violation_list.append(min_constr_violation)
+                                self.inter_sat_act_constr_violation_acts_list.append((act1,act2))
+
 
         # from circinus_tools import debug_tools
         # debug_tools.debug_breakpt()
@@ -800,12 +920,28 @@ class GPActivityScheduling():
         rsrc_norm_f = len(decimated_tp_indcs) * len(model.sats)
 
         def obj_rule(model):
-            return (
-                self.obj_weights['obs_dv'] * 1/model.par_total_obs_dv * sum(model.par_dmr_dv[p]*model.var_dmr_utilization[p] for p in model.dmrs) 
+            total_dv_term = self.obj_weights['obs_dv'] * 1/model.par_total_obs_dv * sum(model.par_dmr_dv[p]*model.var_dmr_utilization[p] for p in model.dmrs) 
                 # + self.obj_weights['route_latency'] * 1/len(model.obs_acts) * sum(dmr_latency_sf_by_dmr_indx[p]*model.var_dmr_utilization[p] for p in model.dmrs)
-                + self.obj_weights['route_latency'] * 1/len(model.obs_acts) * sum(model.var_dmr_latency_sf_by_obs_indx[o] for o in model.obs_acts)
-                + self.obj_weights['energy_storage'] * 1/rsrc_norm_f * sum(model.var_sats_estore[sat_indx,tp_indx]/model.par_sats_estore_max[sat_indx] for tp_indx in decimated_tp_indcs for sat_indx in model.sats)
-            )
+
+            latency_term = self.obj_weights['route_latency'] * 1/len(model.obs_acts) * sum(model.var_dmr_latency_sf_by_obs_indx[o] for o in model.obs_acts)
+            
+            energy_margin_term = self.obj_weights['energy_storage'] * 1/rsrc_norm_f * sum(model.var_sats_estore[sat_indx,tp_indx]/model.par_sats_estore_max[sat_indx] for tp_indx in decimated_tp_indcs for sat_indx in model.sats)
+
+            if len(min_var_inter_sat_act_constr_violation_list) > 0:
+                inter_sat_act_constr_violations_term = self.obj_weights['inter_sat_act_constr_violations'] * 1/sum(min_var_inter_sat_act_constr_violation_list) * sum(model.var_inter_sat_act_constr_violations[indx] for indx in range(1,len(model.var_inter_sat_act_constr_violations)+1))
+            else:
+                inter_sat_act_constr_violations_term = 0
+
+            if len(min_var_intra_sat_act_constr_violation_list) > 0:
+                intra_sat_act_constr_violations_term = self.obj_weights['intra_sat_act_constr_violations'] * 1/sum(min_var_intra_sat_act_constr_violation_list) * sum(model.var_intra_sat_act_constr_violations[indx] for indx in range(1,len(model.var_inter_sat_act_constr_violations)+1))
+            else:
+                intra_sat_act_constr_violations_term = 0
+
+            # from circinus_tools import debug_tools
+            # debug_tools.debug_breakpt()
+
+            return total_dv_term + latency_term + energy_margin_term - inter_sat_act_constr_violations_term - intra_sat_act_constr_violations_term
+            
         model.obj = pe.Objective( rule=obj_rule, sense=pe.maximize )
 
         self.model = model
@@ -879,6 +1015,20 @@ class GPActivityScheduling():
                 for index in varobject:
                     val  = varobject[index].value
                     print (" ",index, val)
+
+            elif str (v) =='var_inter_sat_act_constr_violations': 
+                print ("Variable",v)
+                varobject = getattr(self.model, str(v))
+                for index in varobject:
+                    val  = varobject[index].value
+                    print (" %d %0.3f   %s"%(index, val, self.inter_sat_act_constr_violation_acts_list[index-1]))
+
+            elif str (v) =='var_intra_sat_act_constr_violations': 
+                print ("Variable",v)
+                varobject = getattr(self.model, str(v))
+                for index in varobject:
+                    val  = varobject[index].value
+                    print (" %d %0.3f   %s"%(index, val, self.intra_sat_act_constr_violation_acts_list[index-1]))
 
     def extract_utilized_routes( self, copy_routes = True, verbose = False):
         # scheduled_dv

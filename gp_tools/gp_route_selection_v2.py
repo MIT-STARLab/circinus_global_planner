@@ -303,7 +303,7 @@ class GPDataRouteSelection():
         self.final_route_records = None
 
         # specifies how much data volume from a given obs is allowed to be selected for routing to other satellites. Want this to be greater than one so that routes account for more than just the exact amount of the obs dv, so that there's more choice in routes to ground 
-        self.routable_obs_dv_multiplier = 4
+        self.routable_obs_dv_multiplier = 3
 
 
     @staticmethod
@@ -339,6 +339,8 @@ class GPDataRouteSelection():
             return []
         if obs_wind.start < self.as_start_dt:
             return []
+
+        # print("ids: dlnk_winds_flat %d xlnk_winds %d"%(id(dlnk_winds_flat),id(xlnk_winds)))
 
         start_dt = obs_wind.end
         end_dt = min(self.as_end_dt,start_dt + self.wind_filter_duration)

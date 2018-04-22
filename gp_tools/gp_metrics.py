@@ -175,7 +175,7 @@ class GPMetrics():
             print("%s: \t\t\t %f"%('num_obs_rs_pos_dv',stats['num_obs_rs_pos_dv']))
             print("%s: \t\t\t\t %f"%('num_obs_sched',stats['num_obs_sched']))
             print("%s: \t\t\t %f"%('total_collectible_dv',stats['total_collectible_dv']))
-            print("%s: \t %f"%('total_collect&dlnkable_dv  (no act contsr)',stats['total_collect&dlnkable_dv']))
+            print("%s: \t %f"%('total_collect&dlnk_dv (dlnk conf)',stats['total_collect&dlnkable_dv']))
             print("%s: \t\t\t %f"%('total_sched_dv',stats['total_sched_dv']))
             print("%s: %f"%('ave_obs_dv_rs',stats['ave_obs_dv_rs']))
             print("%s: %f"%('std_obs_dv_rs',stats['std_obs_dv_rs']))

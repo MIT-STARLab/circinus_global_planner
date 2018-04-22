@@ -1,3 +1,11 @@
+#! /usr/bin/env python
+
+##
+# Wrapper for running route selection in serial or in parallel.
+# @author Kit Kennedy
+#
+# Note that the ParallelRSWorkerWrapper class used with multiprocessing pool, map seems to do a pretty good job of not making too many copies of the input data. Saw 10 unique copies of data over 178 jobs executed in mp's pool.map, presumably because there were 10 worker instances that got created. Had specified 8 parallel workers so not sure why this happened, but I'll take it.
+
 import time
 import gp_tools.gp_route_selection_v2 as gprsv2
 
@@ -34,6 +42,7 @@ class ParallelRSWorkerWrapper():
 
     def __init__(self, RS_class, gp_params, dlnk_winds_flat,xlnk_winds, num_obs, verbose = False):
         """ initialize copies of the data for the worker"""
+
         self.dlnk_winds_flat = dlnk_winds_flat
         self.xlnk_winds = xlnk_winds
         self.verbose = verbose
