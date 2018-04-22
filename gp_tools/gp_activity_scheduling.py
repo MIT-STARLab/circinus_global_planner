@@ -487,14 +487,13 @@ class GPActivityScheduling():
 
         model.var_dmr_latency_sf_by_obs_indx = pe.Var (model.obs_acts,  within = pe.NonNegativeReals)
         
-        allow_act_timing_constr_violations = True
+        allow_act_timing_constr_violations = False
+        if allow_act_timing_constr_violations:
+            print('allow_act_timing_constr_violations is True')
+
         #  variables for handling the allowance of inter-activity timing constraint violations. these are only generated if allow_act_timing_constr_violations is True
         model.var_intra_sat_act_constr_violations = pe.VarList()
         model.var_inter_sat_act_constr_violations = pe.VarList()
-        # model.indcs_intra_sat_act_constr_violations = pe.Set(initialize= [])
-        # model.indcs_inter_sat_act_constr_violations = pe.Set(initialize= [])
-        # model.var_intra_sat_act_constr_violations = pe.Var(model.indcs_intra_sat_act_constr_violations)
-        # model.var_inter_sat_act_constr_violations = pe.Var(model.indcs_inter_sat_act_constr_violations)
 
         #  stores all of the lower bounds of the constraint violation variables, for use in normalization for objective function
         min_var_intra_sat_act_constr_violation_list = [] 
@@ -514,17 +513,12 @@ class GPActivityScheduling():
                     >= 0)
         model.c1 =pe.Constraint ( model.acts,  rule=c1_rule)
 
+        # this constraint forces all activity indicators along a route to be high if that route is picked. From the other perspective, if an activity is not picked, then all route indicators through it must be low (not required, but the MILP branch and cut algorithm can take advantage of this to search through binary variables more efficiently)
+        # it's not entirely clear to me though how helpful this constraint is - on a 30 sat model with 100 obs targets and 7 GS (1879 routes input to act sched) things seems to run slower by fractions of a second with this constaint (takes about 10 seconds to solve). Probably more helpful for larger models though...
         model.c1b  = pe.ConstraintList()
         for a in model.acts:
             for p in model.par_dmr_subscrs_by_act[a]:
                 model.c1b.add(model.var_act_indic[a] >= model.var_dmr_indic[p]) 
-
-        model.c1c  = pe.ConstraintList()
-        for act in sat_acts:
-            if type(act) == DlnkWindow:
-                act_uindx = all_acts_by_obj[act]
-                for p in model.par_dmr_subscrs_by_act[act_uindx]:
-                    model.c1c.add(model.var_act_indic[act_uindx] >= model.var_dmr_indic[p]) 
 
         def c2_rule( model,p):
             return model.par_dmr_dv[p]*model.var_dmr_utilization[p] >= model.par_min_as_route_dv*model.var_dmr_indic[p]
@@ -557,6 +551,8 @@ class GPActivityScheduling():
                 #  if the activities overlap in center time (including  transition time), then it's not possible to have sufficient transition time between them.  only allow one
                 if (act2.center - act1.center).total_seconds() <= transition_time_req:
                     constr = model.var_act_indic[act1_uindx]+ model.var_act_indic[act2_uindx] <= 1
+
+                # If they don't overlap in center time, but they do overlap to some amount, then we need to constrain their end and start times to be consistent with one another
                 else:
                     M = max(act1.duration,act2.duration).total_seconds()
                     constr_disable_1 = M*(1-model.var_act_indic[act1_uindx])
@@ -570,23 +566,16 @@ class GPActivityScheduling():
 
                 assert(min_constr_violation < 0)
 
-                # want the constraint violation only to go to zero at its maximum, because we don't want to reward times where there is no constraint violation, only penalize
-                # var_constr_violation = pe.Var (bounds = (min_constr_violation,0))
-
                 # deal with adding a variable to represent this constraint violation. ( I hate that I have to do it this way, deep within this function, but it seems like the approach you have to use for dynamically generating variable lists in pyomo, bizarrely. refer to: https://projects.coin-or.org/Coopr/browser/pyomo/trunk/pyomo/core/base/var.py?rev=11067, https://groups.google.com/forum/#!topic/pyomo-forum/modS1VkPxW0
                 var_list.add()
                 var_constr_violation = var_list[len(var_list)]
-                # new_var_indx = len(var_indcs)+1
-                # var_indcs.add(new_var_indx)
-                # var_constr_violation = var_obj[new_var_indx]
-
-                var_constr_violation.setlb(min_constr_violation)
-                var_constr_violation.setub(0)
 
                 #  bounds on range of constraint violation variable
-                # constr_list.add(var_constr_violation <= 0)
-                # constr_list.add(var_constr_violation >= min_constr_violation)
 
+                # bound minimum of the constraint violation (where both activities have 1.0 utilization), to keep the problem formulation as tight as possible
+                var_constr_violation.setlb(min_constr_violation)
+                # want the constraint violation only to go to zero at its maximum, because we don't want to reward times where there is no constraint violation, only penalize
+                var_constr_violation.setub(0)
 
                 #  the actual time constraint that bounds the constraint violation
                 constr = center_time_diff - time_adjust_1 - time_adjust_2 - transition_time_req >= var_constr_violation
@@ -596,7 +585,7 @@ class GPActivityScheduling():
 
         #  intra-satellite activity overlap constraints [4],[5],[5b]
         #  well, 5B is activity minimum time duration
-        # model.c4  = pe.ConstraintList()
+        # model.c4  = pe.ConstraintList()  # c5 now holds c4 constraints
         model.c5  = pe.ConstraintList() # this now contains all of the activity overlap constraints
         model.c5b  = pe.ConstraintList()
         model.intra_sat_act_constr_bounds  = pe.ConstraintList()
@@ -604,9 +593,6 @@ class GPActivityScheduling():
         for sat_indx in range (self.num_sats):
             num_sat_acts = len(sat_acts[sat_indx])
             for  first_act_indx in  range (num_sat_acts):
-
-                # from circinus_tools import debug_tools
-                # debug_tools.debug_breakpt()
 
                 act1 = sat_acts[sat_indx][first_act_indx]
                 # get the unique index into model.acts
@@ -636,25 +622,10 @@ class GPActivityScheduling():
                         #  don't need to do anything,  continue on to next activity pair
                         continue
 
-                    #  if the activities overlap in center time, then it's not possible to have sufficient transition time between them
-                    #  add constraint to rule out the possibility of scheduling both of them
-                    # elif (act2.center - act1.center).total_seconds() <= transition_time_req:
-                        # model.c4.add( model.var_act_indic[act1_uindx]+ model.var_act_indic[act2_uindx] <= 1)
-
-                    # If they don't overlap in center time, but they do overlap to some amount, then we need to constrain their end and start times to be consistent with one another
                     else:
-                        # center_time_diff = (act2.center - act1.center).total_seconds()
-                        # this is the adjustment added to the center time to get to the start or end of the activity
-                        # time_adjust_1 = model.par_act_dv[act1_uindx]*model.var_activity_utilization[act1_uindx]/2/act1.ave_data_rate
-                        # time_adjust_2 = model.par_act_dv[act2_uindx]*model.var_activity_utilization[act2_uindx]/2/act2.ave_data_rate
-                        # M = max(act1.duration,act2.duration).total_seconds()
-                        # constr_disable_1 = M*(1-model.var_act_indic[act1_uindx])
-                        # constr_disable_2 = M*(1-model.var_act_indic[act2_uindx])
-                        # model.c5.add( center_time_diff - time_adjust_1 - time_adjust_2 + constr_disable_1 + constr_disable_2 >= transition_time_req)
 
                         constr, var_constr_violation, min_constr_violation = gen_inter_act_constraint(
                             model.var_intra_sat_act_constr_violations,
-                            # model.indcs_intra_sat_act_constr_violations,
                             model.intra_sat_act_constr_bounds,
                             transition_time_req,
                             act1,
@@ -668,13 +639,12 @@ class GPActivityScheduling():
 
                         #  if it's a constraint violation constraint, then we have a variable to deal with
                         if not min_constr_violation is None:
-                            # model.var_intra_sat_act_constr_violations.add(var_constr_violation)
                             min_var_intra_sat_act_constr_violation_list.append(min_constr_violation)
                             self.intra_sat_act_constr_violation_acts_list.append((act1,act2))
 
 
         # inter-satellite downlink overlap constraints [9],[10]
-        model.c9  = pe.ConstraintList()
+        # model.c9  = pe.ConstraintList() # c10 now holds c9 constraints
         model.c10  = pe.ConstraintList()
         model.inter_sat_act_constr_bounds  = pe.ConstraintList()
         self.inter_sat_act_constr_violation_acts_list = []
@@ -688,9 +658,6 @@ class GPActivityScheduling():
                 num_other_sat_acts = len(sat_dlnks[other_sat_indx])
 
                 for  sat_act_indx in  range (num_sat_acts):
-
-                    # from circinus_tools import debug_tools
-                    # debug_tools.debug_breakpt()
 
                     act1 = sat_dlnks[sat_indx][sat_act_indx]
                     # get the unique index into model.acts
@@ -706,11 +673,6 @@ class GPActivityScheduling():
                         # this line is pretty important - only consider overlap if they're looking at the same GS. I forgot to add this before and spent days wondering why the optimization process was progressing so slowly (hint: it's really freaking constrained and there's not much guidance for finding a good objective value if no downlink can overlap in time with any other downlink)
                         if act1.gs_indx != act2.gs_indx:
                             continue
-
-                        # todo: include!
-                        # # if they're not looking at the same gs, then constraints don't apply
-                        # if not act1.gs_indx == act2.gs_indx:
-                        #     continue
 
                         # we're considering windows across satellites, so they could be out of order temporally. These constraints are only valid if act2 is after act1 (center time). Don't worry, as we loop through satellites, we consider both directions (i.e. act1 and act2 will be swapped in another iteration, and we'll get past this check and impose the required constraints)
                         if (act2.center - act1.center).total_seconds() < 0:
@@ -731,27 +693,9 @@ class GPActivityScheduling():
                             #  don't need to do anything,  continue on to next activity pair
                             continue
 
-                        #  if the activities overlap in center time, then it's not possible to have sufficient transition time between them
-                        #  add constraint to rule out the possibility of scheduling both of them
-                        # elif (act2.center - act1.center).total_seconds() <= transition_time_req:
-                        #     model.c9.add( model.var_act_indic[act1_uindx]+ model.var_act_indic[act2_uindx] <= 1)
-
-                        # # If they don't overlap in center time, but they do overlap to some amount, then we need to constrain their end and start times to be consistent with one another
-                        # else:
-                        #     center_time_diff = (act2.center - act1.center).total_seconds()
-                        #     # this is the adjustment added to the center time to get to the start or end of the activity
-                        #     time_adjust_1 = model.par_act_dv[act1_uindx]*model.var_activity_utilization[act1_uindx]/2/act1.ave_data_rate
-                        #     time_adjust_2 = model.par_act_dv[act2_uindx]*model.var_activity_utilization[act2_uindx]/2/act2.ave_data_rate
-                        #     M = max(act1.duration,act2.duration).total_seconds()
-                        #     constr_disable_1 = M*(1-model.var_act_indic[act1_uindx])
-                        #     constr_disable_2 = M*(1-model.var_act_indic[act2_uindx])
-                        #     model.c10.add( center_time_diff - time_adjust_1 - time_adjust_2 + constr_disable_1 + constr_disable_2 >= transition_time_req)
-
                         else:
-                            # constr, var_constr_violation, min_constr_violation = gen_inter_act_constraint(transition_time_req,act1,act2,act1_uindx,act2_uindx)
                             constr, var_constr_violation, min_constr_violation = gen_inter_act_constraint(
                                 model.var_inter_sat_act_constr_violations,
-                                # model.indcs_inter_sat_act_constr_violations,
                                 model.inter_sat_act_constr_bounds,
                                 transition_time_req,
                                 act1,
@@ -768,10 +712,6 @@ class GPActivityScheduling():
                                 # model.var_inter_sat_act_constr_violations.add(var_constr_violation)
                                 min_var_inter_sat_act_constr_violation_list.append(min_constr_violation)
                                 self.inter_sat_act_constr_violation_acts_list.append((act1,act2))
-
-
-        # from circinus_tools import debug_tools
-        # debug_tools.debug_breakpt()
 
 
         if verbose:
@@ -872,7 +812,7 @@ class GPActivityScheduling():
                 if self.enforce_data_storage_constr:
                     routes_storing = ds_route_dancecards[sat_indx][tp_indx]
 
-                    # todo: this may be too slow to use == below. Change it back to >= and use a better approach to extract real data storage values in extract_resource_usage below?
+                    # todo: this may be too slow to use == below. Change it back to >= and use a better approach to extract real data storage values in extract_resource_usage below? Leaving == for now because it means I can use these vars to extract output data usage values
                     # constrain the minimum data storage at this tp by the amount of data volume being buffered by each route passing through the sat
                     if routes_storing:
                         model.c7.add( model.var_sats_dstore[sat_indx,tp_indx] == sum(model.par_dmr_dv[p]*model.var_dmr_utilization[p] for p in routes_storing))
@@ -955,18 +895,16 @@ class GPActivityScheduling():
             solver.options['TimeLimit'] = self.solver_params['max_runtime_s']
             solver.options['MIPGap'] = self.solver_params['optimality_gap']
             solver.options['IntFeasTol'] = self.solver_params['integer_feasibility_tolerance']
+            # other options...
+            # solver.options['Cuts'] = 0
+            # solver.options['MIPFocus'] = 1 #for finding feasible solutions quickly
+            # solver.options['MIPFocus'] = 3 #for lowering the mip gap
+
         elif self.solver_name == 'cplex':
             solver.options['timelimit'] = self.solver_params['max_runtime_s']
             solver.options['mip_tolerances_mipgap'] = self.solver_params['optimality_gap']
             solver.options['mip_tolerances_integrality'] = self.solver_params['integer_feasibility_tolerance']
 
-
-            solver.options['TimeLimit'] = 100 #self.solver_params['gurobi']['max_runtime_s']
-            solver.options['MIPGap'] = self.solver_params['gurobi']['optimality_gap']
-            solver.options['IntFeasTol'] = self.solver_params['gurobi']['integer_feasibility_tolerance']
-            # solver.options['Cuts'] = 0
-            # solver.options['MIPFocus'] = 1 #for finding feasible solutions quickly
-            # solver.options['MIPFocus'] = 3 #for lowering the mip gap
 
         # if we're running things remotely, then we will use the NEOS server (https://neos-server.org/neos/)
         if self.solver_params['run_remotely']:
