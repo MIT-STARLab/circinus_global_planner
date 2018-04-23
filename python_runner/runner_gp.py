@@ -99,7 +99,7 @@ class GlobalPlannerRunner:
 
         return p['routes_by_obs'],p['all_stats'],p['route_times_s'],p['obs_indx'],p['obs_winds'],p['dlnk_winds_flat'],p['ecl_winds'],p['window_uid']
 
-    def pickle_rtsel_s2_stuff(self,xlnk_winds_flat,sel_routes_by_obs,ecl_winds,obs_winds,dlnk_winds_flat,window_uid):
+    def pickle_rtsel_s2_stuff(self,xlnk_winds_flat,sel_routes_by_obs,ecl_winds,obs_winds,dlnk_winds_flat,window_uid,stats_rs2_pre,stats_rs2_post):
 
         pickle_stuff =  {}
         pickle_stuff['xlnk_winds_flat'] = xlnk_winds_flat
@@ -108,6 +108,8 @@ class GlobalPlannerRunner:
         pickle_stuff['obs_winds'] = obs_winds
         pickle_stuff['dlnk_winds_flat'] = dlnk_winds_flat
         pickle_stuff['window_uid'] = window_uid
+        pickle_stuff['stats_rs2_pre'] = stats_rs2_pre
+        pickle_stuff['stats_rs2_post'] = stats_rs2_post
         pickle_stuff['params'] =  self.params
         pickle_name ='pickles/rs_s2_%s_%s' %( self.other_params['new_pickle_file_name_pre'],datetime.utcnow().isoformat().replace (':','_'))
         with open('%s.pkl' % ( pickle_name),'wb') as f:
@@ -121,7 +123,7 @@ class GlobalPlannerRunner:
         #  TODO:  uncommon this  if want to reload parameters from file
         # self.params = p['params']
 
-        return p['xlnk_winds_flat'],p['sel_routes_by_obs'],p['ecl_winds'],p['obs_winds'],p['dlnk_winds_flat'],p['window_uid']
+        return p['xlnk_winds_flat'],p['sel_routes_by_obs'],p['ecl_winds'],p['obs_winds'],p['dlnk_winds_flat'],p['window_uid'],p['stats_rs2_pre'],p['stats_rs2_post']
 
 
     def pickle_actsc_stuff(self,routes_by_obs,ecl_winds,scheduled_routes,energy_usage,data_usage,window_uid):
@@ -222,6 +224,9 @@ class GlobalPlannerRunner:
         plot_outputs = {}
         plot_outputs['rs_targIDs_found'] = aoi_targ_stats['rs_targIDs_found']
         plot_outputs['obs_aoi_curves_by_targID'] = aoi_targ_stats['aoi_curves_by_targID_sched']
+        plot_outputs['obs_aoi_curves_by_targID'] = aoi_targ_stats['aoi_curves_by_targID_sched']
+        plot_outputs['initial_lat_by_obs_rs'] = lat_obs_stats['initial_lat_by_obs_rs']
+        plot_outputs['initial_lat_by_obs'] = lat_obs_stats['initial_lat_by_obs']
         plot_outputs['cmd_aoi_curves_by_sat_indx'] = aoi_sat_cmd_stats['aoi_curves_by_sat_indx']
         plot_outputs['tlm_aoi_curves_by_sat_indx'] = aoi_sat_tlm_stats['aoi_curves_by_sat_indx']
         return plot_outputs
@@ -601,16 +606,16 @@ class GlobalPlannerRunner:
                 )
 
 
-    def  plot_activity_scheduling_results ( self,all_possible_winds,routes_by_obs,routes,energy_usage,data_usage,ecl_winds,metrics_plot_inputs):
+    def  plot_activity_scheduling_results ( self,all_possible_winds,sel_routes_by_obs,sched_routes,energy_usage,data_usage,ecl_winds,metrics_plot_inputs):
 
-        # do a bunch of stuff to extract the windows from all of the routes as indexed by observation
-        # note that this stuff is not thewindows from the scheduled routes, but rather the windows from all the route selected in route selection
+        # do a bunch of stuff to extract the windows from all of the sched_routes as indexed by observation
+        # note that this stuff is not thewindows from the scheduled sched_routes, but rather the windows from all the route selected in route selection
         #  start
         sel_obs_winds_flat = [set() for  sat_indx  in range  (self.sat_params['num_sats'])]
         sel_dlnk_winds_flat = [set() for sat_indx  in range (self.sat_params['num_sats'])]
         sel_xlnk_winds_flat = [set() for sat_indx  in range (self.sat_params['num_sats'])]
 
-        for rts_indx, (obs,rts) in enumerate (routes_by_obs.items()):
+        for rts_indx, (obs,rts) in enumerate (sel_routes_by_obs.items()):
             obs_winds_rt, dlnk_winds_rt, \
             xlnk_winds_rt, _, _ = self.io_proc.extract_flat_windows (rts)
 
@@ -629,7 +634,7 @@ class GlobalPlannerRunner:
         # end
 
         sched_obs_winds_flat, sched_dlnk_winds_flat, \
-        sched_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind = self.io_proc.extract_flat_windows (routes,copy_windows= False)
+        sched_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind = self.io_proc.extract_flat_windows (sched_routes,copy_windows= False)
 
         #
         sats_to_include =  [sat_id for sat_id in self.sat_params['sat_id_order']]
@@ -638,115 +643,169 @@ class GlobalPlannerRunner:
 
         all_obs_winds,all_dlnk_winds_flat,all_xlnk_winds_flat = all_possible_winds
 
-        # plot all winds
-        self.gp_plot.plot_winds(
-            sats_to_include,
-            all_obs_winds,
-            all_obs_winds,
-            all_dlnk_winds_flat,
-            all_dlnk_winds_flat,
-            all_xlnk_winds_flat,
-            None,
-            None,
-            self.as_inst_params['start_utc_dt'],
-            # self.as_inst_params['start_utc_dt'] + timedelta( seconds= self.rs_general_params['wind_filter_duration_s']),
-            self.as_inst_params['end_utc_dt'],
-            base_time = self.scenario_params['start_utc_dt'],
-            plot_title = 'All Possible Activities',
-            plot_size_inches = (18,12),
-            plot_include_dlnk_labels = self.as_params['plot_include_dlnk_labels'],
-            plot_include_xlnk_labels = self.as_params['plot_include_xlnk_labels'],
-            show=  False,
-            fig_name='plots/test_all_windows.pdf'
-        )
-
-
-        # plot the selected down links and cross-links this
-        self.gp_plot.plot_winds(
-            sats_to_include,
-            sel_obs_winds_flat,
-            sched_obs_winds_flat,
-            sel_dlnk_winds_flat,
-            sched_dlnk_winds_flat,
-            sel_xlnk_winds_flat,
-            sched_xlnk_winds_flat,
-            route_indcs_by_wind,
-            self.as_inst_params['start_utc_dt'],
-            # self.as_inst_params['start_utc_dt'] + timedelta( seconds= self.rs_general_params['wind_filter_duration_s']),
-            self.as_inst_params['end_utc_dt'],
-            base_time = self.scenario_params['start_utc_dt'],
-            plot_title = 'Scheduled Activities',
-            plot_size_inches = (18,12),
-            plot_include_dlnk_labels = self.as_params['plot_include_dlnk_labels'],
-            plot_include_xlnk_labels = False, #self.as_params['plot_include_xlnk_labels'],
-            show=  False,
-            fig_name='plots/test_activity_times.pdf'
-        )
-
-        # self.gp_plot.plot_data_circles(
+        # # plot all winds
+        # self.gp_plot.plot_winds(
         #     sats_to_include,
+        #     all_obs_winds,
+        #     all_obs_winds,
+        #     all_dlnk_winds_flat,
+        #     all_dlnk_winds_flat,
+        #     all_xlnk_winds_flat,
+        #     None,
+        #     None,
+        #     self.as_inst_params['start_utc_dt'],
+        #     # self.as_inst_params['start_utc_dt'] + timedelta( seconds= self.rs_general_params['wind_filter_duration_s']),
+        #     self.as_inst_params['end_utc_dt'],
+        #     base_time = self.scenario_params['start_utc_dt'],
+        #     plot_title = 'All Possible Activities',
+        #     plot_size_inches = (18,12),
+        #     plot_include_dlnk_labels = self.as_params['plot_include_dlnk_labels'],
+        #     plot_include_xlnk_labels = self.as_params['plot_include_xlnk_labels'],
+        #     plot_original_times = True,
+        #     show=  False,
+        #     fig_name='plots/test_all_windows.pdf'
+        # )
+
+
+        # # plot the selected down links and cross-links this
+        # self.gp_plot.plot_winds(
+        #     sats_to_include,
+        #     sel_obs_winds_flat,
         #     sched_obs_winds_flat,
-        #     sched_obs_winds_flat,
+        #     sel_dlnk_winds_flat,
         #     sched_dlnk_winds_flat,
-        #     sched_dlnk_winds_flat,
-        #     sched_xlnk_winds_flat,
+        #     sel_xlnk_winds_flat,
         #     sched_xlnk_winds_flat,
         #     route_indcs_by_wind,
         #     self.as_inst_params['start_utc_dt'],
         #     # self.as_inst_params['start_utc_dt'] + timedelta( seconds= self.rs_general_params['wind_filter_duration_s']),
         #     self.as_inst_params['end_utc_dt'],
-              # base_time = self.scenario_params['start_utc_dt'],
-        #     plot_title = 'Activity Data Volumes',
+        #     base_time = self.scenario_params['start_utc_dt'],
+        #     plot_title = 'Scheduled Activities',
         #     plot_size_inches = (18,12),
-        #     plot_include_labels = self.as_params['plot_include_labels'],
+        #     plot_include_dlnk_labels = self.as_params['plot_include_dlnk_labels'],
+        #     plot_include_xlnk_labels = self.as_params['plot_include_xlnk_labels'],
+        #     plot_original_times = False,
         #     show=  False,
-        #     fig_name='plots/test_data_volume.pdf'
+        #     fig_name='plots/test_activity_times.pdf'
         # )
 
-        self.gp_plot.plot_energy_usage(
-            sats_to_include,
-            energy_usage,
-            ecl_winds,
-            self.as_inst_params['start_utc_dt'],
-            self.as_inst_params['end_utc_dt'],
-            base_time = self.scenario_params['start_utc_dt'],
-            plot_title = 'Energy Storage Utilization',
-            plot_size_inches = (18,12),
-            show=  False,
-            fig_name='plots/test_energy.pdf'
-        )
+        # # self.gp_plot.plot_data_circles(
+        # #     sats_to_include,
+        # #     sched_obs_winds_flat,
+        # #     sched_obs_winds_flat,
+        # #     sched_dlnk_winds_flat,
+        # #     sched_dlnk_winds_flat,
+        # #     sched_xlnk_winds_flat,
+        # #     sched_xlnk_winds_flat,
+        # #     route_indcs_by_wind,
+        # #     self.as_inst_params['start_utc_dt'],
+        # #     # self.as_inst_params['start_utc_dt'] + timedelta( seconds= self.rs_general_params['wind_filter_duration_s']),
+        # #     self.as_inst_params['end_utc_dt'],
+        #       # base_time = self.scenario_params['start_utc_dt'],
+        # #     plot_title = 'Activity Data Volumes',
+        # #     plot_size_inches = (18,12),
+        # #     plot_include_labels = self.as_params['plot_include_labels'],
+        # #     show=  False,
+        # #     fig_name='plots/test_data_volume.pdf'
+        # # )
 
-        # note that little blips upward that appear in data storage plot for "just passing through" crosslink pairs (looks like _____^_____ . Isn't that some great asciiart?) can be caused by a slight overlap in timepoints at beg/end of two back to back activities. This should not cause any problems
-        self.gp_plot.plot_data_usage(
-            sats_to_include,
-            data_usage,
-            ecl_winds,
-            self.as_inst_params['start_utc_dt'],
-            self.as_inst_params['end_utc_dt'],
-            base_time = self.scenario_params['start_utc_dt'],
-            plot_title = 'Data Storage Utilization',
-            plot_size_inches = (18,12),
-            show=  False,
-            fig_name='plots/test_data.pdf'
-        )
+        # self.gp_plot.plot_energy_usage(
+        #     sats_to_include,
+        #     energy_usage,
+        #     ecl_winds,
+        #     self.as_inst_params['start_utc_dt'],
+        #     self.as_inst_params['end_utc_dt'],
+        #     base_time = self.scenario_params['start_utc_dt'],
+        #     plot_title = 'Energy Storage Utilization',
+        #     plot_size_inches = (18,12),
+        #     show=  False,
+        #     fig_name='plots/test_energy.pdf'
+        # )
 
-        found_targIDs = metrics_plot_inputs['rs_targIDs_found']
-        # targs_to_include = [targ['id'] for targ in self.obs_params['targets']]
-        # targs_to_include = [0,3,4,7,8]
-        # targs_to_include = range(15)
-        # targs_to_include = found_targIDs[0:10]
-        targs_to_include = found_targIDs
+        # # note that little blips upward that appear in data storage plot for "just passing through" crosslink pairs (looks like _____^_____ . Isn't that some great asciiart?) can be caused by a slight overlap in timepoints at beg/end of two back to back activities. This should not cause any problems
+        # self.gp_plot.plot_data_usage(
+        #     sats_to_include,
+        #     data_usage,
+        #     ecl_winds,
+        #     self.as_inst_params['start_utc_dt'],
+        #     self.as_inst_params['end_utc_dt'],
+        #     base_time = self.scenario_params['start_utc_dt'],
+        #     plot_title = 'Data Storage Utilization',
+        #     plot_size_inches = (18,12),
+        #     show=  False,
+        #     fig_name='plots/test_data.pdf'
+        # )
 
-        self.gp_plot.plot_obs_aoi(
-            targs_to_include,
-            metrics_plot_inputs['obs_aoi_curves_by_targID'],
-            self.as_inst_params['start_utc_dt'],
-            self.as_inst_params['end_utc_dt'],
-            base_time = self.scenario_params['start_utc_dt'],
-            plot_title = 'Observation Target AoI',
-            plot_size_inches = (18,12),
+        # found_targIDs = metrics_plot_inputs['rs_targIDs_found']
+        # # targs_to_include = [targ['id'] for targ in self.obs_params['targets']]
+        # # targs_to_include = [0,3,4,7,8]
+        # # targs_to_include = range(15)
+        # # targs_to_include = found_targIDs[0:10]
+        # targs_to_include = found_targIDs
+
+        # self.gp_plot.plot_obs_aoi(
+        #     targs_to_include,
+        #     metrics_plot_inputs['obs_aoi_curves_by_targID'],
+        #     self.as_inst_params['start_utc_dt'],
+        #     self.as_inst_params['end_utc_dt'],
+        #     base_time = self.scenario_params['start_utc_dt'],
+        #     plot_title = 'Observation Target AoI',
+        #     plot_size_inches = (18,12),
+        #     show=False,
+        #     fig_name='plots/test_obs_aoi_plot.pdf'
+        # )
+
+        # plot obs latency histogram
+        self.gp_plot.plot_histogram(
+            data=metrics_plot_inputs['initial_lat_by_obs'].values(),
+            num_bins = 40,
+            plot_type = 'histogram',
+            x_title='Latency (mins)',
+            y_title='Number of observations',
+            plot_title = 'Histogram of initial latency by obs - scheduled (min dv %.1f Mb)'%(self.as_params['min_as_route_dv_Mb']), 
+            plot_size_inches = (12,6),
             show=False,
-            fig_name='plots/test_obs_aoi_plot.pdf'
+            fig_name='plots/obs_lat_sched_hist.pdf'
+        )
+
+        # plot obs latency histogram
+        self.gp_plot.plot_histogram(
+            data=metrics_plot_inputs['initial_lat_by_obs'].values(),
+            num_bins = 40,
+            plot_type = 'cdf',
+            x_title='Latency (mins)',
+            y_title='Number of observations',
+            plot_title = 'Histogram of initial latency by obs - scheduled (min dv %.1f Mb)'%(self.as_params['min_as_route_dv_Mb']), 
+            plot_size_inches = (12,6),
+            show=False,
+            fig_name='plots/obs_lat_sched_cdf.pdf'
+        )
+
+        # plot obs latency histogram
+        self.gp_plot.plot_histogram(
+            data=metrics_plot_inputs['initial_lat_by_obs_rs'].values(),
+            num_bins = 40,
+            plot_type = 'histogram',
+            x_title='Latency (mins)',
+            y_title='Number of observations',
+            plot_title = 'Histogram of initial latency by obs - RS output (min dv %.1f Mb)'%(self.as_params['min_as_route_dv_Mb']), 
+            plot_size_inches = (12,6),
+            show=False,
+            fig_name='plots/obs_lat_rs_hist.pdf'
+        )
+
+        # plot obs latency histogram
+        self.gp_plot.plot_histogram(
+            data=metrics_plot_inputs['initial_lat_by_obs_rs'].values(),
+            num_bins = 40,
+            plot_type = 'cdf',
+            x_title='Latency (mins)',
+            y_title='Number of observations',
+            plot_title = 'Histogram of initial latency by obs - RS output (min dv %.1f Mb)'%(self.as_params['min_as_route_dv_Mb']), 
+            plot_size_inches = (12,6),
+            show=False,
+            fig_name='plots/obs_lat_rs_cdf.pdf'
         )
 
         # sats_to_include =  [sat_p['sat_id'] for sat_p in self.sat_orbit_params]
@@ -817,7 +876,7 @@ class GlobalPlannerRunner:
         # t_a = time.time()
         # need to figure out how to window this or something so that we don't have to compare to every other data route - that's horribly expensive
         print('Assess route overlap pre RS step 2')
-        overlap_cnt_by_route,stats_rs1 = gp_met.assess_route_overlap( routes_by_obs,verbose=True)
+        overlap_cnt_by_route,stats_rs2_pre = gp_met.assess_route_overlap( routes_by_obs,verbose=True)
         # t_b = time.time()
         # time_elapsed = t_b-t_a
         # print('time_elapsed')
@@ -828,14 +887,14 @@ class GlobalPlannerRunner:
         selected_rts_by_obs = gp_rs.run_step2(routes_by_obs,overlap_cnt_by_route)
 
         print('Assess route overlap post RS step 2')
-        overlap_cnt_by_route,stats_rs2 = gp_met.assess_route_overlap( selected_rts_by_obs,verbose=True)
+        overlap_cnt_by_route,stats_rs2_post = gp_met.assess_route_overlap( selected_rts_by_obs,verbose=True)
 
 
         for rts in selected_rts_by_obs.values():
             for dmr in rts:
                 dmr.validate()
 
-        return selected_rts_by_obs
+        return selected_rts_by_obs,stats_rs2_pre,stats_rs2_post
 
     def run( self):
 
@@ -843,7 +902,9 @@ class GlobalPlannerRunner:
         #  parse inputs, if desired
         #################################
 
-        if self.general_other_params['load_windows_from_file']:
+        load_windows = not self.other_params['rs_s1_pickle_input']
+
+        if load_windows:
             print('Load files')
 
             # parse the inputs into activity windows
@@ -888,6 +949,7 @@ class GlobalPlannerRunner:
             if self.other_params['rs_s1_pickle_input']:
                 print('Unpickling route selection step one stuff')
                 routes_by_obs,all_stats,route_times_s,obs_indx,obs_winds,dlnk_winds_flat,ecl_winds,window_uid = self.unpickle_rtsel_s1_stuff()
+                pas_a = time.time()
 
             #  otherwise run route selection step 1
             else:
@@ -914,10 +976,15 @@ class GlobalPlannerRunner:
         if run_step_2:
             if self.other_params['rs_s2_pickle_input']:
                 print('Unpickling route selection step two stuff')
-                xlnk_winds_flat,sel_routes_by_obs,ecl_winds,obs_winds,dlnk_winds_flat,window_uid = self.unpickle_rtsel_s2_stuff()
+                xlnk_winds_flat,sel_routes_by_obs,ecl_winds,obs_winds,dlnk_winds_flat,window_uid,stats_rs2_pre,stats_rs2_post = self.unpickle_rtsel_s2_stuff()
+                pas_a = time.time()
             else:
+                print('num_routes_calced')
+                print(len(route_times_s))
                 print('np.mean(route_times_s)')
                 print(np.mean(route_times_s))
+                print('np.max(route_times_s)')
+                print(np.max(route_times_s))
                 print('np.std(route_times_s)')
                 print(np.std(route_times_s))
                 passthru = False
@@ -925,10 +992,10 @@ class GlobalPlannerRunner:
                     sel_routes_by_obs = {obs:[DataMultiRoute(ID=0,data_routes=[dr]) for dr in rts] for obs,rts in routes_by_obs.items()}
                 else:
                     # run step 2. todo:  move this elsewhere
-                    sel_routes_by_obs = self.run_nominal_route_selection_v2_step2(routes_by_obs)
+                    sel_routes_by_obs,stats_rs2_pre,stats_rs2_post = self.run_nominal_route_selection_v2_step2(routes_by_obs)
 
             if self.pickle_params['pickle_route_selection_step2_results']:
-                self.pickle_rtsel_s2_stuff(xlnk_winds_flat,sel_routes_by_obs,ecl_winds,obs_winds,dlnk_winds_flat,window_uid)
+                self.pickle_rtsel_s2_stuff(xlnk_winds_flat,sel_routes_by_obs,ecl_winds,obs_winds,dlnk_winds_flat,window_uid,stats_rs2_pre,stats_rs2_post)
         else:
             print('Skipping route selection step two stuff')
 

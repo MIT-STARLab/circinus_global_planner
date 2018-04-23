@@ -887,7 +887,7 @@ class GPMetrics():
         if not type(dr) in self.ALLOWED_DR_TYPES:
             raise RuntimeWarning('Data route object is not of expected type. Expected: %s, saw %s'%(self.ALLOWED_DR_TYPES,dr))
 
-    def calc_overlaps(self,routes_by_obs):
+    def calc_overlaps(self,routes_by_obs,verbose=False):
 
         # Note: no longer  implementing the window_overlap_option of "shared_window". the "mutex_window" option is hardcoded below (i.e.  if two routes share the same window at all they are considered overlapping, we don't consider how much data volume is available for that window)
 
@@ -901,9 +901,13 @@ class GPMetrics():
         else:
             raise NotImplementedError
 
+        num_obs = len(routes_by_obs.keys())
 
         overlap_cnt_by_route = {}
         overlap_rts_by_route = {}
+
+        if verbose:
+            print("calc overlaps")
 
         obs_by_route = {}
 
@@ -911,6 +915,11 @@ class GPMetrics():
         rts_by_dlnk = {}
         #  go through all routes and for each window within the route and the route to a dictionary indexed by the window
         for obs_indx, (obs,rts) in enumerate(routes_by_obs.items()): 
+
+            if verbose:
+                if obs_indx%20 == 0:
+                    print("obs %d/%d"%(obs_indx,num_obs-1))
+
             for dr in rts:
                 #  verify the data route type to avoid confusion down the road
                 self.verify_dr_type(dr)
@@ -953,6 +962,9 @@ class GPMetrics():
             #  final overlap count is the number of routes left
             overlap_cnt_by_route[dr] = len(overlap_rts_by_route[dr])
 
+        if verbose:
+            print("finished calc overlaps")
+
         return overlap_cnt_by_route,overlap_rts_by_route
 
     def assess_route_overlap(  self,routes_by_obs,verbose=False):
@@ -962,9 +974,12 @@ class GPMetrics():
         # overlap_count_option='mutex_window'
 
         t_a = time.time()
-        overlap_cnt_by_route,overlap_rts_by_route = self.calc_overlaps(routes_by_obs)
+        overlap_cnt_by_route,overlap_rts_by_route = self.calc_overlaps(routes_by_obs,verbose)
         t_b = time.time()
         time_elapsed = t_b-t_a
+
+        if verbose:
+            print("overlap calc time: %f"%(time_elapsed))
 
         non_overlap_rt_cnt_by_obs = {}
         non_overlap_has_xlnk_rt_cnt_by_obs = {}

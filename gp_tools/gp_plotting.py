@@ -77,6 +77,7 @@ class GPPlotting():
         plot_size_inches = (12,12),
         plot_include_dlnk_labels = True,
         plot_include_xlnk_labels = True,
+        plot_original_times = False,
         show=False,
         fig_name='plots/xlnk_dlnk_plot.pdf'):
         '''
@@ -110,6 +111,18 @@ class GPPlotting():
 
         # keep a running list of all the window IDs seen,  which we'll use for a sanity check
         all_wind_ids = []
+
+        def get_start(wind):
+            if plot_original_times:
+                return wind.original_start
+            else:
+                return wind.start
+
+        def get_end(wind):
+            if plot_original_times:
+                return wind.original_end
+            else:
+                return wind.end
 
         # for each agent
         for  plot_indx, sat_id in enumerate (sats_ids_list):
@@ -189,8 +202,8 @@ class GPPlotting():
                 if len(all_xlnk_winds_flat) > 0:
                     for xlnk_wind in all_xlnk_winds_flat[sat_indx]:
 
-                        xlnk_wind_start = (xlnk_wind.start-base_time).total_seconds()/time_divisor
-                        xlnk_wind_end = (xlnk_wind.end-base_time).total_seconds()/time_divisor
+                        xlnk_wind_start = (get_start(xlnk_wind)-base_time).total_seconds()/time_divisor
+                        xlnk_wind_end = (get_end(xlnk_wind)-base_time).total_seconds()/time_divisor
 
                         # plot the task duration
                         bottom_vert_loc = xlnk_choices_rectangle_rotator
@@ -206,26 +219,6 @@ class GPPlotting():
                         xlnk_choices_rectangle_rotator =  (xlnk_choices_rectangle_rotator+1)%xlnk_rotation_rollover
                         num_xlnk_wind += 1
 
-            # plot the observation "choices" -  meant to represent the windows that could have been chosen
-            if self.winds_plot_obs_choices:
-                if len(all_obs_winds_flat) > 0:
-                    for obs_wind in all_obs_winds_flat[sat_indx]:
-
-                        obs_start = (obs_wind.start-base_time).total_seconds()/time_divisor
-                        obs_end = (obs_wind.end-base_time).total_seconds()/time_divisor
-
-                        # plot the task duration
-                        bottom_vert_loc = obs_choices_rectangle_rotator
-                        d = Rectangle((obs_start, bottom_vert_loc), obs_end-obs_start, bottom_vert_loc+1,alpha=1,fill=True,color='#BFFFBF')
-                        current_axis.add_patch(d)
-
-                        # plt.text(obs_start+0.15, bottom_vert_loc+0.4, "%s,dv %d/%d"%(obs_wind.target_IDs,obs_wind.scheduled_data_vol,obs_wind.data_vol) , fontsize=10, color = 'k')
-
-                        # save off the rotator choice so that we can look it up again
-                        obs_choices_rectangle_rotator_hist[obs_wind] = obs_choices_rectangle_rotator
-
-                        obs_choices_rectangle_rotator =  (obs_choices_rectangle_rotator+1)%obs_rotation_rollover
-
             # plot the downlink "choices" -  meant to represent the windows that could have been chosen
             if self.winds_plot_dlnks_choices:
                 num_dlnk_wind = 0
@@ -233,8 +226,8 @@ class GPPlotting():
                 if len(all_dlnk_winds_flat) > 0:
                     for dlnk_wind in all_dlnk_winds_flat[sat_indx]:
 
-                        dlnk_wind_start = (dlnk_wind.start-base_time).total_seconds()/time_divisor
-                        dlnk_wind_end = (dlnk_wind.end-base_time).total_seconds()/time_divisor
+                        dlnk_wind_start = (get_start(dlnk_wind)-base_time).total_seconds()/time_divisor
+                        dlnk_wind_end = (get_end(dlnk_wind)-base_time).total_seconds()/time_divisor
 
                         # plot the task duration
                         bottom_vert_loc = dlnk_choices_rectangle_rotator
@@ -242,7 +235,7 @@ class GPPlotting():
 
                         current_axis.add_patch(d_w)
                         # plt.text( (dlnk_wind_end+dlnk_wind_start)/2 - 0.30, bottom_vert_loc+0.6, "g%d,dv %d/%d"%(dlnk_wind.gs_indx,dlnk_wind.scheduled_data_vol,dlnk_wind.data_vol) , fontsize=10, color = 'k')
-                        # plt.text( dlnk_wind_start - 0.30, bottom_vert_loc+0.7, "g%d,dv %d/%d"%(dlnk_wind.gs_indx,dlnk_wind.scheduled_data_vol,dlnk_wind.data_vol) , fontsize=10, color = 'k')
+                        plt.text( dlnk_wind_start - 0.30, bottom_vert_loc+0.7, "g%d,dv %d/%d"%(dlnk_wind.gs_indx,dlnk_wind.scheduled_data_vol,dlnk_wind.data_vol) , fontsize=10, color = 'k')
 
                         plt.text(dlnk_wind_start+0.15, bottom_vert_loc+0.1, dlnk_wind.window_ID , fontsize=10, color = 'k')
 
@@ -252,6 +245,27 @@ class GPPlotting():
                         dlnk_choices_rectangle_rotator =  (dlnk_choices_rectangle_rotator+1)%dlnk_rotation_rollover
 
                         num_dlnk_wind += 1
+
+            # plot the observation "choices" -  meant to represent the windows that could have been chosen
+            if self.winds_plot_obs_choices:
+                if len(all_obs_winds_flat) > 0:
+                    for obs_wind in all_obs_winds_flat[sat_indx]:
+
+                        obs_start = (get_start(obs_wind)-base_time).total_seconds()/time_divisor
+                        obs_end = (get_end(obs_wind)-base_time).total_seconds()/time_divisor
+
+                        # plot the task duration
+                        bottom_vert_loc = obs_choices_rectangle_rotator
+                        d = Rectangle((obs_start, bottom_vert_loc), obs_end-obs_start, bottom_vert_loc+1,alpha=1,fill=True,color='#BFFFBF')
+                        current_axis.add_patch(d)
+
+                        plt.text(obs_start+0.15, bottom_vert_loc+0.4, "%s,dv %d/%d"%(obs_wind.target_IDs,obs_wind.scheduled_data_vol,obs_wind.data_vol) , fontsize=10, color = 'k')
+
+                        # save off the rotator choice so that we can look it up again
+                        obs_choices_rectangle_rotator_hist[obs_wind] = obs_choices_rectangle_rotator
+
+                        obs_choices_rectangle_rotator =  (obs_choices_rectangle_rotator+1)%obs_rotation_rollover
+
 
             ##########################
             # plot windows executed
@@ -264,8 +278,8 @@ class GPPlotting():
                 if xlnk_winds_flat and len(xlnk_winds_flat) > 0:
                     for xlnk_wind in xlnk_winds_flat[sat_indx]:
 
-                        xlnk_start = (xlnk_wind.start-base_time).total_seconds()/time_divisor
-                        xlnk_end = (xlnk_wind.end-base_time).total_seconds()/time_divisor
+                        xlnk_start = (get_start(xlnk_wind)-base_time).total_seconds()/time_divisor
+                        xlnk_end = (get_end(xlnk_wind)-base_time).total_seconds()/time_divisor
 
                         #  update the rotator value if we've already added this window to the plot in the "choices" code above
                         if xlnk_wind in xlnk_choices_rectangle_rotator_hist.keys ():
@@ -320,8 +334,8 @@ class GPPlotting():
                 if obs_winds_flat and len(obs_winds_flat) > 0:
                     for obs_wind in obs_winds_flat[sat_indx]:
 
-                        obs_start = (obs_wind.start-base_time).total_seconds()/time_divisor
-                        obs_end = (obs_wind.end-base_time).total_seconds()/time_divisor
+                        obs_start = (get_start(obs_wind)-base_time).total_seconds()/time_divisor
+                        obs_end = (get_end(obs_wind)-base_time).total_seconds()/time_divisor
 
                         #  update the rotator value if we've already added this window to the plot in the "choices" code above
                         if obs_wind in obs_choices_rectangle_rotator_hist.keys ():
@@ -344,8 +358,8 @@ class GPPlotting():
                 if dlnk_winds_flat and len(dlnk_winds_flat) > 0:
                     for dlnk_wind in dlnk_winds_flat[sat_indx]:
 
-                        dlnk_start = (dlnk_wind.start-base_time).total_seconds()/time_divisor
-                        dlnk_end = (dlnk_wind.end-base_time).total_seconds()/time_divisor
+                        dlnk_start = (get_start(dlnk_wind)-base_time).total_seconds()/time_divisor
+                        dlnk_end = (get_end(dlnk_wind)-base_time).total_seconds()/time_divisor
 
                         gs_indx = dlnk_wind.gs_indx
 
@@ -1200,6 +1214,48 @@ class GPPlotting():
             plt.show()
         else:
             savefig(fig_name,format=self.plot_fig_extension)
+
+
+    def plot_histogram(
+        self,
+        data,
+        num_bins,
+        plot_type = 'histogram',
+        x_title='',
+        y_title='',
+        plot_title = 'Hist-o-gram, man!', 
+        plot_size_inches = (12,6),
+        show=False,
+        fig_name='plots/histogram.pdf'):
+
+        #  make a new figure
+        plt.figure()
+
+        #  create subplots for satellites
+        fig = plt.gcf()
+        fig.set_size_inches( plot_size_inches)
+
+        plt.title( plot_title)
+
+        if plot_type == 'histogram':
+            plt.hist(data, bins=num_bins)
+        elif plot_type == 'cdf':
+            plt.hist(data, bins=num_bins,normed=True,cumulative=True, histtype='step')
+        else:
+            raise NotImplementedError
+
+        plt.xlabel(x_title)
+        plt.ylabel(y_title)
+
+        # use the last axes to set the entire plot background color
+        current_axis = plt.gca()
+        current_axis.patch.set_facecolor('w')
+
+        if show:
+            plt.show()
+        else:
+            savefig(fig_name,format=self.plot_fig_extension)
+
 
     @staticmethod
     def plot_route_latdv_pareto(all_routes,weights_tups,plot_name,show= False):
