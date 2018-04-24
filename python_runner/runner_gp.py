@@ -105,6 +105,29 @@ class GlobalPlannerRunner:
 
         return  routes, energy_usage, data_usage
 
+    def run_activity_scheduling_coupled( self, obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,window_uid):
+        gp_as = GPActivitySchedulingCoupled( self.params)
+
+        # from circinus_tools import debug_tools
+        # debug_tools.debug_breakpt()
+
+        print('make activity scheduling (coupled) model')
+        gp_as.make_model (routes_flat, ecl_winds,verbose = True)
+        stats =gp_as.get_stats (verbose = True)
+        print('solve activity scheduling (coupled)')
+        t_a = time.time()
+        gp_as.solve ()
+        t_b = time.time()
+        # gp_as.print_sol ()
+        print('extract_routes')
+        #  make a copy of the windows in the extracted routes so we don't mess with the original objects ( just to be extra careful)
+        routes = gp_as.extract_utilized_routes ( copy_routes = True, verbose  = False)
+        energy_usage,data_usage = gp_as.extract_resource_usage(  decimation_factor =1)
+
+        time_elapsed = t_b-t_a
+
+        return  routes, energy_usage, data_usage
+
 
     def run_route_selection_v2_step1( self,obs_winds,dlnk_winds_flat,xlnk_winds,verbose=False):
 
@@ -258,50 +281,13 @@ class GlobalPlannerRunner:
 
         return selected_rts_by_obs,stats_rs2_pre,stats_rs2_post
 
-    def run( self):
-
-        #################################
-        #  parse inputs, if desired
-        #################################
-
-        load_windows = not self.other_params['rs_s1_pickle_input'] and not self.other_params['rs_s2_pickle_input']
-
-        if load_windows:
-            print('Load files')
-
-            # parse the inputs into activity windows
-            window_uid = 0
-            print('Load obs')
-            obs_winds, window_uid =self.io_proc.import_obs_winds(window_uid)
-            print('Load dlnks')
-            dlnk_winds, dlnk_winds_flat, window_uid =self.io_proc.import_dlnk_winds(window_uid)
-            print('Load xlnks')
-            xlnk_winds, xlnk_winds_flat, window_uid =self.io_proc.import_xlnk_winds(window_uid)
-            print('Load ecl')
-            ecl_winds, window_uid =self.io_proc.import_eclipse_winds(window_uid)
-
-            # with open('temp.pkl','wb') as f:
-            #     pickle.dump( {'params': self.params},f)
-
-            # important to check this because window unique IDs are used as hashes in dictionaries in the scheduling code
-            print('Validate windows')
-            other_helper.validate_unique_windows(self,obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds)
-
-            # todo:  probably ought to delete the input times and rates matrices to free up space
-
-            print('In windows loaded from file:')
-            print('obs_winds')
-            print(sum([len(p) for p in obs_winds]))
-            print('dlnk_win')
-            print(sum([len(p) for p in dlnk_winds]))
-            print('xlnk_win')
-            print(sum([len(xlnk_winds[i][j]) for i in  range( self.sat_params['num_sats']) for j in  range( self.sat_params['num_sats']) ]))
+    def run_route_selection(self,obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,window_uid):
 
         #################################
         #  route selection step 1
         #################################
 
-        pas_a = time.time()
+        pas_a = None
 
         # If we need output from step 1
         run_step_1 = not self.other_params['rs_s2_pickle_input'] and not self.other_params['as_pickle_input']
@@ -370,6 +356,62 @@ class GlobalPlannerRunner:
         if self.rs_general_params['plot_route_selection_results']:
             output_helper.plot_route_selection_results (self,sel_routes_by_obs,dlnk_winds_flat,xlnk_winds_flat,num_obs_to_plot = 5)
 
+        return sel_routes_by_obs,ecl_winds,window_uid,pas_a
+
+    def run( self):
+
+        #################################
+        #  parse inputs, if desired
+        #################################
+
+        load_windows = not self.other_params['rs_s1_pickle_input'] and not self.other_params['rs_s2_pickle_input']
+
+        if load_windows:
+            print('Load files')
+
+            # parse the inputs into activity windows
+            window_uid = 0
+            print('Load obs')
+            obs_winds, window_uid =self.io_proc.import_obs_winds(window_uid)
+            print('Load dlnks')
+            dlnk_winds, dlnk_winds_flat, window_uid =self.io_proc.import_dlnk_winds(window_uid)
+            print('Load xlnks')
+            xlnk_winds, xlnk_winds_flat, window_uid =self.io_proc.import_xlnk_winds(window_uid)
+            print('Load ecl')
+            ecl_winds, window_uid =self.io_proc.import_eclipse_winds(window_uid)
+
+            # with open('temp.pkl','wb') as f:
+            #     pickle.dump( {'params': self.params},f)
+
+            # important to check this because window unique IDs are used as hashes in dictionaries in the scheduling code
+            print('Validate windows')
+            other_helper.validate_unique_windows(self,obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds)
+
+            # todo:  probably ought to delete the input times and rates matrices to free up space
+
+            print('In windows loaded from file:')
+            print('obs_winds')
+            print(sum([len(p) for p in obs_winds]))
+            print('dlnk_win')
+            print(sum([len(p) for p in dlnk_winds]))
+            print('xlnk_win')
+            print(sum([len(xlnk_winds[i][j]) for i in  range( self.sat_params['num_sats']) for j in  range( self.sat_params['num_sats']) ]))
+
+        #################################
+        #  route selection stage
+        #################################
+
+        # pas = planning and scheduling
+        pas_a = time.time()
+
+        run_rs = not self.as_params['run_coupled_rs_as']
+
+        if run_rs:
+            sel_routes_by_obs,ecl_winds,window_uid,pas_a_new = self.run_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,window_uid)
+
+        if pas_a_new:
+            pas_a = pas_a_new
+
         #################################
         #  activity scheduling stage
         #################################
@@ -380,11 +422,16 @@ class GlobalPlannerRunner:
         if self.other_params['as_pickle_input']:
             sel_routes_by_obs,ecl_winds,scheduled_routes,energy_usage,data_usage, window_uid = pickle_helper.unpickle_actsc_stuff(self)
         else:
+            run_coupled_rs_as = self.as_params['run_coupled_rs_as']
             found_routes = any([len(rts) >0 for rts in sel_routes_by_obs.values()])
 
             #  to protect against the weird case where we didn't find any routes ( shouldn't happen, unless we're at the very end of the simulation, or you're trying to break things)
-            if found_routes:
+            if found_routes and not run_coupled_rs_as:
                 scheduled_routes,energy_usage,data_usage = self.run_activity_scheduling(sel_routes_by_obs,ecl_winds)
+
+            # run coupled route selection/act sched solver (slow, optimal)
+            elif run_coupled_rs_as:
+                scheduled_routes,energy_usage,data_usage = self.run_activity_scheduling_coupled(obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,window_uid)
             else:
                 scheduled_routes,energy_usage,data_usage = ([],None,None)
                 print('No routes were found in route selection; not running activity selection')
