@@ -11,7 +11,6 @@ import json
 from datetime import datetime, timedelta
 import sys
 import argparse
-import pickle
 import numpy as np
 from copy import deepcopy
 from collections import OrderedDict
@@ -28,9 +27,12 @@ import gp_tools.gp_route_selection_v1 as gprsv1
 import gp_tools.gp_route_selection_v2 as gprsv2
 from gp_tools.gp_activity_scheduling import GPActivityScheduling
 from gp_tools.gp_metrics import GPMetrics
-from gp_tools.network_sim.gp_network_sim import GPNetSim
 from gp_tools.routing_objects import DataMultiRoute
 import gp_tools.gp_rs_execution as gp_rs_exec
+
+import runner_gp_helper_pickle as pickle_helper 
+import runner_gp_helper_other as other_helper
+import runner_gp_helper_output as output_helper
 
 # TODO: remove this line if not needed
 # from gp_tools.custom_activity_window import ObsWindow
@@ -73,83 +75,11 @@ class GlobalPlannerRunner:
         if self.as_inst_params['end_utc'] > self.scenario_params['end_utc']:
             raise RuntimeError("Activity scheduling instance end time (%s) is greater than scenario end time (%s)"%(self.as_inst_params['end_utc'],self.scenario_params['end_utc']))
 
-    def pickle_rtsel_s1_stuff(self,routes_by_obs,all_stats,route_times_s,obs_indx,obs_winds,dlnk_winds_flat,ecl_winds,window_uid):
-
-        pickle_stuff =  {}
-        pickle_stuff['routes_by_obs'] = routes_by_obs
-        pickle_stuff['all_stats'] = all_stats
-        pickle_stuff['route_times_s'] = route_times_s
-        pickle_stuff['params'] =  self.params
-        pickle_stuff['obs_indx'] = obs_indx
-        pickle_stuff['obs_winds'] = obs_winds
-        pickle_stuff['dlnk_winds_flat'] = dlnk_winds_flat
-        pickle_stuff['ecl_winds'] = ecl_winds
-        pickle_stuff['window_uid'] = window_uid
-        pickle_name ='pickles/rs_s1_%s_oi%d_%s' %( self.other_params['new_pickle_file_name_pre'],obs_indx,datetime.utcnow().isoformat().replace (':','_'))
-        with open('%s.pkl' % ( pickle_name),'wb') as f:
-            pickle.dump(  pickle_stuff,f)
-
-    def unpickle_rtsel_s1_stuff( self):
-        rs_s1_pickle = self.other_params['rs_s1_pickle_input']
-        # rs_s1_pickle = rs_s1_pickle if rs_s1_pickle else self.pickle_params['route_selection_step1_pickle']
-
-        p = pickle.load (open ( rs_s1_pickle,'rb'))
-        #  TODO:  uncommon this  if want to reload parameters from file
-        # self.params = p['params']
-
-        return p['routes_by_obs'],p['all_stats'],p['route_times_s'],p['obs_indx'],p['obs_winds'],p['dlnk_winds_flat'],p['ecl_winds'],p['window_uid']
-
-    def pickle_rtsel_s2_stuff(self,xlnk_winds_flat,sel_routes_by_obs,ecl_winds,obs_winds,dlnk_winds_flat,window_uid,stats_rs2_pre,stats_rs2_post):
-
-        pickle_stuff =  {}
-        pickle_stuff['xlnk_winds_flat'] = xlnk_winds_flat
-        pickle_stuff['sel_routes_by_obs'] = sel_routes_by_obs
-        pickle_stuff['ecl_winds'] = ecl_winds
-        pickle_stuff['obs_winds'] = obs_winds
-        pickle_stuff['dlnk_winds_flat'] = dlnk_winds_flat
-        pickle_stuff['window_uid'] = window_uid
-        pickle_stuff['stats_rs2_pre'] = stats_rs2_pre
-        pickle_stuff['stats_rs2_post'] = stats_rs2_post
-        pickle_stuff['params'] =  self.params
-        pickle_name ='pickles/rs_s2_%s_%s' %( self.other_params['new_pickle_file_name_pre'],datetime.utcnow().isoformat().replace (':','_'))
-        with open('%s.pkl' % ( pickle_name),'wb') as f:
-            pickle.dump(  pickle_stuff,f)
-
-    def unpickle_rtsel_s2_stuff( self):
-        rs_s2_pickle = self.other_params['rs_s2_pickle_input']
-        # rs_s2_pickle = rs_s2_pickle if rs_s2_pickle else self.pickle_params['route_selection_step2_pickle']
-
-        p = pickle.load (open ( rs_s2_pickle,'rb'))
-        #  TODO:  uncommon this  if want to reload parameters from file
-        # self.params = p['params']
-
-        return p['xlnk_winds_flat'],p['sel_routes_by_obs'],p['ecl_winds'],p['obs_winds'],p['dlnk_winds_flat'],p['window_uid'],p['stats_rs2_pre'],p['stats_rs2_post']
-
-
-    def pickle_actsc_stuff(self,routes_by_obs,ecl_winds,scheduled_routes,energy_usage,data_usage,window_uid):
-
-        pickle_stuff =  {}
-        pickle_stuff['routes_by_obs'] = routes_by_obs
-        pickle_stuff['ecl_winds'] = ecl_winds
-        pickle_stuff['scheduled_routes'] = scheduled_routes
-        pickle_stuff['energy_usage'] = energy_usage
-        pickle_stuff['data_usage'] = data_usage
-        pickle_stuff['window_uid'] = window_uid
-        pickle_name ='pickles/as_%s' %(datetime.utcnow().isoformat().replace (':','_'))
-        with open('%s.pkl' % ( pickle_name),'wb') as f:
-            pickle.dump(  pickle_stuff,f)
-
-
-    def unpickle_actsc_stuff( self):
-        as_pickle = self.other_params['as_pickle_input']
-
-        p = pickle.load (open ( as_pickle,'rb'))
-
-        return p['routes_by_obs'],p['ecl_winds'],p['scheduled_routes'],p['energy_usage'],p['data_usage'],p['window_uid']
+    
 
 
 
-    def run_nominal_activity_scheduling( self, routes_by_obs,ecl_winds):
+    def run_activity_scheduling( self, routes_by_obs,ecl_winds):
         gp_as = GPActivityScheduling ( self.params)
 
         # flatten the list of all routes, which currently has nested lists for each observation
@@ -175,157 +105,8 @@ class GlobalPlannerRunner:
 
         return  routes, energy_usage, data_usage
 
-    def calc_activity_scheduling_results ( self,obs_winds,dlnk_winds_flat,rs_routes_by_obs,sched_routes, energy_usage):
-        gp_met = GPMetrics(self.params)
 
-        def in_sched_window(wind):
-            return wind.start >= self.as_inst_params['start_utc_dt'] and wind.end <= self.as_inst_params['end_utc_dt']
-
-        total_collectible_DV_all_obs_winds = sum(obs.data_vol for winds in obs_winds for obs in winds  if in_sched_window(obs))
-        total_dlnkable_DV_all_dlnk_winds = sum(dlnk.data_vol for winds in dlnk_winds_flat for dlnk in winds if in_sched_window(dlnk))
-        rs_output_routes = [rt for rts in rs_routes_by_obs.values() for rt in rts]
-        total_throughput_DV_rs_routes = sum(sum(rt.data_vol for rt in rts) for obs, rts in rs_routes_by_obs.items() if in_sched_window(obs))
-        total_collectible_DV_rs_routes = sum(min(obs.data_vol,sum(rt.data_vol for rt in rts)) for obs, rts in rs_routes_by_obs.items() if in_sched_window(obs))
-
-        print('------------------------------')
-        print('in scheduling window:')
-        print('len(rs_output_routes)')
-        print(len(rs_output_routes))
-        print('len(sched_routes)')
-        print(len(sched_routes))
-        print('total_collectible_DV_all_obs_winds')
-        print(total_collectible_DV_all_obs_winds)
-        print('total_dlnkable_DV_all_dlnk_winds')
-        print(total_dlnkable_DV_all_dlnk_winds)
-        print('total_throughput_DV_rs_routes')
-        print(total_throughput_DV_rs_routes)
-        print('total_collectible_DV_rs_routes')
-        print(total_collectible_DV_rs_routes)
-        print('weights')
-        print(self.as_params['obj_weights'])
-        # dv_stats = gp_met.assess_dv_all_routes (sched_routes,verbose = True)
-        dv_obs_stats = gp_met.assess_dv_by_obs (rs_routes_by_obs,sched_routes,verbose = True)
-        lat_stats = gp_met.assess_latency_all_routes (sched_routes,verbose = True)
-        lat_obs_stats = gp_met.assess_latency_by_obs (rs_routes_by_obs,sched_routes,verbose = True)
-        aoi_targ_stats = gp_met.assess_aoi_by_obs_target(rs_routes_by_obs,sched_routes,verbose = True)
-
-        gp_netsim = GPNetSim ( self.params, self.io_proc)
-        gp_netsim.sim_tlm_cmd_routing(sched_routes, verbose =  False)
-        #  this is indexed by sat index
-        sats_cmd_update_hist = gp_netsim.get_all_sats_cmd_update_hist()
-        aoi_sat_cmd_stats = gp_met.assess_aoi_sat_cmd(sats_cmd_update_hist,verbose = True)
-        #  this is  indexed by ground station index
-        sats_tlm_update_hist = gp_netsim.get_all_sats_tlm_update_hist()
-        aoi_sat_tlm_stats = gp_met.assess_aoi_sat_tlm(sats_tlm_update_hist,verbose = True)
-
-        resource_margin_stats = gp_met.assess_resource_margin(energy_usage,verbose = True)
-
-
-        plot_outputs = {}
-        plot_outputs['rs_targIDs_found'] = aoi_targ_stats['rs_targIDs_found']
-        plot_outputs['obs_aoi_curves_by_targID'] = aoi_targ_stats['aoi_curves_by_targID_sched']
-        plot_outputs['obs_aoi_curves_by_targID'] = aoi_targ_stats['aoi_curves_by_targID_sched']
-        plot_outputs['initial_lat_by_obs_rs'] = lat_obs_stats['initial_lat_by_obs_rs']
-        plot_outputs['initial_lat_by_obs'] = lat_obs_stats['initial_lat_by_obs']
-        plot_outputs['cmd_aoi_curves_by_sat_indx'] = aoi_sat_cmd_stats['aoi_curves_by_sat_indx']
-        plot_outputs['tlm_aoi_curves_by_sat_indx'] = aoi_sat_tlm_stats['aoi_curves_by_sat_indx']
-        return plot_outputs
-
-    def run_route_selection(self,gp_ps,obs,dlnk_winds_flat,xlnk_winds,obj_weights,dr_uid):
-        """[summary]
-
-        [description]
-        :param gp_ps: [description]
-        :type gp_ps: [type]
-        :param obs: [description]
-        :type obs: [type]
-        :param dlnk_winds_flat: [description]
-        :type dlnk_winds_flat: [type]
-        :param xlnk_winds: [description]
-        :type xlnk_winds: [type]
-        :param obj_weights: [description]
-        :type obj_weights: [type]
-        :param dr_uid: globally unique data route ID across all data routes for all observations
-        :type dr_uid: int
-        :returns: [description]
-        :rtype: {[type]}
-        """
-
-
-
-        return routes,obs,stats,time_elapsed,dr_uid
-
-    def run_nominal_route_selection_v1( self,obs_winds,dlnk_winds_flat,xlnk_winds):
-        gp_ps = gprsv1.GPDataRouteSelection ( self.params)
-
-        print ('nominal route selection v1')
-
-        obj_weights = {
-            "total_dv": 0.45,
-            "num_paths_sel": 0.1,
-            "latency_sf": 0.45,
-        }
-
-        obs_indx =0
-        #  list of all routes, indexed by obs_indx ( important for pickling)
-        all_routes =[]
-        all_routes_obs =[]
-        all_stats =[]
-        route_times_s =[]
-
-        # this should be unique across all data routes
-        dr_uid = 0
-
-        for sat_indx in range( self.sat_params['num_sats']):
-            for  index, obs in  enumerate ( obs_winds[sat_indx]):
-
-                print ("sat_indx")
-                print (sat_indx)
-                print ("obs")
-                print ( index)
-
-                # routes,obs,stats,time_elapsed,dr_uid = self.run_route_selection(gp_ps,obs,dlnk_winds_flat,xlnk_winds,obj_weights,dr_uid)
-
-                # run the route selection algorithm
-                gp_ps.make_model (obs,dlnk_winds_flat,xlnk_winds, obj_weights, verbose = True)
-                stats =gp_ps.get_stats (verbose = True)
-                t_a = time.time()
-                gp_ps.solve ()
-                t_b = time.time()
-                gp_ps.print_sol ()
-                adjust_opt = self.rs_general_params['adjust_window_timing_post_selection']
-                routes,dr_uid = gp_ps. extract_routes ( dr_uid,copy_windows= True,adjust_window_timing=adjust_opt,verbose  = True)
-
-                time_elapsed = t_b-t_a
-                # end algorithm
-
-                print ('obs.data_vol, total dlnk dv, ratio')
-                print (obs.data_vol,sum(dr.data_vol for dr in routes),sum(dr.data_vol for dr in routes)/obs.data_vol)
-                print ('min latency, ave latency, max latency')
-                latencies = [(rt.route[-1].end - rt.route[0].end).total_seconds()/60 for rt in  routes]
-                if len(latencies) > 0:
-                    print (np.min( latencies),np.mean( latencies),np.max( latencies))
-                else:
-                    print('no routes found')
-                print ('time_elapsed')
-                print (time_elapsed)
-
-                all_routes.append ( routes)
-                all_routes_obs.append ( obs)
-                all_stats.append ( stats)
-                route_times_s.append ( time_elapsed)
-
-                obs_indx +=1
-
-                if obs_indx >= 1:
-                    break
-
-            if obs_indx >= 1:
-                break
-
-        return all_routes,all_routes_obs,all_stats,route_times_s,obs_indx
-
-    def run_nominal_route_selection_v2_step1( self,obs_winds,dlnk_winds_flat,xlnk_winds,verbose=False):
+    def run_route_selection_v2_step1( self,obs_winds,dlnk_winds_flat,xlnk_winds,verbose=False):
 
         if verbose:
             print ('nominal route selection v2 step 1')
@@ -443,431 +224,12 @@ class GlobalPlannerRunner:
 
         return routes_by_obs,all_stats,route_times_s,obs_indx, dr_uid
 
-    def  setup_test( self,obs_winds,dlnk_winds_flat,xlnk_winds):
-        obs_winds_sel = [[] for sat_indx in range (self.sat_params['num_sats'])]
-        # obs_winds_sel[13].append ( obs_winds[13][0])
-        # obs_winds_sel[19].append ( obs_winds[19][0])
-        # obs_winds_sel[19].append ( obs_winds[19][1])
-        # obs_winds_sel[20].append ( obs_winds[20][6])
-        # obs_winds_sel[26].append ( obs_winds[26][0])
+    
 
-        if False:
-            self.gp_plot.plot_winds(
-                range (self.sat_params['num_sats']),
-                # [13,19,20,26],
-                obs_winds_sel,
-                [],
-                dlnk_winds_flat,
-                [],
-                [],
-                {},
-                self.scenario_params['start_utc_dt'],
-                self.scenario_params['end_utc_dt'],
-                plot_title = 'all obs, dlnks',
-                plot_size_inches = (18,12),
-                plot_include_labels = True,
-                show=  False,
-                fig_name='plots/temp1.pdf'
-            )
-
-        return obs_winds_sel
+    
 
 
-    def run_test_route_selection( self,obs_winds,dlnk_winds_flat,xlnk_winds):
-        gp_rs = GPDataRouteSelection ( self.params)
-
-        total_dv_weights = [0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9]
-        num_paths_sel_weights = [0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1]
-        latency_sf_weights = [0.9,0.8,0.7,0.6,0.5,0.4,0.3,0.2,0.1,0]
-        weights_tups = zip(total_dv_weights,num_paths_sel_weights,latency_sf_weights)
-
-        print ('test route selection')
-
-        # obs_winds_sel =  self.setup_test(obs_winds,dlnk_winds_flat,xlnk_winds)
-        obs_winds_sel = [[] for sat_indx in range (self.sat_params['num_sats'])]
-        # obs_winds_sel[13].append ( obs_winds[13][0])
-        # obs_winds_sel[19].append ( obs_winds[19][0])
-        # obs_winds_sel[19].append ( obs_winds[19][1])
-        obs_winds_sel[20].append ( obs_winds[20][6])
-        # obs_winds_sel[26].append ( obs_winds[26][0])
-
-        obs_indx =0
-        #  list of all routes, indexed by obs_indx ( important for pickling)
-        all_routes =[]
-        all_routes_obs =[]
-        all_stats =[]
-        route_times_s =[]
-
-        #  flatten into a simple list of observations
-        obs_winds_sel_flat = flat_list = [item for sublist in obs_winds_sel for item in sublist]
-
-
-        for  index, obs in  enumerate ( obs_winds_sel_flat):
-            for  weights_index, weights in  enumerate(weights_tups):
-                print ("obs")
-                print ( index)
-                print (  'weights_index')
-                print (  weights_index)
-
-                obj_weights = {
-                    "total_dv":   weights[0],
-                    "num_paths_sel":   weights[1],
-                    "latency_sf":   weights[2],
-                }
-
-                routes,obs,stats,time_elapsed = self.run_route_selection(gp_rs,obs,dlnk_winds_flat,xlnk_winds,obj_weights)
-
-                print ('obs.data_vol, total dlnk dv, ratio')
-                print (obs.data_vol,sum(dr.data_vol for dr in routes),sum(dr.data_vol for dr in routes)/obs.data_vol)
-                print ('min latency, ave latency, max latency')
-                latencies = [(rt.route[-1].end - rt.route[0].end).total_seconds()/60 for rt in  routes]
-                print (np.min( latencies),np.mean( latencies),np.max( latencies))
-                print ('time_elapsed')
-                print (time_elapsed)
-
-                all_routes.append ( routes)
-                all_routes_obs.append ( obs)
-                all_stats.append ( stats)
-                route_times_s.append ( time_elapsed)
-
-            obs_indx +=1
-
-        return all_routes,all_routes_obs,all_stats,route_times_s,obs_indx,weights_tups
-
-    def pareto_plot(all_routes):
-        total_dv_weights = [0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9]
-        num_paths_sel_weights = [0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1]
-        latency_sf_weights = [0.9,0.8,0.7,0.6,0.5,0.4,0.3,0.2,0.1,0]
-        weights_tups = zip(total_dv_weights,num_paths_sel_weights,latency_sf_weights)
-        self.gp_plot.plot_route_latdv_pareto(all_routes,weights_tups,'plots/obs_winds_20_6_pareto.pdf')
-
-    def plot_route_selection_results ( self,routes_by_obs,dlnk_winds_flat,xlnk_winds_flat,num_obs_to_plot):
-
-        first_dlnk_indx = 10
-        num_dlnks_to_plot = 20
-        for obs_indx, (obs,routes) in enumerate (routes_by_obs.items()):
-            if obs_indx >= num_obs_to_plot:
-                break
-
-            print('Plotting obs index %d'%(obs_indx))
-
-            rts_by_dlnk = OrderedDict()
-
-            for dr in routes:
-                dlnk = dr.get_dlnk()
-                rts_by_dlnk.setdefault(dlnk,[]).append(dr)
-
-            for dlnk_indx, dlnk in enumerate (rts_by_dlnk.keys()):
-                if dlnk_indx >= num_dlnks_to_plot:
-                    break
-                if dlnk_indx < first_dlnk_indx:
-                    continue
-
-                # if dlnk_indx != 33:
-                #     continue
-
-                rts = rts_by_dlnk[dlnk]
-
-                # TODO:  this stuff needs to be  changed
-                # (sel_obs_winds_flat, sel_dlnk_winds_flat, sel_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind) = self.io_proc.extract_flat_windows (routes)
-                (sel_obs_winds_flat, sel_dlnk_winds_flat, sel_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind) = self.io_proc.extract_flat_windows (rts)
-
-                obs = rts[0].get_obs()
-
-                sats_to_include =  range (self.sat_params['num_sats'])
-                # sats_to_include = [1,2,3]
-
-                plot_len = max(self.rs_general_params['wind_filter_duration_s'],self.rs_general_params['wind_filter_duration_obs_sat_s'])
-
-                #  plot the selected down links and cross-links
-                self.gp_plot.plot_winds(
-                    sats_to_include,
-                    sel_obs_winds_flat,
-                    sel_obs_winds_flat,
-                    dlnk_winds_flat,
-                    sel_dlnk_winds_flat,
-                    # [],
-                    xlnk_winds_flat,
-                    sel_xlnk_winds_flat,
-                    # [],
-                    route_indcs_by_wind,
-                    self.scenario_params['start_utc_dt'],
-                    # obs.start,
-                    obs.start + timedelta( seconds= plot_len),
-                    # self.scenario_params['start_utc_dt'],
-                    # self.scenario_params['start_utc_dt'] + timedelta( seconds= self.rs_general_params['wind_filter_duration_s']),
-                    # self.scenario_params['end_utc_dt']-timedelta(minutes=200),
-                    plot_title = 'Route Plot',
-                    plot_size_inches = (18,12),
-                    plot_include_dlnk_labels = self.rs_general_params['plot_include_dlnk_labels'],
-                    plot_include_xlnk_labels = self.rs_general_params['plot_include_xlnk_labels'],
-                    show= False,
-                    fig_name='plots/test_rs_o{0}_d{1}_6sat.pdf'.format (obs_indx,dlnk_indx)
-                )
-
-
-    def  plot_activity_scheduling_results ( self,all_possible_winds,sel_routes_by_obs,sched_routes,energy_usage,data_usage,ecl_winds,metrics_plot_inputs):
-
-        # do a bunch of stuff to extract the windows from all of the sched_routes as indexed by observation
-        # note that this stuff is not thewindows from the scheduled sched_routes, but rather the windows from all the route selected in route selection
-        #  start
-        sel_obs_winds_flat = [set() for  sat_indx  in range  (self.sat_params['num_sats'])]
-        sel_dlnk_winds_flat = [set() for sat_indx  in range (self.sat_params['num_sats'])]
-        sel_xlnk_winds_flat = [set() for sat_indx  in range (self.sat_params['num_sats'])]
-
-        for rts_indx, (obs,rts) in enumerate (sel_routes_by_obs.items()):
-            obs_winds_rt, dlnk_winds_rt, \
-            xlnk_winds_rt, _, _ = self.io_proc.extract_flat_windows (rts)
-
-            for sat_indx in range  (self.sat_params['num_sats']):
-                [sel_obs_winds_flat[sat_indx] .add( wind)  for wind in obs_winds_rt[sat_indx]]
-                [sel_dlnk_winds_flat[sat_indx] .add(wind ) for wind in dlnk_winds_rt[sat_indx]]
-                [sel_xlnk_winds_flat[sat_indx] .add(wind ) for wind in xlnk_winds_rt[sat_indx]]
-
-        for sat_indx in range  (self.sat_params['num_sats']):
-            sel_obs_winds_flat[sat_indx] = list(sel_obs_winds_flat[sat_indx])
-            sel_dlnk_winds_flat[sat_indx] = list(sel_dlnk_winds_flat[sat_indx])
-            sel_xlnk_winds_flat[sat_indx] = list(sel_xlnk_winds_flat[sat_indx])
-            sel_obs_winds_flat[sat_indx].sort(key=lambda x: x.start)
-            sel_dlnk_winds_flat[sat_indx].sort(key=lambda x: x.start)
-            sel_xlnk_winds_flat[sat_indx].sort(key=lambda x: x.start)
-        # end
-
-        sched_obs_winds_flat, sched_dlnk_winds_flat, \
-        sched_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind = self.io_proc.extract_flat_windows (sched_routes,copy_windows= False)
-
-        #
-        sats_to_include =  [sat_id for sat_id in self.sat_params['sat_id_order']]
-        # sats_to_include =  [sat_id for sat_id in range(20,30)]
-        # sats_to_include = [12,13,14,15,16]
-
-        all_obs_winds,all_dlnk_winds_flat,all_xlnk_winds_flat = all_possible_winds
-
-        # # plot all winds
-        # self.gp_plot.plot_winds(
-        #     sats_to_include,
-        #     all_obs_winds,
-        #     all_obs_winds,
-        #     all_dlnk_winds_flat,
-        #     all_dlnk_winds_flat,
-        #     all_xlnk_winds_flat,
-        #     None,
-        #     None,
-        #     self.as_inst_params['start_utc_dt'],
-        #     # self.as_inst_params['start_utc_dt'] + timedelta( seconds= self.rs_general_params['wind_filter_duration_s']),
-        #     self.as_inst_params['end_utc_dt'],
-        #     base_time = self.scenario_params['start_utc_dt'],
-        #     plot_title = 'All Possible Activities',
-        #     plot_size_inches = (18,12),
-        #     plot_include_dlnk_labels = self.as_params['plot_include_dlnk_labels'],
-        #     plot_include_xlnk_labels = self.as_params['plot_include_xlnk_labels'],
-        #     plot_original_times = True,
-        #     show=  False,
-        #     fig_name='plots/test_all_windows.pdf'
-        # )
-
-
-        # # plot the selected down links and cross-links this
-        # self.gp_plot.plot_winds(
-        #     sats_to_include,
-        #     sel_obs_winds_flat,
-        #     sched_obs_winds_flat,
-        #     sel_dlnk_winds_flat,
-        #     sched_dlnk_winds_flat,
-        #     sel_xlnk_winds_flat,
-        #     sched_xlnk_winds_flat,
-        #     route_indcs_by_wind,
-        #     self.as_inst_params['start_utc_dt'],
-        #     # self.as_inst_params['start_utc_dt'] + timedelta( seconds= self.rs_general_params['wind_filter_duration_s']),
-        #     self.as_inst_params['end_utc_dt'],
-        #     base_time = self.scenario_params['start_utc_dt'],
-        #     plot_title = 'Scheduled Activities',
-        #     plot_size_inches = (18,12),
-        #     plot_include_dlnk_labels = self.as_params['plot_include_dlnk_labels'],
-        #     plot_include_xlnk_labels = self.as_params['plot_include_xlnk_labels'],
-        #     plot_original_times = False,
-        #     show=  False,
-        #     fig_name='plots/test_activity_times.pdf'
-        # )
-
-        # # self.gp_plot.plot_data_circles(
-        # #     sats_to_include,
-        # #     sched_obs_winds_flat,
-        # #     sched_obs_winds_flat,
-        # #     sched_dlnk_winds_flat,
-        # #     sched_dlnk_winds_flat,
-        # #     sched_xlnk_winds_flat,
-        # #     sched_xlnk_winds_flat,
-        # #     route_indcs_by_wind,
-        # #     self.as_inst_params['start_utc_dt'],
-        # #     # self.as_inst_params['start_utc_dt'] + timedelta( seconds= self.rs_general_params['wind_filter_duration_s']),
-        # #     self.as_inst_params['end_utc_dt'],
-        #       # base_time = self.scenario_params['start_utc_dt'],
-        # #     plot_title = 'Activity Data Volumes',
-        # #     plot_size_inches = (18,12),
-        # #     plot_include_labels = self.as_params['plot_include_labels'],
-        # #     show=  False,
-        # #     fig_name='plots/test_data_volume.pdf'
-        # # )
-
-        # self.gp_plot.plot_energy_usage(
-        #     sats_to_include,
-        #     energy_usage,
-        #     ecl_winds,
-        #     self.as_inst_params['start_utc_dt'],
-        #     self.as_inst_params['end_utc_dt'],
-        #     base_time = self.scenario_params['start_utc_dt'],
-        #     plot_title = 'Energy Storage Utilization',
-        #     plot_size_inches = (18,12),
-        #     show=  False,
-        #     fig_name='plots/test_energy.pdf'
-        # )
-
-        # # note that little blips upward that appear in data storage plot for "just passing through" crosslink pairs (looks like _____^_____ . Isn't that some great asciiart?) can be caused by a slight overlap in timepoints at beg/end of two back to back activities. This should not cause any problems
-        # self.gp_plot.plot_data_usage(
-        #     sats_to_include,
-        #     data_usage,
-        #     ecl_winds,
-        #     self.as_inst_params['start_utc_dt'],
-        #     self.as_inst_params['end_utc_dt'],
-        #     base_time = self.scenario_params['start_utc_dt'],
-        #     plot_title = 'Data Storage Utilization',
-        #     plot_size_inches = (18,12),
-        #     show=  False,
-        #     fig_name='plots/test_data.pdf'
-        # )
-
-        # found_targIDs = metrics_plot_inputs['rs_targIDs_found']
-        # # targs_to_include = [targ['id'] for targ in self.obs_params['targets']]
-        # # targs_to_include = [0,3,4,7,8]
-        # # targs_to_include = range(15)
-        # # targs_to_include = found_targIDs[0:10]
-        # targs_to_include = found_targIDs
-
-        # self.gp_plot.plot_obs_aoi(
-        #     targs_to_include,
-        #     metrics_plot_inputs['obs_aoi_curves_by_targID'],
-        #     self.as_inst_params['start_utc_dt'],
-        #     self.as_inst_params['end_utc_dt'],
-        #     base_time = self.scenario_params['start_utc_dt'],
-        #     plot_title = 'Observation Target AoI',
-        #     plot_size_inches = (18,12),
-        #     show=False,
-        #     fig_name='plots/test_obs_aoi_plot.pdf'
-        # )
-
-        # plot obs latency histogram
-        self.gp_plot.plot_histogram(
-            data=metrics_plot_inputs['initial_lat_by_obs'].values(),
-            num_bins = 40,
-            plot_type = 'histogram',
-            x_title='Latency (mins)',
-            y_title='Number of observations',
-            plot_title = 'Histogram of initial latency by obs - scheduled (min dv %.1f Mb)'%(self.as_params['min_as_route_dv_Mb']), 
-            plot_size_inches = (12,6),
-            show=False,
-            fig_name='plots/obs_lat_sched_hist.pdf'
-        )
-
-        # plot obs latency histogram
-        self.gp_plot.plot_histogram(
-            data=metrics_plot_inputs['initial_lat_by_obs'].values(),
-            num_bins = 40,
-            plot_type = 'cdf',
-            x_title='Latency (mins)',
-            y_title='Number of observations',
-            plot_title = 'Histogram of initial latency by obs - scheduled (min dv %.1f Mb)'%(self.as_params['min_as_route_dv_Mb']), 
-            plot_size_inches = (12,6),
-            show=False,
-            fig_name='plots/obs_lat_sched_cdf.pdf'
-        )
-
-        # plot obs latency histogram
-        self.gp_plot.plot_histogram(
-            data=metrics_plot_inputs['initial_lat_by_obs_rs'].values(),
-            num_bins = 40,
-            plot_type = 'histogram',
-            x_title='Latency (mins)',
-            y_title='Number of observations',
-            plot_title = 'Histogram of initial latency by obs - RS output (min dv %.1f Mb)'%(self.as_params['min_as_route_dv_Mb']), 
-            plot_size_inches = (12,6),
-            show=False,
-            fig_name='plots/obs_lat_rs_hist.pdf'
-        )
-
-        # plot obs latency histogram
-        self.gp_plot.plot_histogram(
-            data=metrics_plot_inputs['initial_lat_by_obs_rs'].values(),
-            num_bins = 40,
-            plot_type = 'cdf',
-            x_title='Latency (mins)',
-            y_title='Number of observations',
-            plot_title = 'Histogram of initial latency by obs - RS output (min dv %.1f Mb)'%(self.as_params['min_as_route_dv_Mb']), 
-            plot_size_inches = (12,6),
-            show=False,
-            fig_name='plots/obs_lat_rs_cdf.pdf'
-        )
-
-        # sats_to_include =  [sat_p['sat_id'] for sat_p in self.sat_orbit_params]
-        # sats_to_include =  range(10)
-        aoi_option = 'cmd'
-        self.gp_plot.plot_sat_tlm_cmd_aoi(
-            sats_to_include,
-            metrics_plot_inputs['cmd_aoi_curves_by_sat_indx'],
-            aoi_option,
-            self.as_inst_params['start_utc_dt'],
-            self.as_inst_params['end_utc_dt'],
-            base_time = self.scenario_params['start_utc_dt'],
-            plot_title = 'Satellite Command Uplink AoI',
-            plot_size_inches = (18,12),
-            show=False,
-            fig_name='plots/test_cmd_aoi_plot.pdf'
-        )
-
-        aoi_option = 'tlm'
-        self.gp_plot.plot_sat_tlm_cmd_aoi(
-            sats_to_include,
-            metrics_plot_inputs['tlm_aoi_curves_by_sat_indx'],
-            aoi_option,
-            self.as_inst_params['start_utc_dt'],
-            self.as_inst_params['end_utc_dt'],
-            base_time = self.scenario_params['start_utc_dt'],
-            plot_title = 'Satellite Telemetry Downlink AoI',
-            plot_size_inches = (18,12),
-            show=False,
-            fig_name='plots/test_tlm_aoi_plot.pdf'
-        )
-
-
-    def validate_unique_windows( self,obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds):
-        all_wind_ids = set()
-
-        for indx in range(len(obs_winds)):
-            for wind in obs_winds[indx]:
-                if wind.window_ID in all_wind_ids:
-                    raise Exception('Found a duplicate unique window ID where it should not have been possible')
-                all_wind_ids.add(wind.window_ID)
-
-        for indx in range(len(dlnk_winds_flat)):
-            for wind in dlnk_winds_flat[indx]:
-                if wind.window_ID in all_wind_ids:
-                    raise Exception('Found a duplicate unique window ID where it should not have been possible')
-                all_wind_ids.add(wind.window_ID)
-
-        for indx in range(len(xlnk_winds)):
-            for indx_2 in range(len(xlnk_winds[indx])):
-                for wind in xlnk_winds[indx][indx_2]:
-                    if wind.window_ID in all_wind_ids:
-                        raise Exception('Found a duplicate unique window ID where it should not have been possible')
-                    all_wind_ids.add(wind.window_ID)
-
-        for indx in range(len(ecl_winds)):
-            for wind in ecl_winds[indx]:
-                if wind.window_ID in all_wind_ids:
-                    raise Exception('Found a duplicate unique window ID where it should not have been possible')
-                all_wind_ids.add(wind.window_ID)
-
-    def run_nominal_route_selection_v2_step2(self,routes_by_obs):
+    def run_route_selection_v2_step2(self,routes_by_obs):
         print('num routes')
         print(sum(len(rts) for rts in routes_by_obs.values()))
 
@@ -902,7 +264,7 @@ class GlobalPlannerRunner:
         #  parse inputs, if desired
         #################################
 
-        load_windows = not self.other_params['rs_s1_pickle_input']
+        load_windows = not self.other_params['rs_s1_pickle_input'] and not self.other_params['rs_s2_pickle_input']
 
         if load_windows:
             print('Load files')
@@ -923,7 +285,7 @@ class GlobalPlannerRunner:
 
             # important to check this because window unique IDs are used as hashes in dictionaries in the scheduling code
             print('Validate windows')
-            self.validate_unique_windows(obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds)
+            other_helper.validate_unique_windows(self,obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds)
 
             # todo:  probably ought to delete the input times and rates matrices to free up space
 
@@ -948,18 +310,18 @@ class GlobalPlannerRunner:
             #  if  we are loading from file, do that
             if self.other_params['rs_s1_pickle_input']:
                 print('Unpickling route selection step one stuff')
-                routes_by_obs,all_stats,route_times_s,obs_indx,obs_winds,dlnk_winds_flat,ecl_winds,window_uid = self.unpickle_rtsel_s1_stuff()
+                routes_by_obs,all_stats,route_times_s,obs_indx,obs_winds,dlnk_winds_flat,ecl_winds,window_uid = pickle_helper.unpickle_rtsel_s1_stuff(self)
                 pas_a = time.time()
 
             #  otherwise run route selection step 1
             else:
                 print('Run route selection step 1')
-                routes_by_obs,all_stats,route_times_s, obs_indx, dr_uid  =  self.run_nominal_route_selection_v2_step1(obs_winds,dlnk_winds_flat,xlnk_winds,verbose=self.rs_v2_params['verbose_step1'])
+                routes_by_obs,all_stats,route_times_s, obs_indx, dr_uid  =  self.run_route_selection_v2_step1(obs_winds,dlnk_winds_flat,xlnk_winds,verbose=self.rs_v2_params['verbose_step1'])
                 # routes_by_obs,all_stats,route_times_s, obs_indx, weights_tups  =  self.run_test_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
 
             #  pickle before step 2 because step 2 doesn't take that long
             if self.pickle_params['pickle_route_selection_step1_results']:
-                self.pickle_rtsel_s1_stuff(routes_by_obs,all_stats,route_times_s,obs_indx,obs_winds,dlnk_winds_flat,ecl_winds,window_uid)
+                pickle_helper.pickle_rtsel_s1_stuff(self,routes_by_obs,all_stats,route_times_s,obs_indx,obs_winds,dlnk_winds_flat,ecl_winds,window_uid)
         else:
             print('Skipping route selection step one stuff')
 
@@ -976,7 +338,7 @@ class GlobalPlannerRunner:
         if run_step_2:
             if self.other_params['rs_s2_pickle_input']:
                 print('Unpickling route selection step two stuff')
-                xlnk_winds_flat,sel_routes_by_obs,ecl_winds,obs_winds,dlnk_winds_flat,window_uid,stats_rs2_pre,stats_rs2_post = self.unpickle_rtsel_s2_stuff()
+                xlnk_winds_flat,sel_routes_by_obs,ecl_winds,obs_winds,dlnk_winds_flat,window_uid,stats_rs2_pre,stats_rs2_post = pickle_helper.unpickle_rtsel_s2_stuff(self)
                 pas_a = time.time()
             else:
                 print('num_routes_calced')
@@ -992,10 +354,10 @@ class GlobalPlannerRunner:
                     sel_routes_by_obs = {obs:[DataMultiRoute(ID=0,data_routes=[dr]) for dr in rts] for obs,rts in routes_by_obs.items()}
                 else:
                     # run step 2. todo:  move this elsewhere
-                    sel_routes_by_obs,stats_rs2_pre,stats_rs2_post = self.run_nominal_route_selection_v2_step2(routes_by_obs)
+                    sel_routes_by_obs,stats_rs2_pre,stats_rs2_post = self.run_route_selection_v2_step2(routes_by_obs)
 
             if self.pickle_params['pickle_route_selection_step2_results']:
-                self.pickle_rtsel_s2_stuff(xlnk_winds_flat,sel_routes_by_obs,ecl_winds,obs_winds,dlnk_winds_flat,window_uid,stats_rs2_pre,stats_rs2_post)
+                pickle_helper.pickle_rtsel_s2_stuff(self,xlnk_winds_flat,sel_routes_by_obs,ecl_winds,obs_winds,dlnk_winds_flat,window_uid,stats_rs2_pre,stats_rs2_post)
         else:
             print('Skipping route selection step two stuff')
 
@@ -1006,7 +368,7 @@ class GlobalPlannerRunner:
         print('route selection output stage')
 
         if self.rs_general_params['plot_route_selection_results']:
-            self.plot_route_selection_results (sel_routes_by_obs,dlnk_winds_flat,xlnk_winds_flat,num_obs_to_plot = 5)
+            output_helper.plot_route_selection_results (self,sel_routes_by_obs,dlnk_winds_flat,xlnk_winds_flat,num_obs_to_plot = 5)
 
         #################################
         #  activity scheduling stage
@@ -1016,26 +378,26 @@ class GlobalPlannerRunner:
             return None
 
         if self.other_params['as_pickle_input']:
-            sel_routes_by_obs,ecl_winds,scheduled_routes,energy_usage,data_usage, window_uid = self.unpickle_actsc_stuff()
+            sel_routes_by_obs,ecl_winds,scheduled_routes,energy_usage,data_usage, window_uid = pickle_helper.unpickle_actsc_stuff(self)
         else:
             found_routes = any([len(rts) >0 for rts in sel_routes_by_obs.values()])
 
             #  to protect against the weird case where we didn't find any routes ( shouldn't happen, unless we're at the very end of the simulation, or you're trying to break things)
             if found_routes:
-                scheduled_routes,energy_usage,data_usage = self.run_nominal_activity_scheduling(sel_routes_by_obs,ecl_winds)
+                scheduled_routes,energy_usage,data_usage = self.run_activity_scheduling(sel_routes_by_obs,ecl_winds)
             else:
                 scheduled_routes,energy_usage,data_usage = ([],None,None)
                 print('No routes were found in route selection; not running activity selection')
 
         # if we are saving to file, do that
         if self.pickle_params['pickle_act_scheduling_results']:
-            self.pickle_actsc_stuff(sel_routes_by_obs,ecl_winds,scheduled_routes,energy_usage,data_usage, window_uid)
+            pickle_helper.pickle_actsc_stuff(self,sel_routes_by_obs,ecl_winds,scheduled_routes,energy_usage,data_usage, window_uid)
 
 
         pas_b = time.time()
         total_plan_and_sched_runtime = pas_b - pas_a
 
-        metrics_plot_inputs = self.calc_activity_scheduling_results (obs_winds,dlnk_winds_flat,sel_routes_by_obs,scheduled_routes, energy_usage)
+        metrics_plot_inputs = output_helper.calc_activity_scheduling_results (self,obs_winds,dlnk_winds_flat,sel_routes_by_obs,scheduled_routes, energy_usage)
 
         print('total_plan_and_sched_runtime (warning: may include (un)pickling time and RS plot output)')
         print("%.2f seconds"%(total_plan_and_sched_runtime))
@@ -1047,7 +409,7 @@ class GlobalPlannerRunner:
         print('activity scheduling output stage')
 
         if self.as_params['plot_activity_scheduling_results']:
-            self.plot_activity_scheduling_results((obs_winds,dlnk_winds_flat,xlnk_winds_flat),sel_routes_by_obs,scheduled_routes,energy_usage,data_usage,ecl_winds,metrics_plot_inputs)
+            output_helper.plot_activity_scheduling_results(self,(obs_winds,dlnk_winds_flat,xlnk_winds_flat),sel_routes_by_obs,scheduled_routes,energy_usage,data_usage,ecl_winds,metrics_plot_inputs)
 
 
         # if you want to see windows from RS output...
