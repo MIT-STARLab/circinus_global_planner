@@ -268,7 +268,7 @@ class GPDataRouteSelection():
         as_params = gp_params['gp_general_params']['activity_scheduling_params']
         gp_general_other_params = gp_params['gp_general_params']['other_params']
         link_params = gp_params['gp_orbit_link_params']['general_link_params']
-        gp_as_inst_params = gp_params['gp_instance_params']['activity_scheduling_params']
+        gp_inst_planning_params = gp_params['gp_instance_params']['planning_params']
 
 
         # If including cross-links are not when creating routes
@@ -276,8 +276,9 @@ class GPDataRouteSelection():
 
         self.num_sats=sat_params['num_sats']
         #  the end of the route selection search window for a given obs will either be the time input from the instance params file, or the end time of the obs plus the filter window length
-        self.as_start_dt  = tt.iso_string_to_dt (gp_as_inst_params['start_utc'])
-        self.as_end_dt  = tt.iso_string_to_dt (gp_as_inst_params['end_utc'])
+        self.planning_start_dt  = gp_inst_planning_params['planning_start_dt']
+        self.planning_end_obs_xlnk_dt  = gp_inst_planning_params['planning_end_obs_xlnk_dt']
+        self.planning_end_dlnk_dt  = gp_inst_planning_params['planning_end_obs_xlnk_dt']
 
         # get the smallest time step used in orbit link. this is the smallest time step we need to worry about in data route selection
         self.act_timestep = min(link_params['xlnk_max_len_s'],link_params['dlnk_max_len_s'])
@@ -335,16 +336,17 @@ class GPDataRouteSelection():
         dr_uid = 0
 
         # if the obs window ends later than the time prescribed, then we can't find any routes!
-        if obs_wind.end > self.as_end_dt:
+        if obs_wind.end > self.planning_end_obs_xlnk_dt:
             return []
-        if obs_wind.start < self.as_start_dt:
+        if obs_wind.start < self.planning_start_dt:
             return []
 
         # print("ids: dlnk_winds_flat %d xlnk_winds %d"%(id(dlnk_winds_flat),id(xlnk_winds)))
 
         start_dt = obs_wind.end
-        end_dt = min(self.as_end_dt,start_dt + self.wind_filter_duration)
-        end_obs_sat_dt = min(self.as_end_dt,start_dt + self.wind_filter_duration_obs_sat)
+        # planning_end_dlnk_dt should be > planning_end_obs_xlnk_dt, to allow the observing sat to reach far into the future for a dlnk to counter the case where it can only get a small amount of DV offboard through xlnks. It might be a while till it has a dlnk though.
+        end_dt = min(self.planning_end_obs_xlnk_dt, start_dt + self.wind_filter_duration)
+        end_obs_sat_dt = min(self.planning_end_dlnk_dt, start_dt + self.wind_filter_duration_obs_sat)
 
         # crazy looking line, but it's easy... dictionary of end times by sat_indx - end_dt if not observing sat, else end_obs_sat_dt
         end_dt_by_sat_indx = {sat_indx: end_dt if sat_indx != obs_wind.sat_indx else end_obs_sat_dt for sat_indx in range (self.num_sats)}

@@ -25,12 +25,14 @@ class GPNetSim():
         sat_params = gp_params['gp_orbit_prop_params']['sat_params']
         gs_params = gp_params['gp_orbit_prop_params']['gs_params']
         as_params = gp_params['gp_general_params']['activity_scheduling_params']
-        gp_inst_params = gp_params['gp_instance_params']['activity_scheduling_params']
+        gp_inst_params = gp_params['gp_instance_params']['planning_params']
         gp_general_other_params = gp_params['gp_general_params']['other_params']
 
-        self.sched_start_utc_dt  = gp_inst_params['start_utc_dt']
-        self.sched_end_utc_dt  = gp_inst_params['end_utc_dt']
-        self.resource_delta_t_s  =as_params['resource_delta_t_s']
+        self.planning_start_dt  = gp_inst_params['planning_start_dt']
+        self.planning_end_obs_xlnk_dt = gp_inst_params['planning_end_obs_xlnk_dt']
+        self.planning_end_dlnk_dt  = gp_inst_params['planning_end_dlnk_dt']
+        self.planning_end_dt  = self.planning_end_dlnk_dt
+        self.resource_delta_t_s  = as_params['resource_delta_t_s']
         self.num_sats=sat_params['num_sats']
         self.num_gs=gs_params['num_stations']
         self.gs_id_ignore_list=gp_general_other_params['gs_id_ignore_list']
@@ -46,13 +48,13 @@ class GPNetSim():
         # construct a set of dance cards for every satellite, 
         # each of which keeps track of all of the activities of satellite 
         # can possibly execute at any given time slice delta T. 
-        # activity_dancecards = [Dancecard(self.sched_start_utc_dt,self.sched_end_utc_dt,self.resource_delta_t_s) for sat_indx in range (self.num_sats)]
+        # activity_dancecards = [Dancecard(self.planning_start_dt,self.planning_end_dt,self.resource_delta_t_s) for sat_indx in range (self.num_sats)]
         # for sat_indx in range (self.num_sats): 
         #     # activity_dancecards[sat_indx].add_winds_to_dancecard(obs_winds[sat_indx])
         #     activity_dancecards[sat_indx].add_winds_to_dancecard(dlnk_winds[sat_indx])
         #     activity_dancecards[sat_indx].add_winds_to_dancecard(xlnk_winds[sat_indx])
 
-        merged_activity_dancecard = Dancecard(self.sched_start_utc_dt,self.sched_end_utc_dt,self.resource_delta_t_s)
+        merged_activity_dancecard = Dancecard(self.planning_start_dt,self.planning_end_dt,self.resource_delta_t_s)
         for sat_indx in range (self.num_sats): 
             # activity_dancecards[sat_indx].add_winds_to_dancecard(obs_winds[sat_indx])
             merged_activity_dancecard.add_winds_to_dancecard(dlnk_winds[sat_indx])
@@ -64,10 +66,10 @@ class GPNetSim():
         self.net_sim_sats = net_sim_sats
         self.net_sim_gs = net_sim_gs
         for sat_indx in range (self.num_sats): 
-            net_sim_sats.append (NetSimSat(sat_indx,self.num_sats, self.num_gs,self.sched_start_utc_dt,self.sched_end_utc_dt))
+            net_sim_sats.append (NetSimSat(sat_indx,self.num_sats, self.num_gs,self.planning_start_dt,self.planning_end_dt))
         # note that though we are creating a simulation object for every ground station index, nothing will end up happening for any ignored ground stations because they should have no downlinks
         for gs_indx in range (self.num_gs): 
-            net_sim_gs.append (NetSimGS(gs_indx,self.num_sats, self.num_gs,self.sched_start_utc_dt,self.sched_end_utc_dt))
+            net_sim_gs.append (NetSimGS(gs_indx,self.num_sats, self.num_gs,self.planning_start_dt,self.planning_end_dt))
 
 
         # get the time points that we will iterate through to step through the simulation

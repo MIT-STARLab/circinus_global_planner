@@ -1,17 +1,21 @@
+from gp_tools.custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
 from gp_tools.gp_metrics import GPMetrics
 from gp_tools.network_sim.gp_network_sim import GPNetSim
 
 def calc_activity_scheduling_results ( gp_runner_inst,obs_winds,dlnk_winds_flat,rs_routes_by_obs,sched_routes, energy_usage):
     gp_met = GPMetrics(gp_runner_inst.params)
 
-    def in_sched_window(wind):
-        return wind.start >= gp_runner_inst.as_inst_params['start_utc_dt'] and wind.end <= gp_runner_inst.as_inst_params['end_utc_dt']
+    def in_planning_window(wind):
+        if type(wind) == ObsWindow:
+            return wind.start >= gp_runner_inst.gp_inst_params['planning_start_dt'] and wind.end <= gp_runner_inst.gp_inst_params['planning_end_obs_xlnk_dt']
+        if type(wind) == DlnkWindow:
+            return wind.start >= gp_runner_inst.gp_inst_params['planning_start_dt'] and wind.end <= gp_runner_inst.gp_inst_params['planning_end_dlnk_dt']
 
-    total_collectible_DV_all_obs_winds = sum(obs.data_vol for winds in obs_winds for obs in winds  if in_sched_window(obs))
-    total_dlnkable_DV_all_dlnk_winds = sum(dlnk.data_vol for winds in dlnk_winds_flat for dlnk in winds if in_sched_window(dlnk))
+    total_collectible_DV_all_obs_winds = sum(obs.data_vol for winds in obs_winds for obs in winds  if in_planning_window(obs))
+    total_dlnkable_DV_all_dlnk_winds = sum(dlnk.data_vol for winds in dlnk_winds_flat for dlnk in winds if in_planning_window(dlnk))
     rs_output_routes = [rt for rts in rs_routes_by_obs.values() for rt in rts]
-    total_throughput_DV_rs_routes = sum(sum(rt.data_vol for rt in rts) for obs, rts in rs_routes_by_obs.items() if in_sched_window(obs))
-    total_collectible_DV_rs_routes = sum(min(obs.data_vol,sum(rt.data_vol for rt in rts)) for obs, rts in rs_routes_by_obs.items() if in_sched_window(obs))
+    total_throughput_DV_rs_routes = sum(sum(rt.data_vol for rt in rts) for obs, rts in rs_routes_by_obs.items() if in_planning_window(obs))
+    total_collectible_DV_rs_routes = sum(min(obs.data_vol,sum(rt.data_vol for rt in rts)) for obs, rts in rs_routes_by_obs.items() if in_planning_window(obs))
 
     print('------------------------------')
     print('in scheduling window:')
@@ -119,7 +123,7 @@ def plot_route_selection_results ( gp_runner_inst,routes_by_obs,dlnk_winds_flat,
                 obs.start + timedelta( seconds= plot_len),
                 # gp_runner_inst.scenario_params['start_utc_dt'],
                 # gp_runner_inst.scenario_params['start_utc_dt'] + timedelta( seconds= gp_runner_inst.rs_general_params['wind_filter_duration_s']),
-                # gp_runner_inst.scenario_params['end_utc_dt']-timedelta(minutes=200),
+                # gp_runner_inst.scenario_params['planning_end_dlnk_dt']-timedelta(minutes=200),
                 plot_title = 'Route Plot',
                 plot_size_inches = (18,12),
                 plot_include_dlnk_labels = gp_runner_inst.rs_general_params['plot_include_dlnk_labels'],
@@ -176,9 +180,9 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
     #     all_xlnk_winds_flat,
     #     None,
     #     None,
-    #     gp_runner_inst.as_inst_params['start_utc_dt'],
-    #     # gp_runner_inst.as_inst_params['start_utc_dt'] + timedelta( seconds= gp_runner_inst.rs_general_params['wind_filter_duration_s']),
-    #     gp_runner_inst.as_inst_params['end_utc_dt'],
+    #     gp_runner_inst.gp_inst_params['planning_start_dt'],
+    #     # gp_runner_inst.gp_inst_params['planning_start_dt'] + timedelta( seconds= gp_runner_inst.rs_general_params['wind_filter_duration_s']),
+    #     gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
     #     base_time = gp_runner_inst.scenario_params['start_utc_dt'],
     #     plot_title = 'All Possible Activities',
     #     plot_size_inches = (18,12),
@@ -200,9 +204,9 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
     #     sel_xlnk_winds_flat,
     #     sched_xlnk_winds_flat,
     #     route_indcs_by_wind,
-    #     gp_runner_inst.as_inst_params['start_utc_dt'],
-    #     # gp_runner_inst.as_inst_params['start_utc_dt'] + timedelta( seconds= gp_runner_inst.rs_general_params['wind_filter_duration_s']),
-    #     gp_runner_inst.as_inst_params['end_utc_dt'],
+    #     gp_runner_inst.gp_inst_params['planning_start_dt'],
+    #     # gp_runner_inst.gp_inst_params['planning_start_dt'] + timedelta( seconds= gp_runner_inst.rs_general_params['wind_filter_duration_s']),
+    #     gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
     #     base_time = gp_runner_inst.scenario_params['start_utc_dt'],
     #     plot_title = 'Scheduled Activities',
     #     plot_size_inches = (18,12),
@@ -222,9 +226,9 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
     # #     sched_xlnk_winds_flat,
     # #     sched_xlnk_winds_flat,
     # #     route_indcs_by_wind,
-    # #     gp_runner_inst.as_inst_params['start_utc_dt'],
-    # #     # gp_runner_inst.as_inst_params['start_utc_dt'] + timedelta( seconds= gp_runner_inst.rs_general_params['wind_filter_duration_s']),
-    # #     gp_runner_inst.as_inst_params['end_utc_dt'],
+    # #     gp_runner_inst.gp_inst_params['planning_start_dt'],
+    # #     # gp_runner_inst.gp_inst_params['planning_start_dt'] + timedelta( seconds= gp_runner_inst.rs_general_params['wind_filter_duration_s']),
+    # #     gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
     #       # base_time = gp_runner_inst.scenario_params['start_utc_dt'],
     # #     plot_title = 'Activity Data Volumes',
     # #     plot_size_inches = (18,12),
@@ -237,8 +241,8 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
     #     sats_to_include,
     #     energy_usage,
     #     ecl_winds,
-    #     gp_runner_inst.as_inst_params['start_utc_dt'],
-    #     gp_runner_inst.as_inst_params['end_utc_dt'],
+    #     gp_runner_inst.gp_inst_params['planning_start_dt'],
+    #     gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
     #     base_time = gp_runner_inst.scenario_params['start_utc_dt'],
     #     plot_title = 'Energy Storage Utilization',
     #     plot_size_inches = (18,12),
@@ -251,8 +255,8 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
     #     sats_to_include,
     #     data_usage,
     #     ecl_winds,
-    #     gp_runner_inst.as_inst_params['start_utc_dt'],
-    #     gp_runner_inst.as_inst_params['end_utc_dt'],
+    #     gp_runner_inst.gp_inst_params['planning_start_dt'],
+    #     gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
     #     base_time = gp_runner_inst.scenario_params['start_utc_dt'],
     #     plot_title = 'Data Storage Utilization',
     #     plot_size_inches = (18,12),
@@ -270,8 +274,8 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
     # gp_runner_inst.gp_plot.plot_obs_aoi(
     #     targs_to_include,
     #     metrics_plot_inputs['obs_aoi_curves_by_targID'],
-    #     gp_runner_inst.as_inst_params['start_utc_dt'],
-    #     gp_runner_inst.as_inst_params['end_utc_dt'],
+    #     gp_runner_inst.gp_inst_params['planning_start_dt'],
+    #     gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
     #     base_time = gp_runner_inst.scenario_params['start_utc_dt'],
     #     plot_title = 'Observation Target AoI',
     #     plot_size_inches = (18,12),
@@ -338,8 +342,8 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
         sats_to_include,
         metrics_plot_inputs['cmd_aoi_curves_by_sat_indx'],
         aoi_option,
-        gp_runner_inst.as_inst_params['start_utc_dt'],
-        gp_runner_inst.as_inst_params['end_utc_dt'],
+        gp_runner_inst.gp_inst_params['planning_start_dt'],
+        gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
         base_time = gp_runner_inst.scenario_params['start_utc_dt'],
         plot_title = 'Satellite Command Uplink AoI',
         plot_size_inches = (18,12),
@@ -352,8 +356,8 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
         sats_to_include,
         metrics_plot_inputs['tlm_aoi_curves_by_sat_indx'],
         aoi_option,
-        gp_runner_inst.as_inst_params['start_utc_dt'],
-        gp_runner_inst.as_inst_params['end_utc_dt'],
+        gp_runner_inst.gp_inst_params['planning_start_dt'],
+        gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
         base_time = gp_runner_inst.scenario_params['start_utc_dt'],
         plot_title = 'Satellite Telemetry Downlink AoI',
         plot_size_inches = (18,12),

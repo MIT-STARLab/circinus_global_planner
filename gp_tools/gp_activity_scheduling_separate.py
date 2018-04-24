@@ -13,12 +13,13 @@ from pyomo import opt  as po
 import numpy as np
 
 from circinus_tools  import time_tools as tt
+from .gp_activity_scheduling_super import  GPActivityScheduling
 from .custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
 from .routing_objects import DataMultiRoute
 from .schedule_objects import Dancecard
 from circinus_tools  import  constants as const
 
-class GPActivityScheduling():
+class GPActivitySchedulingSeparate(GPActivityScheduling):
     """docstring for GP activity scheduling"""
     
     # how close a binary variable must be to zero or one to be counted as that
@@ -32,89 +33,8 @@ class GPActivityScheduling():
         :type params: dict
         """
 
-        scenario_params = gp_params['gp_orbit_prop_params']['scenario_params']
-        sat_params = gp_params['gp_orbit_prop_params']['sat_params']
-        as_params = gp_params['gp_general_params']['activity_scheduling_params']
-        gp_inst_params = gp_params['gp_instance_params']['activity_scheduling_params']
-        
-        self.latency_params = gp_params['gp_general_params']['other_params']['latency_calculation']
-        self.solver_name =as_params['solver_name']
-        self.solver_params =as_params['solver_params']
-        self.min_as_route_dv =as_params['min_as_route_dv_Mb']
-        self.num_sats=sat_params['num_sats']
-        self.sched_start_utc_dt  = gp_inst_params['start_utc_dt']
-        self.sched_end_utc_dt  = gp_inst_params['end_utc_dt']
-        self.resource_delta_t_s  =as_params['resource_delta_t_s']
-        self.enforce_energy_storage_constr  =as_params['enforce_energy_storage_constr']
-        self.enforce_data_storage_constr  =as_params['enforce_data_storage_constr']
+        super().__init__(gp_params)
 
-        #  the "effectively zero" number.
-        self.dv_epsilon = as_params['dv_epsilon_Mb']
-        self.resource_margin_obj_num_timepoints = as_params['resource_margin_obj_num_timepoints']
-
-        self.obj_weights =as_params['obj_weights']
-
-        self.use_symmetric_xlnk_windows = gp_params['gp_general_params']['other_params']['use_symmetric_xlnk_windows']
-
-        self.power_params = sat_params['power_params_sorted']
-        self.data_storage_params = sat_params['data_storage_params_sorted']
-        self.initial_state = sat_params['initial_state_sorted']
-        sat_activity_params = sat_params['activity_params']
-
-        # these lists are in order of satellite index because we've sorted 
-        self.sats_init_estate_Wh = [sat_state['batt_e_Wh'] for sat_state in self.initial_state]
-        self.sats_emin_Wh = [p_params['battery_storage_Wh']['e_min'][p_params['battery_option']] for p_params in self.power_params]
-        self.sats_emax_Wh = [p_params['battery_storage_Wh']['e_max'][p_params['battery_option']] for p_params in self.power_params]
-
-        self.sats_dmin_Mb = [1000*ds_params['data_storage_Gbit']['d_min'][ds_params['storage_option']] for ds_params in self.data_storage_params]
-        self.sats_dmax_Mb = [1000*ds_params['data_storage_Gbit']['d_max'][ds_params['storage_option']] for ds_params in self.data_storage_params]
-
-        self.energy_unit = "Wh"
-
-        self.sats_edot_by_act_W = []
-        for p_params in self.power_params:
-            sat_edot_by_act = {}
-            sat_edot_by_act['base'] = p_params['power_consumption_W']['base'][p_params['base_option']]
-            sat_edot_by_act['obs'] = p_params['power_consumption_W']['obs'][p_params['obs_option']]
-            sat_edot_by_act['dlnk'] = p_params['power_consumption_W']['dlnk'][p_params['dlnk_option']]
-            sat_edot_by_act['xlnk-tx'] = p_params['power_consumption_W']['xlnk-tx'][p_params['xlnk_tx_option']]
-            sat_edot_by_act['xlnk-rx'] = p_params['power_consumption_W']['xlnk-rx'][p_params['xlnk_rx_option']]
-            sat_edot_by_act['charging'] = p_params['power_consumption_W']['orbit_insunlight_average_charging'][p_params['charging_option']]
-            self.sats_edot_by_act_W.append (sat_edot_by_act)
-
-        self.act_type_map = {
-            ObsWindow: 'obs',
-            DlnkWindow: 'dlnk',
-            'xlnk-tx': 'xlnk-tx',
-            'xlnk-rx': 'xlnk-rx',
-            EclipseWindow: 'charging'
-        }
-
-        self.act_transition_time_map = {
-            ('inter-sat',DlnkWindow,DlnkWindow): sat_activity_params['transition_time_s']['inter-sat']['dlnk-dlnk'],
-            "default":  sat_activity_params['transition_time_s']['default']
-        }
-
-        self.min_act_duration_s = {
-            ObsWindow: sat_activity_params['min_duration_s']['obs'],
-            DlnkWindow: sat_activity_params['min_duration_s']['dlnk'],
-            XlnkWindow: sat_activity_params['min_duration_s']['xlnk']
-        }
-
-        # this is now less useful than I thought
-        self.standard_activities = [ObsWindow,DlnkWindow]
-
-        #  this should be as small as possible to prevent ill conditioning, but big enough that score factor constraints are still valid. 
-        #  note: the size of this value is checked in make_model() below
-        self.big_M_lat = 1e6
-
-
-        # this big M should be conformatably bigger than the duration of any activity. It's used to switch on/off constraints that are related to differences in start/end times of activities, and in the worst case we expect such differences to max out at the legnth of the longest-duration activity. As long as we provide some comfortable margin past that duration, should be fine.
-        # setting to 20 minutes
-        self.big_M_act_t_dur_s = 30*60
-
-        # this big M should be twice as large as any activity data volume 
-        self.big_M_act_dv = 200000 # in Mb
 
     def get_stats(self,verbose=True):
 
@@ -144,8 +64,6 @@ class GPActivityScheduling():
         num_routes_xlnk = [num for act,num in num_routes_by_act.items() if type(act) == XlnkWindow]
         stats['ave_num_routes_per_xlnk'] = np.mean(num_routes_xlnk) if len(num_routes_xlnk) > 0 else const.UNASSIGNED
         stats['max_num_routes_per_xlnk'] = np.max(num_routes_xlnk) if len(num_routes_xlnk) > 0 else const.UNASSIGNED
-
-
 
         if verbose:
             print ( "Considering %d routes" % (stats['num_routes']))
@@ -260,14 +178,13 @@ class GPActivityScheduling():
                     
 
     def filter_routes( self,routes_flat):
-        """ todo: should filter routes based on having the observation be within the window of interest for scheduling"""
 
         new_routes = []
         for dmr in routes_flat:
             dmr_start = dmr.get_obs().start
             dmr_end = dmr.get_dlnk().end
 
-            if dmr_start < self.sched_start_utc_dt or dmr_end > self.sched_end_utc_dt:
+            if dmr_start < self.planning_start_dt or dmr_end > self.planning_end_dt:
                 pass
             if dmr.get_dlnk().duration.total_seconds() < self.min_act_duration_s[DlnkWindow]:
                 print('discarding too short dlnk window')
@@ -352,7 +269,8 @@ class GPActivityScheduling():
             # can possibly execute at any given time slice delta T. 
             # this is for constructing energy storage constraints
             # using resource_delta_t_s because this dancecard is solely for use in constructing resource constraints
-            es_act_dancecards = [Dancecard(self.sched_start_utc_dt,self.sched_end_utc_dt,self.resource_delta_t_s,item_init=None,mode='timestep') for sat_indx in range (self.num_sats)]
+            # note that these dancecards will baloon in size pretty quickly as the planning_end_dt increases. However most of the complexity they introduce is before planning_end_obs_xlnk_dt because that's the horizon where obs,xlnk actitivities are included. After that there should only be sparse downlinks
+            es_act_dancecards = [Dancecard(self.planning_start_dt,self.planning_end_dt,self.resource_delta_t_s,item_init=None,mode='timestep') for sat_indx in range (self.num_sats)]
             
             for sat_indx in range (self.num_sats): 
                 es_act_dancecards[sat_indx].add_winds_to_dancecard(sat_acts[sat_indx])
@@ -360,7 +278,7 @@ class GPActivityScheduling():
 
             # this is for data storage
             # for each sat/timepoint, we store a list of all those data multi routes that are storing data on the sat at that timepoint
-            ds_route_dancecards = [Dancecard(self.sched_start_utc_dt,self.sched_end_utc_dt,self.resource_delta_t_s,item_init=None,mode='timepoint') for sat_indx in range (self.num_sats)]
+            ds_route_dancecards = [Dancecard(self.planning_start_dt,self.planning_end_dt,self.resource_delta_t_s,item_init=None,mode='timepoint') for sat_indx in range (self.num_sats)]
             
             # add data routes to the dancecard
             for dmr_indx,dmr in enumerate(routes_flat):

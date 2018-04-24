@@ -25,7 +25,7 @@ from gp_tools.io_processing import GPProcessorIO
 from gp_tools.gp_plotting import GPPlotting
 import gp_tools.gp_route_selection_v1 as gprsv1
 import gp_tools.gp_route_selection_v2 as gprsv2
-from gp_tools.gp_activity_scheduling import GPActivityScheduling
+from gp_tools.gp_activity_scheduling_separate import GPActivitySchedulingSeparate
 from gp_tools.gp_metrics import GPMetrics
 from gp_tools.routing_objects import DataMultiRoute
 import gp_tools.gp_rs_execution as gp_rs_exec
@@ -66,21 +66,24 @@ class GlobalPlannerRunner:
         self.rs_general_params = gp_params['gp_general_params']['route_selection_general_params']
         self.rs_v2_params = gp_params['gp_general_params']['route_selection_params_v2']
         self.as_params = self.params['gp_general_params']['activity_scheduling_params']
-        self.as_inst_params = self.params['gp_instance_params']['activity_scheduling_params']
+        self.gp_inst_params = self.params['gp_instance_params']['planning_params']
         self.io_proc =GPProcessorIO(self.params)
         self.gp_plot =GPPlotting( self.params)
 
-        if self.as_inst_params['start_utc'] < self.scenario_params['start_utc']:
-            raise RuntimeError("Activity scheduling instance start time (%s) is less than scenario start time (%s)"%(self.as_inst_params['start_utc'],self.scenario_params['start_utc']))
-        if self.as_inst_params['end_utc'] > self.scenario_params['end_utc']:
-            raise RuntimeError("Activity scheduling instance end time (%s) is greater than scenario end time (%s)"%(self.as_inst_params['end_utc'],self.scenario_params['end_utc']))
+        # it's no good if the planning window (the activities to select) goes outside of the scenario window (the possible activities, eclipse windows)
+        if self.gp_inst_params['planning_start_dt'] < self.scenario_params['start_utc_dt']:
+            raise RuntimeError("GP instance start time (%s) is less than scenario start time (%s)"%(self.gp_inst_params['planning_start_dt'],self.scenario_params['start_utc']))
+        if self.gp_inst_params['planning_end_obs_xlnk_dt'] > self.scenario_params['end_utc_dt']:
+            raise RuntimeError("GP instance obs,xlnk end time (%s) is greater than scenario end time (%s)"%(self.gp_inst_params['planning_end_obs_xlnk_dt'],self.scenario_params['end_utc']))
+        if self.gp_inst_params['planning_end_dlnk_dt'] > self.scenario_params['end_utc_dt']:
+            raise RuntimeError("GP instance dlnk end time (%s) is greater than scenario end time (%s)"%(self.gp_inst_params['planning_end_dlnk_dt'],self.scenario_params['end_utc']))
 
     
 
 
 
     def run_activity_scheduling( self, routes_by_obs,ecl_winds):
-        gp_as = GPActivityScheduling ( self.params)
+        gp_as = GPActivitySchedulingSeparate ( self.params)
 
         # flatten the list of all routes, which currently has nested lists for each observation
         routes_flat = [rt for rts in routes_by_obs.values() for rt in rts]
@@ -112,7 +115,7 @@ class GlobalPlannerRunner:
         # debug_tools.debug_breakpt()
 
         print('make activity scheduling (coupled) model')
-        gp_as.make_model (routes_flat, ecl_winds,verbose = True)
+        gp_as.make_model ( obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,verbose = True)
         stats =gp_as.get_stats (verbose = True)
         print('solve activity scheduling (coupled)')
         t_a = time.time()
@@ -146,7 +149,7 @@ class GlobalPlannerRunner:
 
             for sat_indx in range( self.sat_params['num_sats']):
                 for sat_obs_index,obs_wind in enumerate(obs_winds[sat_indx]):
-                    if obs_wind.start >= self.as_inst_params['start_utc_dt'] and obs_wind.end <= self.as_inst_params['end_utc_dt']:
+                    if obs_wind.start >= self.gp_inst_params['planning_start_dt'] and obs_wind.end <= self.gp_inst_params['planning_end_obs_xlnk_dt']:
                         obs_winds_filt[sat_indx].append(obs_wind)
             return obs_winds_filt
 
@@ -431,7 +434,7 @@ class GlobalPlannerRunner:
 
             # run coupled route selection/act sched solver (slow, optimal)
             elif run_coupled_rs_as:
-                scheduled_routes,energy_usage,data_usage = self.run_activity_scheduling_coupled(obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,window_uid)
+                scheduled_routes,energy_usage,data_usage = self.run_activity_scheduling_coupled(obs_winds,dlnk_winds_flat,xlnk_winds_flat,ecl_winds,window_uid)
             else:
                 scheduled_routes,energy_usage,data_usage = ([],None,None)
                 print('No routes were found in route selection; not running activity selection')
@@ -533,13 +536,17 @@ class PipelineRunner:
             raise NotImplementedError
 
         #  check that it's the right version
-        if gp_instance_params['version'] == "0.1":
-            # gp_instance_params['route_selection_params']['start_utc_dt'] = tt.iso_string_to_dt ( gp_instance_params['route_selection_params']['start_utc'])
-            gp_instance_params['activity_scheduling_params']['start_utc_dt'] = tt.iso_string_to_dt ( gp_instance_params['activity_scheduling_params']['start_utc'])
-            gp_instance_params['metrics_params']['start_utc_dt'] = tt.iso_string_to_dt ( gp_instance_params['metrics_params']['start_utc'])
-            # gp_instance_params['route_selection_params']['end_utc_dt'] = tt.iso_string_to_dt ( gp_instance_params['route_selection_params']['end_utc'])
-            gp_instance_params['activity_scheduling_params']['end_utc_dt'] = tt.iso_string_to_dt ( gp_instance_params['activity_scheduling_params']['end_utc'])
-            gp_instance_params['metrics_params']['end_utc_dt'] = tt.iso_string_to_dt ( gp_instance_params['metrics_params']['end_utc'])
+        if gp_instance_params['version'] == "0.2":
+
+            gp_instance_params['planning_params']['planning_start_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_start'])
+            gp_instance_params['planning_params']['planning_end_obs_xlnk_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_end_obs_xlnk'])
+            gp_instance_params['planning_params']['planning_end_dlnk_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_end_dlnk'])
+
+            dlnk_end = gp_instance_params['planning_params']['planning_end_dlnk_dt']
+            obs_xlnk_end = gp_instance_params['planning_params']['planning_end_obs_xlnk_dt']
+            if not dlnk_end <= obs_xlnk_end:
+                raise RuntimeWarning('Planning window end for dlnk (%s) should be set equal or later than end for observations, crosslinks (%s)'%(dlnk_end,obs_xlnk_end))
+
         else:
             raise NotImplementedError
 

@@ -26,7 +26,7 @@ class GPMetrics():
         """
         scenario_params = gp_params['gp_orbit_prop_params']['scenario_params']
         sat_params = gp_params['gp_orbit_prop_params']['sat_params']
-        gp_inst_params = gp_params['gp_instance_params']['metrics_params']
+        gp_inst_params = gp_params['gp_instance_params']['planning_params']
         obs_params = gp_params['gp_orbit_prop_params']['obs_params']
         gp_general_other_params = gp_params['gp_general_params']['other_params']
         metrics_params = gp_params['gp_general_params']['metrics_params']
@@ -34,9 +34,11 @@ class GPMetrics():
         as_params = gp_params['gp_general_params']['activity_scheduling_params']
 
         self.latency_params = gp_params['gp_general_params']['other_params']['latency_calculation']
-        self.scenario_start_dt  = scenario_params['start_utc_dt']
-        self.met_start_dt  = tt.iso_string_to_dt (gp_inst_params['start_utc'])
-        self.met_end_dt  = tt.iso_string_to_dt (gp_inst_params['end_utc'])
+        # self.scenario_start_dt  = scenario_params['start_utc_dt']
+        # these are used for AoI calculation
+        # todo: update these times once receding horizon working...
+        self.met_obs_start_dt  = gp_inst_params['planning_start_dt']
+        self.met_obs_end_dt  = gp_inst_params['planning_end_obs_xlnk_dt']
         self.num_sats=sat_params['num_sats']
         self.num_targ = obs_params['num_targets']
         self.all_targ_IDs = [targ['id'] for targ in obs_params['targets']]
@@ -646,12 +648,12 @@ class GPMetrics():
             if not include_routing:
                 dlnk_obs_times_mat_targ.sort(key=lambda row: row[1])  # sort by creation time
 
-                av_aoi,aoi_curve = self.get_av_aoi_no_routing(dlnk_obs_times_mat_targ, self.met_start_dt, self.met_end_dt,aoi_units=self.aoi_units,aoi_plot_t_units=self.aoi_plot_t_units)
+                av_aoi,aoi_curve = self.get_av_aoi_no_routing(dlnk_obs_times_mat_targ, self.met_obs_start_dt, self.met_obs_end_dt,aoi_units=self.aoi_units,aoi_plot_t_units=self.aoi_plot_t_units)
 
             else:
                 dlnk_obs_times_mat_targ.sort(key=lambda row: row[0])  # sort by downlink time
 
-                av_aoi,aoi_curve = self.get_av_aoi_routing(dlnk_obs_times_mat_targ,  self.met_start_dt,self.met_end_dt,self.dlnk_same_time_slop_s,aoi_units=self.aoi_units,aoi_plot_t_units=self.aoi_plot_t_units)
+                av_aoi,aoi_curve = self.get_av_aoi_routing(dlnk_obs_times_mat_targ,  self.met_obs_start_dt,self.met_obs_end_dt,self.dlnk_same_time_slop_s,aoi_units=self.aoi_units,aoi_plot_t_units=self.aoi_plot_t_units)
             
             av_aoi_by_targID[targ_ID] = av_aoi
             aoi_curves_by_targID[targ_ID] = aoi_curve

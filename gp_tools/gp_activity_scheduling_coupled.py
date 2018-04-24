@@ -174,108 +174,34 @@ class GPActivitySchedulingCoupled():
 
         return stats
 
-    def get_activity_structs( self,routes_flat):
+    # def get_act_obs_subscripts(obs_winds,dlnk_winds_flat,xlnk_winds):
+    #     act_obs_subscripts = []
 
-        #  all activities are uniquely indexed. these structures keep track of those, and the mapping to activity objects
-        all_acts_indcs = []
-        #  these structures are for lookup in both directions
-        all_acts_by_indx = {}
-        all_acts_by_obj = {}
+    #     for sat_acts in 
 
-        # these structures keep track of the subset of unique indices that correspond to observations and links. Also we keep track of what data routes correspond to an activity
-        link_act_indcs = []
-        obs_act_indcs = []
-        # dmr is data multi-route
-        dmr_indcs_by_link_act = {}
-        dmr_indcs_by_obs_act = {}
-        dmr_indcs_by_act = {}
-        dv_by_link_act = {}
-        dv_by_obs_act = {}
-        dv_by_act = {}
 
-        sat_acts = [[] for sat_indx in range (self.num_sats)]
-        sat_dlnks = [[] for sat_indx in range (self.num_sats)]
 
-        new_act_indx = 0
-        for dmr_indx, dmr in enumerate (routes_flat):
-            for act in dmr.get_winds():
+        todo fix this code
+    def filter_windows(self,obs_winds,dlnk_winds_flat,xlnk_winds_flat,num_sats):
 
-                # if we haven't yet seen this activity, then add it to bookkeeping
-                if not act in all_acts_by_obj.keys():
-                    act_indx = new_act_indx
-                    all_acts_indcs.append(act_indx)
-                    all_acts_by_indx[act_indx] = act
-                    all_acts_by_obj[act] = act_indx
-                    dmr_indcs_by_act[act_indx] = []
-                    dmr_indcs_by_act[act_indx].append (dmr_indx)
-                    dv_by_act[act_indx] = act.data_vol
-                    new_act_indx += 1
+        obs_winds_filtered = [[] for sat_indx in  range (num_sats)]
+        dlink_winds_flat_filtered = [[] for sat_indx in  range (num_sats)]
+        xlink_winds_flat_filtered = [[] for sat_indx in  range (num_sats)]
 
-                    # also need to add it to the list and dictionary for observations
-                    if type(act) == ObsWindow:
-                        sat_acts[act.sat_indx].append(act)
-                        obs_act_indcs.append(act_indx)
-                        dmr_indcs_by_obs_act[act_indx] = []
-                        dmr_indcs_by_obs_act[act_indx].append (dmr_indx)
-                        dv_by_obs_act[act_indx] = act.data_vol
+        for sat_indx in  range (num_sats):
+            for wind in obs_winds[sat_indx]:
+                if  wind.start >= self.planning_start_dt  and  wind.end  <= self.planning_end_obs_xlnk_dt:
+                    obs_winds_filtered[sat_indx][xsat_indx]. append ( wind)
 
-                    # also need to add it to the list and dictionary for links
-                    if type(act) == DlnkWindow:
-                        link_act_indcs.append(act_indx)
-                        dmr_indcs_by_link_act[act_indx] = []
-                        dmr_indcs_by_link_act[act_indx].append (dmr_indx)
-                        dv_by_link_act[act_indx] = act.data_vol
-                        sat_acts[act.sat_indx].append(act)
-                        # grab the dlnks for each sat too, while we're looping through
-                        sat_dlnks[act.sat_indx].append(act)
+            for wind in dlnk_winds_flat[sat_indx]:
+                if  wind.start >= self.planning_start_dt  and  wind.end  <= self.planning_end_dlnk_dt:
+                    dlink_winds_flat_filtered[sat_indx]. append ( wind)
 
-                    if type(act) == XlnkWindow:
-                        link_act_indcs.append(act_indx)
-                        dmr_indcs_by_link_act[act_indx] = []
-                        dmr_indcs_by_link_act[act_indx].append (dmr_indx)
-                        dv_by_link_act[act_indx] = act.data_vol
-                        sat_acts[act.sat_indx].append(act)
-                        sat_acts[act.xsat_indx].append(act)
+            for wind in xlnk_winds_flat[sat_indx]:
+                if  wind.start >= self.planning_start_dt  and  wind.end  <= self.planning_end_obs_xlnk_dt:
+                    xlink_winds_flat_filtered[sat_indx][xsat_indx]. append ( wind)
 
-                #  if we have already seen the activity,  then just need to update the appropriate structures
-                else:
-                    act_indx = all_acts_by_obj[act]
-                    dmr_indcs_by_act[act_indx].append (dmr_indx)
-
-                    # add the data route index
-                    if type(act) == ObsWindow:
-                        dmr_indcs_by_obs_act[act_indx].append (dmr_indx)
-                    if type(act) == DlnkWindow or type(act) == XlnkWindow:
-                        dmr_indcs_by_link_act[act_indx].append (dmr_indx)
-
-        # print (dmr_indcs_by_link_act)
-        # print (dmr_indcs_by_obs_act)
-
-        #  sort the activities, because we'll need that for constructing constraints
-        for sat_indx in range (self.num_sats):
-            sat_acts[sat_indx].sort(key=lambda x: x.center)
-            sat_dlnks[sat_indx].sort(key=lambda x: x.center)
-
-        return sat_acts,sat_dlnks,all_acts_indcs,dmr_indcs_by_act,dv_by_act,all_acts_by_obj,all_acts_by_indx,obs_act_indcs,dmr_indcs_by_obs_act,dv_by_obs_act,link_act_indcs,dmr_indcs_by_link_act,dv_by_link_act
-                    
-
-    def filter_routes( self,routes_flat):
-        """ todo: should filter routes based on having the observation be within the window of interest for scheduling"""
-
-        new_routes = []
-        for dmr in routes_flat:
-            dmr_start = dmr.get_obs().start
-            dmr_end = dmr.get_dlnk().end
-
-            if dmr_start < self.sched_start_utc_dt or dmr_end > self.sched_end_utc_dt:
-                pass
-            if dmr.get_dlnk().duration.total_seconds() < self.min_act_duration_s[DlnkWindow]:
-                print('discarding too short dlnk window')
-                pass
-            else:
-                new_routes.append (dmr)
-
-        return new_routes
+        return obs_winds_filtered, dlink_winds_flat_filtered, xlink_winds_flat_filtered
 
     @staticmethod
     def get_dmr_latency_score_factors(routes_flat,dmr_indcs_by_obs_act,latency_params):
@@ -305,7 +231,7 @@ class GPActivitySchedulingCoupled():
  
         return dmr_latency_sf_by_dmr_indx
 
-    def make_model ( self,routes_flat, ecl_winds, verbose = True):
+    def make_model ( self,obs_winds,dlnk_winds_flat,xlnk_winds, verbose = True):
         model = pe.ConcreteModel()
 
         # filter the routes to make sure that  none of their activities fall outside the scheduling window
