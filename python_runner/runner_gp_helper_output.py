@@ -170,118 +170,118 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
 
     all_obs_winds,all_dlnk_winds_flat,all_xlnk_winds_flat = all_possible_winds
 
-    # # plot all winds
-    # gp_runner_inst.gp_plot.plot_winds(
-    #     sats_to_include,
-    #     all_obs_winds,
-    #     all_obs_winds,
-    #     all_dlnk_winds_flat,
-    #     all_dlnk_winds_flat,
-    #     all_xlnk_winds_flat,
-    #     None,
-    #     None,
-    #     gp_runner_inst.gp_inst_params['planning_start_dt'],
-    #     # gp_runner_inst.gp_inst_params['planning_start_dt'] + timedelta( seconds= gp_runner_inst.rs_general_params['wind_filter_duration_s']),
-    #     gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
-    #     base_time = gp_runner_inst.scenario_params['start_utc_dt'],
-    #     plot_title = 'All Possible Activities',
-    #     plot_size_inches = (18,12),
-    #     plot_include_dlnk_labels = gp_runner_inst.as_params['plot_include_dlnk_labels'],
-    #     plot_include_xlnk_labels = gp_runner_inst.as_params['plot_include_xlnk_labels'],
-    #     plot_original_times = True,
-    #     show=  False,
-    #     fig_name='plots/test_all_windows.pdf'
-    # )
+    # plot all winds
+    gp_runner_inst.gp_plot.plot_winds(
+        sats_to_include,
+        all_obs_winds,
+        all_obs_winds,
+        all_dlnk_winds_flat,
+        all_dlnk_winds_flat,
+        all_xlnk_winds_flat,
+        None,
+        None,
+        gp_runner_inst.gp_inst_params['planning_start_dt'],
+        # gp_runner_inst.gp_inst_params['planning_start_dt'] + timedelta( seconds= gp_runner_inst.rs_general_params['wind_filter_duration_s']),
+        gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
+        base_time = gp_runner_inst.scenario_params['start_utc_dt'],
+        plot_title = 'All Possible Activities',
+        plot_size_inches = (18,12),
+        plot_include_dlnk_labels = gp_runner_inst.as_params['plot_include_dlnk_labels'],
+        plot_include_xlnk_labels = gp_runner_inst.as_params['plot_include_xlnk_labels'],
+        plot_original_times = True,
+        show=  False,
+        fig_name='plots/test_all_windows.pdf'
+    )
 
 
-    # # plot the selected down links and cross-links this
-    # gp_runner_inst.gp_plot.plot_winds(
+    # plot the selected down links and cross-links this
+    gp_runner_inst.gp_plot.plot_winds(
+        sats_to_include,
+        sel_obs_winds_flat,
+        sched_obs_winds_flat,
+        sel_dlnk_winds_flat,
+        sched_dlnk_winds_flat,
+        sel_xlnk_winds_flat,
+        sched_xlnk_winds_flat,
+        route_indcs_by_wind,
+        gp_runner_inst.gp_inst_params['planning_start_dt'],
+        # gp_runner_inst.gp_inst_params['planning_start_dt'] + timedelta( seconds= gp_runner_inst.rs_general_params['wind_filter_duration_s']),
+        gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
+        base_time = gp_runner_inst.scenario_params['start_utc_dt'],
+        plot_title = 'Scheduled Activities',
+        plot_size_inches = (18,12),
+        plot_include_dlnk_labels = gp_runner_inst.as_params['plot_include_dlnk_labels'],
+        plot_include_xlnk_labels = gp_runner_inst.as_params['plot_include_xlnk_labels'],
+        plot_original_times = False,
+        show=  False,
+        fig_name='plots/test_activity_times.pdf'
+    )
+
+    # gp_runner_inst.gp_plot.plot_data_circles(
     #     sats_to_include,
-    #     sel_obs_winds_flat,
     #     sched_obs_winds_flat,
-    #     sel_dlnk_winds_flat,
+    #     sched_obs_winds_flat,
     #     sched_dlnk_winds_flat,
-    #     sel_xlnk_winds_flat,
+    #     sched_dlnk_winds_flat,
+    #     sched_xlnk_winds_flat,
     #     sched_xlnk_winds_flat,
     #     route_indcs_by_wind,
     #     gp_runner_inst.gp_inst_params['planning_start_dt'],
     #     # gp_runner_inst.gp_inst_params['planning_start_dt'] + timedelta( seconds= gp_runner_inst.rs_general_params['wind_filter_duration_s']),
     #     gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
-    #     base_time = gp_runner_inst.scenario_params['start_utc_dt'],
-    #     plot_title = 'Scheduled Activities',
+          # base_time = gp_runner_inst.scenario_params['start_utc_dt'],
+    #     plot_title = 'Activity Data Volumes',
     #     plot_size_inches = (18,12),
-    #     plot_include_dlnk_labels = gp_runner_inst.as_params['plot_include_dlnk_labels'],
-    #     plot_include_xlnk_labels = gp_runner_inst.as_params['plot_include_xlnk_labels'],
-    #     plot_original_times = False,
+    #     plot_include_labels = gp_runner_inst.as_params['plot_include_labels'],
     #     show=  False,
-    #     fig_name='plots/test_activity_times.pdf'
+    #     fig_name='plots/test_data_volume.pdf'
     # )
 
-    # # gp_runner_inst.gp_plot.plot_data_circles(
-    # #     sats_to_include,
-    # #     sched_obs_winds_flat,
-    # #     sched_obs_winds_flat,
-    # #     sched_dlnk_winds_flat,
-    # #     sched_dlnk_winds_flat,
-    # #     sched_xlnk_winds_flat,
-    # #     sched_xlnk_winds_flat,
-    # #     route_indcs_by_wind,
-    # #     gp_runner_inst.gp_inst_params['planning_start_dt'],
-    # #     # gp_runner_inst.gp_inst_params['planning_start_dt'] + timedelta( seconds= gp_runner_inst.rs_general_params['wind_filter_duration_s']),
-    # #     gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
-    #       # base_time = gp_runner_inst.scenario_params['start_utc_dt'],
-    # #     plot_title = 'Activity Data Volumes',
-    # #     plot_size_inches = (18,12),
-    # #     plot_include_labels = gp_runner_inst.as_params['plot_include_labels'],
-    # #     show=  False,
-    # #     fig_name='plots/test_data_volume.pdf'
-    # # )
+    gp_runner_inst.gp_plot.plot_energy_usage(
+        sats_to_include,
+        energy_usage,
+        ecl_winds,
+        gp_runner_inst.gp_inst_params['planning_start_dt'],
+        gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
+        base_time = gp_runner_inst.scenario_params['start_utc_dt'],
+        plot_title = 'Energy Storage Utilization',
+        plot_size_inches = (18,12),
+        show=  False,
+        fig_name='plots/test_energy.pdf'
+    )
 
-    # gp_runner_inst.gp_plot.plot_energy_usage(
-    #     sats_to_include,
-    #     energy_usage,
-    #     ecl_winds,
-    #     gp_runner_inst.gp_inst_params['planning_start_dt'],
-    #     gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
-    #     base_time = gp_runner_inst.scenario_params['start_utc_dt'],
-    #     plot_title = 'Energy Storage Utilization',
-    #     plot_size_inches = (18,12),
-    #     show=  False,
-    #     fig_name='plots/test_energy.pdf'
-    # )
+    # note that little blips upward that appear in data storage plot for "just passing through" crosslink pairs (looks like _____^_____ . Isn't that some great asciiart?) can be caused by a slight overlap in timepoints at beg/end of two back to back activities. This should not cause any problems
+    gp_runner_inst.gp_plot.plot_data_usage(
+        sats_to_include,
+        data_usage,
+        ecl_winds,
+        gp_runner_inst.gp_inst_params['planning_start_dt'],
+        gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
+        base_time = gp_runner_inst.scenario_params['start_utc_dt'],
+        plot_title = 'Data Storage Utilization',
+        plot_size_inches = (18,12),
+        show=  False,
+        fig_name='plots/test_data.pdf'
+    )
 
-    # # note that little blips upward that appear in data storage plot for "just passing through" crosslink pairs (looks like _____^_____ . Isn't that some great asciiart?) can be caused by a slight overlap in timepoints at beg/end of two back to back activities. This should not cause any problems
-    # gp_runner_inst.gp_plot.plot_data_usage(
-    #     sats_to_include,
-    #     data_usage,
-    #     ecl_winds,
-    #     gp_runner_inst.gp_inst_params['planning_start_dt'],
-    #     gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
-    #     base_time = gp_runner_inst.scenario_params['start_utc_dt'],
-    #     plot_title = 'Data Storage Utilization',
-    #     plot_size_inches = (18,12),
-    #     show=  False,
-    #     fig_name='plots/test_data.pdf'
-    # )
+    found_targIDs = metrics_plot_inputs['rs_targIDs_found']
+    # targs_to_include = [targ['id'] for targ in gp_runner_inst.obs_params['targets']]
+    # targs_to_include = [0,3,4,7,8]
+    # targs_to_include = range(15)
+    # targs_to_include = found_targIDs[0:10]
+    targs_to_include = found_targIDs
 
-    # found_targIDs = metrics_plot_inputs['rs_targIDs_found']
-    # # targs_to_include = [targ['id'] for targ in gp_runner_inst.obs_params['targets']]
-    # # targs_to_include = [0,3,4,7,8]
-    # # targs_to_include = range(15)
-    # # targs_to_include = found_targIDs[0:10]
-    # targs_to_include = found_targIDs
-
-    # gp_runner_inst.gp_plot.plot_obs_aoi(
-    #     targs_to_include,
-    #     metrics_plot_inputs['obs_aoi_curves_by_targID'],
-    #     gp_runner_inst.gp_inst_params['planning_start_dt'],
-    #     gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
-    #     base_time = gp_runner_inst.scenario_params['start_utc_dt'],
-    #     plot_title = 'Observation Target AoI',
-    #     plot_size_inches = (18,12),
-    #     show=False,
-    #     fig_name='plots/test_obs_aoi_plot.pdf'
-    # )
+    gp_runner_inst.gp_plot.plot_obs_aoi(
+        targs_to_include,
+        metrics_plot_inputs['obs_aoi_curves_by_targID'],
+        gp_runner_inst.gp_inst_params['planning_start_dt'],
+        gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
+        base_time = gp_runner_inst.scenario_params['start_utc_dt'],
+        plot_title = 'Observation Target AoI',
+        plot_size_inches = (18,12),
+        show=False,
+        fig_name='plots/test_obs_aoi_plot.pdf'
+    )
 
     # plot obs latency histogram
     gp_runner_inst.gp_plot.plot_histogram(

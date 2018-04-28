@@ -26,6 +26,7 @@ from gp_tools.gp_plotting import GPPlotting
 import gp_tools.gp_route_selection_v1 as gprsv1
 import gp_tools.gp_route_selection_v2 as gprsv2
 from gp_tools.gp_activity_scheduling_separate import GPActivitySchedulingSeparate
+from gp_tools.gp_activity_scheduling_coupled import GPActivitySchedulingCoupled
 from gp_tools.gp_metrics import GPMetrics
 from gp_tools.routing_objects import DataMultiRoute
 import gp_tools.gp_rs_execution as gp_rs_exec
@@ -108,7 +109,7 @@ class GlobalPlannerRunner:
 
         return  routes, energy_usage, data_usage
 
-    def run_activity_scheduling_coupled( self, obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,window_uid):
+    def run_activity_scheduling_coupled( self, obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds):
         gp_as = GPActivitySchedulingCoupled( self.params)
 
         # from circinus_tools import debug_tools
@@ -121,7 +122,11 @@ class GlobalPlannerRunner:
         t_a = time.time()
         gp_as.solve ()
         t_b = time.time()
-        # gp_as.print_sol ()
+        gp_as.print_sol ()
+
+        from circinus_tools import debug_tools
+        debug_tools.debug_breakpt()
+
         print('extract_routes')
         #  make a copy of the windows in the extracted routes so we don't mess with the original objects ( just to be extra careful)
         routes = gp_as.extract_utilized_routes ( copy_routes = True, verbose  = False)
@@ -409,6 +414,7 @@ class GlobalPlannerRunner:
 
         run_rs = not self.as_params['run_coupled_rs_as']
 
+        pas_a_new = None
         if run_rs:
             sel_routes_by_obs,ecl_winds,window_uid,pas_a_new = self.run_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,window_uid)
 
@@ -426,15 +432,16 @@ class GlobalPlannerRunner:
             sel_routes_by_obs,ecl_winds,scheduled_routes,energy_usage,data_usage, window_uid = pickle_helper.unpickle_actsc_stuff(self)
         else:
             run_coupled_rs_as = self.as_params['run_coupled_rs_as']
-            found_routes = any([len(rts) >0 for rts in sel_routes_by_obs.values()])
 
-            #  to protect against the weird case where we didn't find any routes ( shouldn't happen, unless we're at the very end of the simulation, or you're trying to break things)
-            if found_routes and not run_coupled_rs_as:
-                scheduled_routes,energy_usage,data_usage = self.run_activity_scheduling(sel_routes_by_obs,ecl_winds)
+            if not run_coupled_rs_as:
+                found_routes = any([len(rts) >0 for rts in sel_routes_by_obs.values()])
+                #  to protect against the weird case where we didn't find any routes ( shouldn't happen, unless we're at the very end of the simulation, or you're trying to break things)
+                if found_routes:
+                    scheduled_routes,energy_usage,data_usage = self.run_activity_scheduling(sel_routes_by_obs,ecl_winds)
 
             # run coupled route selection/act sched solver (slow, optimal)
             elif run_coupled_rs_as:
-                scheduled_routes,energy_usage,data_usage = self.run_activity_scheduling_coupled(obs_winds,dlnk_winds_flat,xlnk_winds_flat,ecl_winds,window_uid)
+                scheduled_routes,energy_usage,data_usage = self.run_activity_scheduling_coupled(obs_winds,dlnk_winds_flat,xlnk_winds_flat,ecl_winds)
             else:
                 scheduled_routes,energy_usage,data_usage = ([],None,None)
                 print('No routes were found in route selection; not running activity selection')

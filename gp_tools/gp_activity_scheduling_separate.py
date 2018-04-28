@@ -777,7 +777,6 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
         def obj_rule(model):
             total_dv_term = self.obj_weights['obs_dv'] * 1/model.par_total_obs_dv * sum(model.par_dmr_dv[p]*model.var_dmr_utilization[p] for p in model.dmrs) 
-                # + self.obj_weights['route_latency'] * 1/len(model.obs_act_windids) * sum(dmr_latency_sf_by_dmr_indx[p]*model.var_dmr_utilization[p] for p in model.dmrs)
 
             latency_term = self.obj_weights['route_latency'] * 1/len(model.obs_act_windids) * sum(model.var_dmr_latency_sf_by_obs_indx[o] for o in model.obs_act_windids)
             

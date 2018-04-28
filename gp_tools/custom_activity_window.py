@@ -126,7 +126,7 @@ class DlnkWindow(CommWindow):
 
         super(DlnkWindow, self).__init__(start, end, window_ID)
 
-    # THIS IS A DIRTY HACK for dealing with a legacy pick pickle file that uses gs_ID instead of gs_indx. 
+    # THIS IS A DIRTY HACK for dealing with a legacy pickle file that uses gs_ID instead of gs_indx. 
     # TODO: remove this after  initial dev
     def __getattr__(self, attr):
         if attr == 'gs_indx' and 'gs_indx' not in dir(self):
@@ -221,7 +221,7 @@ class XlnkWindow(CommWindow):
         """ check if satellite is receiving during this cross-link
         
         satellite is always a receiver during a symmetric cross-link, and is a receiver if it's not the tx satellite in a nonsymmetric cross-link
-        :param sat_indx:  satellite index
+        :param sat_indx:  satellite index for the satellite which is asking the question "am I receiving?"
         :type sat_indx: int
         :returns:  true if it's receiving
         :rtype: {bool}

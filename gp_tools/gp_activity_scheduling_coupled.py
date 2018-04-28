@@ -6,19 +6,21 @@
 from  datetime import timedelta
 from copy import  deepcopy
 from math import ceil
+from copy import copy
 
 from pyomo import environ  as pe
 from pyomo import opt  as po
 
 import numpy as np
 
+from .gp_activity_scheduling_super import  GPActivityScheduling
 from circinus_tools  import time_tools as tt
 from .custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
 from .routing_objects import DataMultiRoute
 from .schedule_objects import Dancecard
 from circinus_tools  import  constants as const
 
-class GPActivitySchedulingCoupled():
+class GPActivitySchedulingCoupled(GPActivityScheduling):
     """docstring for GP activity scheduling"""
     
     def __init__(self,gp_params):
@@ -33,53 +35,20 @@ class GPActivitySchedulingCoupled():
 
     def get_stats(self,verbose=True):
 
-        num_winds_per_route = [len(dmr.get_winds()) for dmr in self.routes_flat]
-        num_routes_by_act = {act:len(self.dmr_indcs_by_act[act_indx]) for act,act_indx in self.all_acts_by_obj.items()}
-
         stats = {}
-        stats['num_routes'] = sum([len ( self.routes_flat)])
-        stats['num_acts'] = sum([len ( self.all_acts_indcs)])
-        stats['num_obs_acts'] = sum([len ( self.obs_act_indcs)])
-        stats['num_link_acts'] = sum([len ( self.link_act_indcs)])
-        stats['ave_num_winds_per_route'] = np.mean(num_winds_per_route)
-        stats['max_num_winds_per_route'] = np.max(num_winds_per_route)
-        stats['med_num_winds_per_route'] = np.median(num_winds_per_route)
+        stats['num_acts'] = len ( self.all_acts_windids)
+        stats['num_obs'] = len ( self.all_obs_windids)
+        stats['num_dlnks'] = len ( self.all_dlnk_windids)
+        stats['num_xlnks'] = len ( self.all_xlnk_windids)
         stats['num_variables'] = self.model.nvariables ()
         stats['num_nobjectives'] = self.model.nobjectives ()
         stats['num_nconstraints'] = self.model.nconstraints ()
-        stats['num_dlnks'] = sum([1 for act in num_routes_by_act.keys() if type(act) == DlnkWindow])
-        stats['num_xlnks'] = sum([1 for act in num_routes_by_act.keys() if type(act) == XlnkWindow])
-
-        stats['ave_num_routes_per_act'] = np.mean(list(num_routes_by_act.values()))
-        stats['ave_num_routes_per_obs'] = np.mean([num for act,num in num_routes_by_act.items() if type(act) == ObsWindow])
-        stats['ave_num_routes_per_dlnk'] = np.mean([num for act,num in num_routes_by_act.items() if type(act) == DlnkWindow])
-        stats['max_num_routes_per_dlnk'] = np.max([num for act,num in num_routes_by_act.items() if type(act) == DlnkWindow])
-        stats['min_num_routes_per_dlnk'] = np.min([num for act,num in num_routes_by_act.items() if type(act) == DlnkWindow])
-        stats['med_num_routes_per_dlnk'] = np.median([num for act,num in num_routes_by_act.items() if type(act) == DlnkWindow])
-        num_routes_xlnk = [num for act,num in num_routes_by_act.items() if type(act) == XlnkWindow]
-        stats['ave_num_routes_per_xlnk'] = np.mean(num_routes_xlnk) if len(num_routes_xlnk) > 0 else const.UNASSIGNED
-        stats['max_num_routes_per_xlnk'] = np.max(num_routes_xlnk) if len(num_routes_xlnk) > 0 else const.UNASSIGNED
-
-
 
         if verbose:
-            print ( "Considering %d routes" % (stats['num_routes']))
             print ( "Considering %d activity windows" % (stats['num_acts']))
-            print ( "Considering %d observation windows" % (stats['num_obs_acts']))
-            print ( "Considering %d link windows" % (stats['num_link_acts']))
-            print ( "Considering %d xlink windows" % (stats['num_xlnks']))
+            print ( "Considering %d observation windows" % (stats['num_obs']))
             print ( "Considering %d dlink windows" % (stats['num_dlnks']))
-            print ( "ave_num_winds_per_route: %0.2f"%(stats['ave_num_winds_per_route']))
-            print ( "max_num_winds_per_route: %0.2f"%(stats['max_num_winds_per_route']))
-            print ( "med_num_winds_per_route: %0.2f"%(stats['med_num_winds_per_route']))
-            print ( "ave_num_routes_per_act: %0.2f"%(stats['ave_num_routes_per_act']))
-            print ( "ave_num_routes_per_obs: %0.2f"%(stats['ave_num_routes_per_obs']))
-            print ( "ave_num_routes_per_dlnk: %0.2f"%(stats['ave_num_routes_per_dlnk']))
-            print ( "max_num_routes_per_dlnk: %0.2f"%(stats['max_num_routes_per_dlnk']))
-            print ( "min_num_routes_per_dlnk: %0.2f"%(stats['min_num_routes_per_dlnk']))
-            print ( "med_num_routes_per_dlnk: %0.2f"%(stats['med_num_routes_per_dlnk']))
-            print ( "ave_num_routes_per_xlnk: %0.2f"%(stats['ave_num_routes_per_xlnk']))
-            print ( "max_num_routes_per_xlnk: %0.2f"%(stats['max_num_routes_per_xlnk']))
+            print ( "Considering %d xlink windows" % (stats['num_xlnks']))
             print ( 'self.model.nvariables ()')
             print ( self.model.nvariables ())
             print ( 'self.model.nobjectives ()')
@@ -105,7 +74,7 @@ class GPActivitySchedulingCoupled():
         for sat_indx in  range (num_sats):
             for wind in obs_winds[sat_indx]:
                 if  wind.start >= self.planning_start_dt  and  wind.end  <= self.planning_end_obs_xlnk_dt:
-                    obs_winds_filtered[sat_indx][xsat_indx]. append ( wind)
+                    obs_winds_filtered[sat_indx]. append ( wind)
 
             for wind in dlnk_winds_flat[sat_indx]:
                 if  wind.start >= self.planning_start_dt  and  wind.end  <= self.planning_end_dlnk_dt:
@@ -113,48 +82,153 @@ class GPActivitySchedulingCoupled():
 
             for wind in xlnk_winds_flat[sat_indx]:
                 if  wind.start >= self.planning_start_dt  and  wind.end  <= self.planning_end_obs_xlnk_dt:
-                    xlink_winds_flat_filtered[sat_indx][xsat_indx]. append ( wind)
+                    xlink_winds_flat_filtered[sat_indx]. append ( wind)
 
         return obs_winds_filtered, dlink_winds_flat_filtered, xlink_winds_flat_filtered
 
-    def get_obs_post_link_subscripts(obs_winds_filt,dlnk_winds_filt,xlnk_winds_filt):
-        """Get list of tuples of subscripts (window IDs) for all windows that follow a given obs and can be used for routing data from that obs"""
+    def get_activity_structs(self,obs_winds_filt,dlnk_winds_filt,xlnk_winds_filt):
+        """Get the structures representing activity subscripts for variables, parameters that are used in creating the pyomo model"""
 
-        all_acts_by_indx = 1
+        #  all activities are uniquely indexed. these structures keep track of those, and the mapping to activity objects
+        all_acts_windids = set()
+        all_obs_windids = set()
+        all_dlnk_windids = set()
+        all_xlnk_windids = set()
+        all_act_objs_by_windid = {}
+        capacity_by_act_windid = {}
 
-        dlnk_obs_subscripts = []
-        xlnk_obs_subscripts = []
+        # all acts for a given sat
+        sats_acts_set = [set() for sat_indx in range (self.num_sats)]
 
-        obs_subscripts_by_dlnk = {}
-        obs_subscripts_by_xlnk = {}
+        # this is T^s
+        all_link_times_by_sat_indx = {sat_indx: [] for sat_indx in range(self.num_sats)}  
+        # this is used for producing T^s
+        all_link_times_link_objs_by_sat_indx = {sat_indx: [] for sat_indx in range(self.num_sats)}  
+        # this is a list of all the (s,o,t) in v_(s,o,t) in the formulation (where t is an index, starting at 0 for each sat)
+        sat_obs_time_dv_subscripts = []
+        # this is the actual time corresponding to the subscript stored in sat_obs_time_dv_subscripts
+        time_by_sat_obs_time_dv_subscript = {}
+        # keeps track of the v_(s,o,t) subscripts corresponding to "the start of" a given activity 
+        sat_obs_time_dv_subscripts_by_link_obj = {}
+
+        # making these sets because xlnks are repeated across xlnk.sat_indx, xlnk.xsat_indx, and want to use same data structure for both dlnks and xlnks
+        dlnk_obs_windids = set()
+        xlnk_obs_windids = set()
+
+        obs_windids_by_dlnk_windid = {}
+        dlnk_windids_by_obs_windid = {}
+        obs_windids_by_xlnk_windid = {}
 
         # look for every dlnk that follows an obs. This is a potential window for downlinking data from the obs
-        for dlnks_sat in dlnk_winds_filt:
-            for dlnk in dlnks_sat:
-                for obs_sat in obs_winds:
+        for sat_indx in range(self.num_sats):
+            for dlnk in dlnk_winds_filt[sat_indx]:
+                # grab the windid/obj mapping while we're here
+                dlnk_windid = dlnk.window_ID
+                all_act_objs_by_windid[dlnk_windid] = dlnk
+                all_acts_windids.add(dlnk_windid)
+                all_dlnk_windids.add(dlnk_windid)
+                capacity_by_act_windid[dlnk_windid] = dlnk.data_vol
+                obs_windids_by_dlnk_windid.setdefault(dlnk_windid, [])
+                all_link_times_link_objs_by_sat_indx[sat_indx].append((dlnk.center,[dlnk]))
+                sats_acts_set[sat_indx].add(dlnk)
+                sat_obs_time_dv_subscripts_by_link_obj.setdefault(dlnk, [])
+
+                for obs_sat in obs_winds_filt:
                     for obs in obs_sat:
+                        # we'll do this obs storing again for every subsequent downlink, of course...it's fine, we'll survive
+                        obs_windid = obs.window_ID
+                        all_act_objs_by_windid[obs_windid] = obs
+                        all_acts_windids.add(obs_windid)
+                        all_obs_windids.add(obs_windid)
+                        capacity_by_act_windid[obs_windid] = obs.data_vol
+                        dlnk_windids_by_obs_windid.setdefault(obs_windid, [])
+                        sats_acts_set[obs.sat_indx].add(obs)
+
                         if dlnk.center > obs.center:
-                            # make tuple of subscripts
-                            dlnk_obs_subscripts.append((dlnk.window_ID,obs.window_ID))
-                            obs_subscripts_by_dlnk.setdefault(dlnk, [])
-                            obs_subscripts_by_dlnk.append(obs.window_ID)
+                            # make tuple of windids
+                            dlnk_obs_windids.add((dlnk.window_ID,obs.window_ID))
+                            obs_windids_by_dlnk_windid[dlnk_windid].append(obs_windid)
+                            dlnk_windids_by_obs_windid[obs_windid].append(dlnk_windid)
 
         # look for every xlnk that follows an obs. This is a potential window for moving data from the obs
         # note: assuming we want to look at both xlnk directionalities here
-        for xlnks_sat in xlnk_winds_filt:
-            for xlnk in xlnks_sat:
-                for obs_sat in obs_winds:
+        for sat_indx in range(self.num_sats):
+            for xlnk in xlnk_winds_filt[sat_indx]:
+                xlnk_windid = xlnk.window_ID
+                all_act_objs_by_windid[xlnk_windid] = xlnk
+                all_acts_windids.add(xlnk_windid)
+                all_xlnk_windids.add(xlnk_windid)
+                capacity_by_act_windid[xlnk_windid] = xlnk.data_vol
+                obs_windids_by_xlnk_windid.setdefault(xlnk_windid, [])
+                # note that we can't use xlnk.sat_indx below below every xlnk wind has a sat_indx and an xsat_indx (sat_indx < xsat_indx) and it's incorrect to use sat_indx straight
+                all_link_times_link_objs_by_sat_indx[sat_indx].append((xlnk.center,[xlnk]))
+                sats_acts_set[sat_indx].add(xlnk)
+                sat_obs_time_dv_subscripts_by_link_obj.setdefault(xlnk, [])
+
+                for obs_sat in obs_winds_filt:
                     for obs in obs_sat:
                         if xlnk.center > obs.center:
-                            # make tuple of subscripts
-                            xlnk_obs_subscripts.append((xlnk.window_ID,obs.window_ID))
-                            obs_subscripts_by_xlnk.setdefault(xlnk, [])
-                            obs_subscripts_by_xlnk.append(obs.window_ID)
+                            # make tuple of windids
+                            xlnk_obs_windids.add((xlnk.window_ID,obs.window_ID))
+                            obs_windids_by_xlnk_windid[xlnk_windid].append(obs.window_ID)
 
-        return dlnk_obs_subscripts,xlnk_obs_subscripts,obs_subscripts_by_dlnk,obs_subscripts_by_xlnk
+        obs_windids_by_lnk_windid = copy(obs_windids_by_dlnk_windid)
+        obs_windids_by_lnk_windid.update(obs_windids_by_xlnk_windid)
+
+        #  make sure they're sorted
+        for time_link_objs_list in all_link_times_link_objs_by_sat_indx.values():
+            # sort by time
+            time_link_objs_list.sort(key=lambda x: x[0])
+
+        # deal with the fact that some activities have pretty much the same center time, and we'd like to merge those into a single timepoint in T_s rather than multiple, to avoid that extra hit in computational complexity
+        time_epsilon_tiny_diff_count = 0
+        for sat_indx,time_link_objs_list in all_link_times_link_objs_by_sat_indx.items():
+            last_time = None
+            for time_obj in time_link_objs_list:
+                curr_time = time_obj[0]
+                #  todo: add merging? If done, need to merge in both all_link_times_by_sat_indx and all_link_times_link_objs_by_sat_indx
+                all_link_times_by_sat_indx.setdefault(sat_indx,[])
+                all_link_times_by_sat_indx[sat_indx].append(curr_time)
+
+                if last_time and (curr_time - last_time < self.T_s_time_epsilon):
+                    time_epsilon_tiny_diff_count += 1
 
 
-    def make_model ( self,obs_winds,dlnk_winds_flat,xlnk_winds_flat, ecl_winds, verbose = True):
+        print("time_epsilon_tiny_diff_count")
+        print(time_epsilon_tiny_diff_count)
+
+        # generate list of subscripts for v_(s,o,t), as well as the correspondence between activity windows and their entries in v_(s,o,t)
+        for obs_sat in obs_winds_filt:
+            for obs in obs_sat:
+                for sat_indx in range(self.num_sats):
+                    for time_index,(time,link_objs) in enumerate(all_link_times_link_objs_by_sat_indx[sat_indx]):
+
+                        if time > obs.center:
+                            sat_obs_time_subscr = (sat_indx,obs.window_ID,time_index)
+                            sat_obs_time_dv_subscripts.append(sat_obs_time_subscr)
+                            time_by_sat_obs_time_dv_subscript[sat_obs_time_subscr] = time
+                            for link_obj in link_objs:
+                                # if sat_indx ==4 and obs.window_ID == 41 and link_obj.window_ID == 5303:
+                                #     from circinus_tools import debug_tools
+                                #     debug_tools.debug_breakpt()
+
+                                sat_obs_time_dv_subscripts_by_link_obj[link_obj].append(sat_obs_time_subscr)
+
+
+        sats_acts = []
+        for sat_act_set in sats_acts_set:
+            sat_act_list = list(sat_act_set)
+            sat_act_list.sort(key= lambda a: a.center)
+            sats_acts.append(sat_act_list)
+
+
+
+        return sats_acts,all_acts_windids,all_obs_windids,all_dlnk_windids,all_xlnk_windids,all_act_objs_by_windid,capacity_by_act_windid,dlnk_obs_windids,xlnk_obs_windids,obs_windids_by_lnk_windid,obs_windids_by_dlnk_windid,obs_windids_by_xlnk_windid,dlnk_windids_by_obs_windid,all_link_times_by_sat_indx,sat_obs_time_dv_subscripts,time_by_sat_obs_time_dv_subscript,sat_obs_time_dv_subscripts_by_link_obj
+
+
+    def make_model ( self,obs_winds,dlnk_winds_flat,xlnk_winds_flat, ecl_winds, verbose = False):
+        # note this model only works for non-symmetric crosslink windows!
+
         model = pe.ConcreteModel()
 
         # filter the routes to make sure that  none of their activities fall outside the scheduling window
@@ -171,19 +245,49 @@ class GPActivitySchedulingCoupled():
         ##############################
 
         try:
-            (sat_acts,
-                sat_dlnks,
-                all_acts_indcs,
-                dmr_indcs_by_act,
-                dv_by_act,
-                all_acts_by_obj,
-                all_acts_by_indx,
-                obs_act_indcs,
-                dmr_indcs_by_obs_act,
-                dv_by_obs_act,
-                link_act_indcs,
-                dmr_indcs_by_link_act,
-                dv_by_link_act) =  self.get_activity_structs(routes_flat)
+            # (sat_acts,
+            #     sat_dlnks,
+            #     all_acts_indcs,
+            #     dmr_indcs_by_act,
+            #     dv_by_act,
+            #     all_acts_by_obj,
+            #     all_acts_by_indx,
+            #     obs_act_indcs,
+            #     dmr_indcs_by_obs_act,
+            #     dv_by_obs_act,
+            #     link_act_indcs,
+            #     dmr_indcs_by_link_act,
+            #     dv_by_link_act) =  self.get_activity_structs(routes_flat)
+
+            (sats_acts,
+                all_acts_windids,
+                all_obs_windids,
+                all_dlnk_windids,
+                all_xlnk_windids,
+                all_act_objs_by_windid,
+                capacity_by_act_windid,
+                dlnk_obs_windids,
+                xlnk_obs_windids,
+                obs_windids_by_lnk_windid,
+                obs_windids_by_dlnk_windid,
+                obs_windids_by_xlnk_windid,
+                dlnk_windids_by_obs_windid,
+                all_link_times_by_sat_indx,
+                sat_obs_time_dv_subscripts,
+                time_by_sat_obs_time_dv_subscript,
+                sat_obs_time_dv_subscripts_by_link_obj
+                 ) = self.get_activity_structs(
+                        obs_winds_filt,
+                        dlnk_winds_filt,
+                        xlnk_winds_filt
+                    )
+
+            self.all_acts_windids = all_acts_windids
+            self.all_obs_windids = all_obs_windids
+            self.all_dlnk_windids = all_acts_windids
+            self.all_xlnk_windids = all_acts_windids
+            self.all_act_objs_by_windid = all_act_objs_by_windid
+            self.time_by_sat_obs_time_dv_subscript = time_by_sat_obs_time_dv_subscript
 
             # dmr_latency_sf_by_dmr_indx =  self.get_dmr_latency_score_factors(
             #     routes_flat,
@@ -197,73 +301,84 @@ class GPActivitySchedulingCoupled():
             # this is for constructing energy storage constraints
             # using resource_delta_t_s because this dancecard is solely for use in constructing resource constraints
             # note that these dancecards will baloon in size pretty quickly as the planning_end_dt increases. However most of the complexity they introduce is before planning_end_obs_xlnk_dt because that's the horizon where obs,xlnk actitivities are included. After that there should only be sparse downlinks
-            es_act_dancecards = [Dancecard(self.planning_start_dt,self.planning_end_dt,self.resource_delta_t_s,item_init=None,mode='timestep') for sat_indx in range (self.num_sats)]
+        #     es_act_dancecards = [Dancecard(self.planning_start_dt,self.planning_end_dt,self.resource_delta_t_s,item_init=None,mode='timestep') for sat_indx in range (self.num_sats)]
             
-            for sat_indx in range (self.num_sats): 
-                es_act_dancecards[sat_indx].add_winds_to_dancecard(sat_acts[sat_indx])
-                es_act_dancecards[sat_indx].add_winds_to_dancecard(ecl_winds[sat_indx])
+        #     for sat_indx in range (self.num_sats): 
+        #         es_act_dancecards[sat_indx].add_winds_to_dancecard(sat_acts[sat_indx])
+        #         es_act_dancecards[sat_indx].add_winds_to_dancecard(ecl_winds[sat_indx])
 
-            # this is for data storage
-            # for each sat/timepoint, we store a list of all those data multi routes that are storing data on the sat at that timepoint
-            ds_route_dancecards = [Dancecard(self.planning_start_dt,self.planning_end_dt,self.resource_delta_t_s,item_init=None,mode='timepoint') for sat_indx in range (self.num_sats)]
+        #     # this is for data storage
+        #     # for each sat/timepoint, we store a list of all those data multi routes that are storing data on the sat at that timepoint
+        #     ds_route_dancecards = [Dancecard(self.planning_start_dt,self.planning_end_dt,self.resource_delta_t_s,item_init=None,mode='timepoint') for sat_indx in range (self.num_sats)]
             
-            # add data routes to the dancecard
-            for dmr_indx,dmr in enumerate(routes_flat):
-                # list of type routing_objects.SatStorageInterval
-                dmr_ds_intervs = dmr.get_data_storage_intervals()
+        #     # add data routes to the dancecard
+        #     for dmr_indx,dmr in enumerate(routes_flat):
+        #         # list of type routing_objects.SatStorageInterval
+        #         dmr_ds_intervs = dmr.get_data_storage_intervals()
 
-                for interv in dmr_ds_intervs:
-                    # store the dmr object at this timepoint
-                    ds_route_dancecards[interv.sat_indx].add_item_in_interval(dmr_indx,interv.start,interv.end)
+        #         for interv in dmr_ds_intervs:
+        #             # store the dmr object at this timepoint
+        #             ds_route_dancecards[interv.sat_indx].add_item_in_interval(dmr_indx,interv.start,interv.end)
 
         except IndexError:
             raise RuntimeWarning('sat_indx out of range. Are you sure all of your input files are consistent? (including pickles)')        
-        self.dmr_indcs_by_act = dmr_indcs_by_act
-        self.all_acts_indcs = all_acts_indcs
-        self.obs_act_indcs = obs_act_indcs
-        self.link_act_indcs = link_act_indcs
-        self.all_acts_by_obj = all_acts_by_obj
-        self.all_acts_by_indx = all_acts_by_indx
+        # self.dmr_indcs_by_act = dmr_indcs_by_act
+        # self.all_acts_indcs = all_acts_indcs
+        # self.obs_act_indcs = obs_act_indcs
+        # self.link_act_indcs = link_act_indcs
+        # self.all_acts_by_obj = all_acts_by_obj
+        # self.all_acts_by_indx = all_acts_by_indx
 
-        # these subscripts probably should've been done using the unique IDs for the objects, rather than their arbitrary locations within a list. Live and learn, hélas...
+        # # these subscripts probably should've been done using the unique IDs for the objects, rather than their arbitrary locations within a list. Live and learn, hélas...
 
-        #  subscript for each dmr (data multi route) p  (p index is a hold-over from when I called them paths)
-        model.dmrs = pe.Set(initialize= range(len(routes_flat)))
+        # #  subscript for each dmr (data multi route) p  (p index is a hold-over from when I called them paths)
+        # model.dmrs = pe.Set(initialize= range(len(routes_flat)))
+        
         #  subscript for each activity a
-        model.acts = pe.Set(initialize= all_acts_indcs)
+        model.act_windids = pe.Set(initialize= all_acts_windids)
+        #  subscript for each obs o
+        model.obs_windids = pe.Set(initialize= all_obs_windids)
+        #  subscript for each link
+        model.lnk_windids = pe.Set(initialize= all_dlnk_windids.union(all_xlnk_windids))
+        # every act-obs within that act combination
+        model.act_obs_subscripts = pe.Set(initialize= dlnk_obs_windids.union(xlnk_obs_windids),dimen=2)
         #  subscript for each satellite
-        model.sats = pe.Set(initialize=  range ( self.num_sats))
+        model.sat_indcs = pe.Set(initialize= range(self.num_sats))
+        #  subscript for each s,o,t in v_(s,o,t)
+        # t in model.sat_obs_time_dv_subscripts is index into all_link_times_by_sat_indx
+        model.sat_obs_time_dv_subscripts = pe.Set(initialize= sat_obs_time_dv_subscripts,dimen=3)
 
-        # timepoints is the indices, which starts at 0 
-        #  NOTE: we assume the same time system for every satellite
-        self.es_time_getter_dc = es_act_dancecards[0]
-        es_num_timepoints = es_act_dancecards[0].num_timepoints
-        model.es_timepoint_indcs = pe.Set(initialize=  self.es_time_getter_dc.get_tp_indcs())
 
-        self.ds_time_getter_dc = ds_route_dancecards[0]
-        model.ds_timepoint_indcs = pe.Set(initialize=  self.ds_time_getter_dc.get_tp_indcs())
+        # # timepoints is the indices, which starts at 0 
+        # #  NOTE: we assume the same time system for every satellite
+        # self.es_time_getter_dc = es_act_dancecards[0]
+        # es_num_timepoints = es_act_dancecards[0].num_timepoints
+        # model.es_timepoint_indcs = pe.Set(initialize=  self.es_time_getter_dc.get_tp_indcs())
 
-        #  unique indices for observation and link acts
-        model.obs_acts = pe.Set(initialize= obs_act_indcs)
-        model.link_acts = pe.Set(initialize= link_act_indcs)
+        # self.ds_time_getter_dc = ds_route_dancecards[0]
+        # model.ds_timepoint_indcs = pe.Set(initialize=  self.ds_time_getter_dc.get_tp_indcs())
 
-        if self.solver_name == 'gurobi' or self.solver_name == 'cplex':
-            int_feas_tol = self.solver_params['integer_feasibility_tolerance']
-        else:
-            raise NotImplementedError
+        # #  unique indices for observation and link acts
+        # model.obs_acts = pe.Set(initialize= obs_act_indcs)
+        # model.link_acts = pe.Set(initialize= link_act_indcs)
 
-        for p,lat_sf in dmr_latency_sf_by_dmr_indx.items():        
-            if lat_sf > int_feas_tol*self.big_M_lat:
-                raise RuntimeWarning('big_M_lat (%f) is not large enough for latency score factor %f and integer feasibility tolerance %f (dmr index %d)'%(self.big_M_lat,lat_sf,int_feas_tol,p))
+        # if self.solver_name == 'gurobi' or self.solver_name == 'cplex':
+        #     int_feas_tol = self.solver_params['integer_feasibility_tolerance']
+        # else:
+        #     raise NotImplementedError
 
-        for act_obj in all_acts_by_obj.keys():
-            if 2*(act_obj.end-act_obj.start).total_seconds() > self.big_M_act_t_dur_s:
-                raise RuntimeWarning('big_M_act_t_dur_s (%f) is not large enough for act of duration %s and integer feasibility tolerance %f (act string %s)'%(self.big_M_act_t_dur_s,act_obj.end-act_obj.start,int_feas_tol,act_obj))
-            # if 2*(act_obj.end-act_obj.start).total_seconds() > (1-int_feas_tol) *  self.big_M_act_t_dur_s:
-                # raise RuntimeWarning('big_M_act_t_dur_s (%f) is not large enough for act of duration %s and integer feasibility tolerance %f (act string %s)'%(self.big_M_act_t_dur_s,act_obj.end-act_obj.start,int_feas_tol,act_obj))
+        # for p,lat_sf in dmr_latency_sf_by_dmr_indx.items():        
+        #     if lat_sf > int_feas_tol*self.big_M_lat:
+        #         raise RuntimeWarning('big_M_lat (%f) is not large enough for latency score factor %f and integer feasibility tolerance %f (dmr index %d)'%(self.big_M_lat,lat_sf,int_feas_tol,p))
 
-            if 2*act_obj.data_vol > (1-int_feas_tol) * self.big_M_act_dv:
-                raise RuntimeWarning('big_M_act_dv (%f) is not large enough for act of dv %f and integer feasibility tolerance %f (act string %s)'%(self.big_M_act_dv,act_obj.data_vol,int_feas_tol,act_obj))
+        # for act_obj in all_acts_by_obj.keys():
+        #     if 2*(act_obj.end-act_obj.start).total_seconds() > self.big_M_act_t_dur_s:
+        #         raise RuntimeWarning('big_M_act_t_dur_s (%f) is not large enough for act of duration %s and integer feasibility tolerance %f (act string %s)'%(self.big_M_act_t_dur_s,act_obj.end-act_obj.start,int_feas_tol,act_obj))
+        #     # if 2*(act_obj.end-act_obj.start).total_seconds() > (1-int_feas_tol) *  self.big_M_act_t_dur_s:
+        #         # raise RuntimeWarning('big_M_act_t_dur_s (%f) is not large enough for act of duration %s and integer feasibility tolerance %f (act string %s)'%(self.big_M_act_t_dur_s,act_obj.end-act_obj.start,int_feas_tol,act_obj))
+
+        #     if 2*act_obj.data_vol > (1-int_feas_tol) * self.big_M_act_dv:
+        #         raise RuntimeWarning('big_M_act_dv (%f) is not large enough for act of dv %f and integer feasibility tolerance %f (act string %s)'%(self.big_M_act_dv,act_obj.data_vol,int_feas_tol,act_obj))
                 
 
 
@@ -271,83 +386,87 @@ class GPActivitySchedulingCoupled():
         #  Make parameters
         ##############################
 
-        model.par_min_as_route_dv = pe.Param (initialize=self.min_as_route_dv)
-        model.par_obs_dv = pe.Param(model.obs_acts,initialize =dv_by_obs_act)
-        model.par_total_obs_dv = sum(dv_by_obs_act.values())
-        model.par_link_dv = pe.Param(model.link_acts,initialize =dv_by_link_act)
-        model.par_act_dv = pe.Param(model.acts,initialize =dv_by_act)
-        #  data volume for each data multi-route
-        model.par_dmr_dv = pe.Param(model.dmrs,initialize ={ dmr_indx: dmr.data_vol for dmr_indx,dmr in enumerate (routes_flat)})
-        #  data volume for each activity in each data multi-route
+        # model.par_min_as_route_dv = pe.Param (initialize=self.min_as_route_dv)
+        # model.par_obs_dv = pe.Param(model.obs_acts,initialize =dv_by_obs_act)
+        model.par_total_obs_dv = sum(capacity_by_act_windid[o] for o in all_obs_windids)
+        # model.par_link_dv = pe.Param(model.link_acts,initialize =dv_by_link_act)
+        model.par_act_capacity = pe.Param(model.act_windids,initialize =capacity_by_act_windid)
+        # #  data volume for each data multi-route
+        # model.par_dmr_dv = pe.Param(model.dmrs,initialize ={ dmr_indx: dmr.data_vol for dmr_indx,dmr in enumerate (routes_flat)})
+        # #  data volume for each activity in each data multi-route
 
-        # todo: will probably have to fix this to not be the full set multiplication of model.dmrs, model.acts - can use dmr_indcs_by_act
-        model.par_dmr_act_dv = pe.Param(
-            model.dmrs,
-            model.acts,
-            initialize = { (dmr_indx,self.all_acts_by_obj[act]): 
-                dmr.data_vol_for_wind(act) for dmr_indx,dmr in enumerate (routes_flat) for act in dmr.get_winds()
-            }
-        )
+        # # todo: will probably have to fix this to not be the full set multiplication of model.dmrs, model.acts - can use dmr_indcs_by_act
+        # model.par_dmr_act_dv = pe.Param(
+        #     model.dmrs,
+        #     model.acts,
+        #     initialize = { (dmr_indx,self.all_acts_by_obj[act]): 
+        #         dmr.data_vol_for_wind(act) for dmr_indx,dmr in enumerate (routes_flat) for act in dmr.get_winds()
+        #     }
+        # )
 
-        # each of these is essentially a dictionary indexed by link or obs act indx, with  the value being a list of dmr indices that are included within that act
-        # these are valid indices into model.dmrs
-        model.par_dmr_subscrs_by_link_act = pe.Param(model.link_acts,initialize =dmr_indcs_by_link_act)
-        model.par_dmr_subscrs_by_obs_act = pe.Param(model.obs_acts,initialize =dmr_indcs_by_obs_act)
-        model.par_dmr_subscrs_by_act = pe.Param(model.acts,initialize =dmr_indcs_by_act)
+        # # each of these is essentially a dictionary indexed by link or obs act indx, with  the value being a list of dmr indices that are included within that act
+        # # these are valid indices into model.dmrs
+        # model.par_dmr_subscrs_by_link_act = pe.Param(model.link_acts,initialize =dmr_indcs_by_link_act)
+        # model.par_dmr_subscrs_by_obs_act = pe.Param(model.obs_acts,initialize =dmr_indcs_by_obs_act)
+        # model.par_dmr_subscrs_by_act = pe.Param(model.acts,initialize =dmr_indcs_by_act)
 
 
-        if self.energy_unit == "Wh":
-            model.par_resource_delta_t = pe.Param (initialize= self.resource_delta_t_s/3600)
-        else: 
-            raise NotImplementedError
-        model.par_sats_estore_initial = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_init_estate_Wh)})
-        model.par_sats_estore_min = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_emin_Wh)})
-        model.par_sats_estore_max = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_emax_Wh)})
-        model.par_sats_edot_by_act = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_edot_by_act_W)})
+        # if self.energy_unit == "Wh":
+        #     model.par_resource_delta_t = pe.Param (initialize= self.resource_delta_t_s/3600)
+        # else: 
+        #     raise NotImplementedError
+        # model.par_sats_estore_initial = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_init_estate_Wh)})
+        # model.par_sats_estore_min = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_emin_Wh)})
+        # model.par_sats_estore_max = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_emax_Wh)})
+        # model.par_sats_edot_by_act = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_edot_by_act_W)})
 
-        model.par_sats_dstore_min = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_dmin_Mb)})
-        model.par_sats_dstore_max = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_dmax_Mb)})
+        # model.par_sats_dstore_min = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_dmin_Mb)})
+        # model.par_sats_dstore_max = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_dmax_Mb)})
 
         ##############################
         #  Make variables
         ##############################
 
-        model.var_act_dv_utilization  = pe.Var (model.acts, bounds =(0,1))
-        model.var_act_obs_dv_utilization  = pe.Var (model.obs_post_link_acts, bounds =(0,1))
+        # v_a, variables [1]
+        model.var_act_dv_utilization  = pe.Var (model.act_windids, within = pe.NonNegativeReals)
+        # v_(a,o), variables [2]
+        model.var_act_obs_dv_utilization  = pe.Var (model.act_obs_subscripts,  within = pe.NonNegativeReals)
+        # v_(s,o,t), variables [3]
+        model.var_sat_obs_time_dv  = pe.Var (model.sat_obs_time_dv_subscripts,  within = pe.NonNegativeReals)
 
 
 
 
-        # activity utilization variable indicating how much of an activity's capacity is used [1]
-        model.var_activity_utilization  = pe.Var (model.acts, bounds =(0,1))
-        # dmr utilization variable indicating how much of a dmr's capacity is used [2]
-        model.var_dmr_utilization  = pe.Var (model.dmrs, bounds =(0,1))
-        #  indicator variables for whether or not dmrs [3] and activities [4] have been chosen
-        model.var_dmr_indic  = pe.Var (model.dmrs, within = pe.Binary)
-        # model.var_dmr_indic  = pe.Var (model.dmrs, bounds =(0,1))
-        model.var_act_indic  = pe.Var (model.acts, within = pe.Binary)
-        # model.var_act_indic  = pe.Var (model.acts, bounds =(0,1))
+        # # activity utilization variable indicating how much of an activity's capacity is used [1]
+        # model.var_activity_utilization  = pe.Var (model.acts, bounds =(0,1))
+        # # dmr utilization variable indicating how much of a dmr's capacity is used [2]
+        # model.var_dmr_utilization  = pe.Var (model.dmrs, bounds =(0,1))
+        # #  indicator variables for whether or not dmrs [3] and activities [4] have been chosen
+        # model.var_dmr_indic  = pe.Var (model.dmrs, within = pe.Binary)
+        # # model.var_dmr_indic  = pe.Var (model.dmrs, bounds =(0,1))
+        # model.var_act_indic  = pe.Var (model.acts, within = pe.Binary)
+        # # model.var_act_indic  = pe.Var (model.acts, bounds =(0,1))
 
         
-        # satellite energy storage
-        model.var_sats_estore  = pe.Var (model.sats,  model.es_timepoint_indcs,  within = pe.NonNegativeReals)
+        # # satellite energy storage
+        # model.var_sats_estore  = pe.Var (model.sats,  model.es_timepoint_indcs,  within = pe.NonNegativeReals)
 
-        # satellite data storage (data buffers)
-        model.var_sats_dstore  = pe.Var (model.sats,  model.ds_timepoint_indcs,  within = pe.NonNegativeReals)
+        # # satellite data storage (data buffers)
+        # model.var_sats_dstore  = pe.Var (model.sats,  model.ds_timepoint_indcs,  within = pe.NonNegativeReals)
 
-        model.var_dmr_latency_sf_by_obs_indx = pe.Var (model.obs_acts,  within = pe.NonNegativeReals)
+        # model.var_dmr_latency_sf_by_obs_indx = pe.Var (model.obs_acts,  within = pe.NonNegativeReals)
         
-        allow_act_timing_constr_violations = False
-        if allow_act_timing_constr_violations:
-            print('allow_act_timing_constr_violations is True')
+        # allow_act_timing_constr_violations = False
+        # if allow_act_timing_constr_violations:
+        #     print('allow_act_timing_constr_violations is True')
 
-        #  variables for handling the allowance of inter-activity timing constraint violations. these are only generated if allow_act_timing_constr_violations is True
-        model.var_intra_sat_act_constr_violations = pe.VarList()
-        model.var_inter_sat_act_constr_violations = pe.VarList()
+        # #  variables for handling the allowance of inter-activity timing constraint violations. these are only generated if allow_act_timing_constr_violations is True
+        # model.var_intra_sat_act_constr_violations = pe.VarList()
+        # model.var_inter_sat_act_constr_violations = pe.VarList()
 
-        #  stores all of the lower bounds of the constraint violation variables, for use in normalization for objective function
-        min_var_intra_sat_act_constr_violation_list = [] 
-        min_var_inter_sat_act_constr_violation_list = [] 
+        # #  stores all of the lower bounds of the constraint violation variables, for use in normalization for objective function
+        # min_var_intra_sat_act_constr_violation_list = [] 
+        # min_var_inter_sat_act_constr_violation_list = [] 
 
         ##############################
         #  Make constraints
@@ -357,341 +476,416 @@ class GPActivitySchedulingCoupled():
 
         # note that the observations show up within model.acts as well, so we also constraint route scheduled DV by the real available DV from each observation
         def c1_rule( model,a):
-            return (model.par_act_dv[a]*model.var_activity_utilization[a] -
-                        sum(model.par_dmr_act_dv[p,a]*model.var_dmr_utilization[p] 
-                            for p in model.par_dmr_subscrs_by_act[a]) 
-                    >= 0)
-        model.c1 =pe.Constraint ( model.acts,  rule=c1_rule)
+            return ( model.var_act_dv_utilization[a] <= model.par_act_capacity[a])
+        model.c1 =pe.Constraint ( model.act_windids,  rule=c1_rule)
 
-        # this constraint forces all activity indicators along a route to be high if that route is picked. From the other perspective, if an activity is not picked, then all route indicators through it must be low (not required, but the MILP branch and cut algorithm can take advantage of this to search through binary variables more efficiently)
-        # it's not entirely clear to me though how helpful this constraint is - on a 30 sat model with 100 obs targets and 7 GS (1879 routes input to act sched) things seems to run slower by fractions of a second with this constaint (takes about 10 seconds to solve). Probably more helpful for larger models though...
-        model.c1b  = pe.ConstraintList()
-        for a in model.acts:
-            for p in model.par_dmr_subscrs_by_act[a]:
-                model.c1b.add(model.var_act_indic[a] >= model.var_dmr_indic[p]) 
+        def c1b_rule( model,a):
+            return model.var_act_dv_utilization[a] >= sum(model.var_act_obs_dv_utilization[a,o] for o in obs_windids_by_lnk_windid[a])
+        model.c1b =pe.Constraint ( model.lnk_windids,  rule=c1b_rule)
 
-        def c2_rule( model,p):
-            return model.par_dmr_dv[p]*model.var_dmr_utilization[p] >= model.par_min_as_route_dv*model.var_dmr_indic[p]
-        model.c2 =pe.Constraint ( model.dmrs,  rule=c2_rule)
-
-        def c3_rule( model,a):
-            return model.var_act_indic[a] >=  model.var_activity_utilization[a]
-        model.c3 =pe.Constraint ( model.acts,  rule=c3_rule)  
-
-        def c3c_rule( model,p):
-            return model.var_dmr_indic[p] >=  model.var_dmr_utilization[p]
-        model.c3c =pe.Constraint ( model.dmrs,  rule=c3c_rule)
-
-        # keep track of this, so we know to warn user about default transition time usage
-        #  note: this is not a parameter! it's merely helpful for reporting warnings
-        used_default_transition_time = False
-
-        def gen_inter_act_constraint(var_list,constr_list,transition_time_req,act1,act2,act1_uindx,act2_uindx):
-
-            var_constr_violation = None
-            min_constr_violation = None
-
-            center_time_diff = (act2.center - act1.center).total_seconds()
-            time_adjust_1 = model.par_act_dv[act1_uindx]*model.var_activity_utilization[act1_uindx]/2/act1.ave_data_rate
-            time_adjust_2 = model.par_act_dv[act2_uindx]*model.var_activity_utilization[act2_uindx]/2/act2.ave_data_rate
-            max_time_adjust_1 = model.par_act_dv[act1_uindx]*1/2/act1.ave_data_rate
-            max_time_adjust_2 = model.par_act_dv[act2_uindx]*1/2/act2.ave_data_rate
-
-            if not allow_act_timing_constr_violations:
-                #  if the activities overlap in center time (including  transition time), then it's not possible to have sufficient transition time between them.  only allow one
-                if (act2.center - act1.center).total_seconds() <= transition_time_req:
-                    constr = model.var_act_indic[act1_uindx]+ model.var_act_indic[act2_uindx] <= 1
-
-                # If they don't overlap in center time, but they do overlap to some amount, then we need to constrain their end and start times to be consistent with one another
-                else:
-                    M = max(act1.duration,act2.duration).total_seconds()
-                    constr_disable_1 = M*(1-model.var_act_indic[act1_uindx])
-                    constr_disable_2 = M*(1-model.var_act_indic[act2_uindx])
-        
-                    constr = center_time_diff - time_adjust_1 - time_adjust_2 + constr_disable_1 + constr_disable_2 >= transition_time_req
-
-            else:
-                # time_adjust_N can go as low as zero, so the constraint violation can be this at its lowest
-                min_constr_violation = center_time_diff - max_time_adjust_1 - max_time_adjust_2 - transition_time_req
-
-                assert(min_constr_violation < 0)
-
-                # deal with adding a variable to represent this constraint violation. ( I hate that I have to do it this way, deep within this function, but it seems like the approach you have to use for dynamically generating variable lists in pyomo, bizarrely. refer to: https://projects.coin-or.org/Coopr/browser/pyomo/trunk/pyomo/core/base/var.py?rev=11067, https://groups.google.com/forum/#!topic/pyomo-forum/modS1VkPxW0
-                var_list.add()
-                var_constr_violation = var_list[len(var_list)]
-
-                #  bounds on range of constraint violation variable
-
-                # bound minimum of the constraint violation (where both activities have 1.0 utilization), to keep the problem formulation as tight as possible
-                var_constr_violation.setlb(min_constr_violation)
-                # want the constraint violation only to go to zero at its maximum, because we don't want to reward times where there is no constraint violation, only penalize
-                var_constr_violation.setub(0)
-
-                #  the actual time constraint that bounds the constraint violation
-                constr = center_time_diff - time_adjust_1 - time_adjust_2 - transition_time_req >= var_constr_violation
-
-            return constr, var_constr_violation, min_constr_violation
+        # c2
+        model.c2  = pe.ConstraintList()
+        for a in model.lnk_windids:
+            for o in obs_windids_by_lnk_windid[a]:
+                model.c2.add(model.var_act_obs_dv_utilization[a,o] <= model.var_act_dv_utilization[o])
 
 
-        #  intra-satellite activity overlap constraints [4],[5],[5b]
-        #  well, 5B is activity minimum time duration
-        # model.c4  = pe.ConstraintList()  # c5 now holds c4 constraints
-        model.c5  = pe.ConstraintList() # this now contains all of the activity overlap constraints
-        model.c5b  = pe.ConstraintList()
-        model.intra_sat_act_constr_bounds  = pe.ConstraintList()
-        self.intra_sat_act_constr_violation_acts_list = []
-        for sat_indx in range (self.num_sats):
-            num_sat_acts = len(sat_acts[sat_indx])
-            for  first_act_indx in  range (num_sat_acts):
+        def c4_rule( model,o):
+            return model.var_act_dv_utilization[o] == sum(model.var_act_obs_dv_utilization[d,o] for d in dlnk_windids_by_obs_windid[o])
+        model.c4 =pe.Constraint ( model.obs_windids,  rule=c4_rule)
 
-                act1 = sat_acts[sat_indx][first_act_indx]
-                # get the unique index into model.acts
-                act1_uindx = all_acts_by_obj[act1]
-                length_1 = model.par_act_dv[act1_uindx]*model.var_activity_utilization[act1_uindx]/act1.ave_data_rate
-                model.c5b.add( length_1 >= model.var_act_indic[act1_uindx] * self.min_act_duration_s[type(act1)])
-                
-                for  second_act_indx in  range (first_act_indx+1,num_sat_acts):
-                    act2 = sat_acts[sat_indx][ second_act_indx]
-                    # get the unique index into model.acts
-                    act2_uindx = all_acts_by_obj[act2]
+        # from circinus_tools import debug_tools
+        # debug_tools.debug_breakpt()
 
-                    # act list should be sorted
-                    assert(act2.center >= act1.center)
+        # c5
+        model.c5  = pe.ConstraintList()
+        for o in model.obs_windids:
+            for s in model.sat_indcs:
+                t_o = all_act_objs_by_windid[o].center
 
-                    # get the transition time requirement between these activities
-                    try:
-                        transition_time_req = self.act_transition_time_map[("intra-sat",type(act1),type(act2))]
-                    # if not explicitly specified, go with default transition time requirement
-                    except KeyError:
-                        used_default_transition_time = True
-                        transition_time_req = self.act_transition_time_map["default"]
-
-                    # if there is enough transition time between the two activities, no constraint needs to be added
-                    #  note that we are okay even if for some reason Act 2 starts before Act 1 ends, because time deltas return negative total seconds as well
-                    if (act2.start - act1.end).total_seconds() >= transition_time_req:
-                        #  don't need to do anything,  continue on to next activity pair
+                for t_indx,t in enumerate(all_link_times_by_sat_indx[s]):
+                    if not t > t_o:
                         continue
 
-                    else:
+                    # sum of all the dv terms up to time t
+                    dv_sum = 0
 
-                        constr, var_constr_violation, min_constr_violation = gen_inter_act_constraint(
-                            model.var_intra_sat_act_constr_violations,
-                            model.intra_sat_act_constr_bounds,
-                            transition_time_req,
-                            act1,
-                            act2,
-                            act1_uindx,
-                            act2_uindx
-                        )
+                    # if this is the observing sat, account for the data given to the sat by the obs itself
+                    if s == all_act_objs_by_windid[o].sat_indx:
+                        dv_sum += model.var_act_dv_utilization[o]
 
-                        #  add the constraint, regardless of whether or not it's a "big M" constraint, or a constraint violation constraint - they're handled the same
-                        model.c5.add( constr )
+                    # all of the acts that occur on s after obs (t_o) and before t
+                    # note the inequalities here. First inequality - don't count the obs. Second: want v_(s,o,t) to be constrained by what happened previously. If this were an inequality, would say "the dv available at the time of an xlnk/dlnk is limited by dv contributions of all previous xlnks and the dv contribution of THIS XLNK. That's unbounded, could generate infinite dv"
+                    sat_acts_slice = [act for act in sats_acts[s] if (
+                        (type(act) == DlnkWindow or type(act) == XlnkWindow) and
+                        (act.center > t_o and act.center < t)
+                    )]
+                    
+                    for lnk in sat_acts_slice:
+                        if type(lnk) == DlnkWindow:
+                            # we lose dv in a dlnk window
 
-                        #  if it's a constraint violation constraint, then we have a variable to deal with
-                        if not min_constr_violation is None:
-                            min_var_intra_sat_act_constr_violation_list.append(min_constr_violation)
-                            self.intra_sat_act_constr_violation_acts_list.append((act1,act2))
+                            dv_sum -= model.var_act_obs_dv_utilization[lnk.window_ID,o]
+                        elif type(lnk) == XlnkWindow:
+                            # this code won't work if we're assuming symmetric xlnk windows
+                            assert(not lnk.symmetric)
 
+                            # if receiving, we're adding dv in that xlnk window
+                            if lnk.is_rx(s):
+                                dv_sum += model.var_act_obs_dv_utilization[lnk.window_ID,o]
+                            # if transmitting, we're losing dv in that xlnk window
+                            else:
+                                dv_sum -= model.var_act_obs_dv_utilization[lnk.window_ID,o]
 
-        # inter-satellite downlink overlap constraints [9],[10]
-        # model.c9  = pe.ConstraintList() # c10 now holds c9 constraints
-        model.c10  = pe.ConstraintList()
-        model.inter_sat_act_constr_bounds  = pe.ConstraintList()
-        self.inter_sat_act_constr_violation_acts_list = []
-        for sat_indx in range (self.num_sats):
-            num_sat_acts = len(sat_dlnks[sat_indx])
-            
-            for other_sat_indx in range (self.num_sats):
-                if other_sat_indx == sat_indx:
+                    model.c5.add(model.var_sat_obs_time_dv[s,o,t_indx] <= dv_sum)
+
+                    # if s==4 and o == 41 and t_indx == 205:
+                    # if s==4 and o == 64:
+                    #     from circinus_tools import debug_tools
+                    #     debug_tools.debug_breakpt()    
+
+        # c6
+        model.c6  = pe.ConstraintList()
+        for s in model.sat_indcs:
+            for lnk in sats_acts[s]:
+                # verify lnk is actually a link act
+                if not (type(lnk) == DlnkWindow or type(lnk) == XlnkWindow):
                     continue
 
-                num_other_sat_acts = len(sat_dlnks[other_sat_indx])
-
-                for  sat_act_indx in  range (num_sat_acts):
-
-                    act1 = sat_dlnks[sat_indx][sat_act_indx]
-                    # get the unique index into model.acts
-                    act1_uindx = all_acts_by_obj[act1]
+                # this loop handles all observations that a link might be able to route
+                for sat_obs_time_dv_subscript in sat_obs_time_dv_subscripts_by_link_obj[lnk]:
                     
-                    for  other_sat_act_indx in  range (num_other_sat_acts):
-                        act2 = sat_dlnks[other_sat_indx][other_sat_act_indx]
-                        # get the unique index into model.acts
-                        act2_uindx = all_acts_by_obj[act2]
+                    # if receiving, we're not constrained by any dv availability
+                    # need to consider this here because the sat_obs_time_dv_subscripts_by_link_obj mapping holds both tx and rx directions for every link
+                    sat_indx_tmp = sat_obs_time_dv_subscript[0]
+                    if type(lnk) == XlnkWindow: 
+                        # this code won't work if we're assuming symmetric xlnk windows
+                        assert(not lnk.symmetric)
+                        if lnk.is_rx(sat_indx_tmp):
+                                continue
 
-                        assert(type(act1) == DlnkWindow and type(act2) == DlnkWindow)
+                    # quick sanity check that it's the right satellite while we're here
+                    # assert(s == sat_obs_time_dv_subscript[0])
+                    o = sat_obs_time_dv_subscript[1]
+                    model.c6.add( model.var_act_obs_dv_utilization[lnk.window_ID,o] <= model.var_sat_obs_time_dv[sat_obs_time_dv_subscript])
 
-                        # this line is pretty important - only consider overlap if they're looking at the same GS. I forgot to add this before and spent days wondering why the optimization process was progressing so slowly (hint: it's really freaking constrained and there's not much guidance for finding a good objective value if no downlink can overlap in time with any other downlink)
-                        if act1.gs_indx != act2.gs_indx:
-                            continue
-
-                        # we're considering windows across satellites, so they could be out of order temporally. These constraints are only valid if act2 is after act1 (center time). Don't worry, as we loop through satellites, we consider both directions (i.e. act1 and act2 will be swapped in another iteration, and we'll get past this check and impose the required constraints)
-                        if (act2.center - act1.center).total_seconds() < 0:
-                            continue
-
-
-                        # get the transition time requirement between these activities
-                        try:
-                            transition_time_req = self.act_transition_time_map[("inter-sat",DlnkWindow,DlnkWindow)]
-                        # if not explicitly specified, go with default transition time requirement
-                        except KeyError:
-                            used_default_transition_time = True
-                            transition_time_req = self.act_transition_time_map["default"]
-
-                        # if there is enough transition time between the two activities, no constraint needs to be added
-                        #  note that we are okay even if for some reason Act 2 starts before Act 1 ends, because time deltas return negative total seconds as well
-                        if (act2.start - act1.end).total_seconds() >= transition_time_req:
-                            #  don't need to do anything,  continue on to next activity pair
-                            continue
-
-                        else:
-                            constr, var_constr_violation, min_constr_violation = gen_inter_act_constraint(
-                                model.var_inter_sat_act_constr_violations,
-                                model.inter_sat_act_constr_bounds,
-                                transition_time_req,
-                                act1,
-                                act2,
-                                act1_uindx,
-                                act2_uindx
-                            )
-
-                            #  add the constraint, regardless of whether or not it's a "big M" constraint, or a constraint violation constraint - they're handled the same
-                            model.c10.add( constr )
-
-                            #  if it's a constraint violation constraint, then we have a variable to deal with
-                            if not min_constr_violation is None:
-                                # model.var_inter_sat_act_constr_violations.add(var_constr_violation)
-                                min_var_inter_sat_act_constr_violation_list.append(min_constr_violation)
-                                self.inter_sat_act_constr_violation_acts_list.append((act1,act2))
+                    # if lnk.window_ID == 6735:
+                    #     print(model.c6[len(model.c6)].expr.to_string())
+                    # from circinus_tools import debug_tools
+                    # debug_tools.debug_breakpt()
+                    
 
 
-        if verbose:
-            if used_default_transition_time:
-                print('\nWarning: used default transition time for inter- or intra- satellite activity timing constraints\n')
+        # # keep track of this, so we know to warn user about default transition time usage
+        # #  note: this is not a parameter! it's merely helpful for reporting warnings
+        # used_default_transition_time = False
+
+        # def gen_inter_act_constraint(var_list,constr_list,transition_time_req,act1,act2,act1_uindx,act2_uindx):
+
+        #     var_constr_violation = None
+        #     min_constr_violation = None
+
+        #     center_time_diff = (act2.center - act1.center).total_seconds()
+        #     time_adjust_1 = model.par_act_dv[act1_uindx]*model.var_activity_utilization[act1_uindx]/2/act1.ave_data_rate
+        #     time_adjust_2 = model.par_act_dv[act2_uindx]*model.var_activity_utilization[act2_uindx]/2/act2.ave_data_rate
+        #     max_time_adjust_1 = model.par_act_dv[act1_uindx]*1/2/act1.ave_data_rate
+        #     max_time_adjust_2 = model.par_act_dv[act2_uindx]*1/2/act2.ave_data_rate
+
+        #     if not allow_act_timing_constr_violations:
+        #         #  if the activities overlap in center time (including  transition time), then it's not possible to have sufficient transition time between them.  only allow one
+        #         if (act2.center - act1.center).total_seconds() <= transition_time_req:
+        #             constr = model.var_act_indic[act1_uindx]+ model.var_act_indic[act2_uindx] <= 1
+
+        #         # If they don't overlap in center time, but they do overlap to some amount, then we need to constrain their end and start times to be consistent with one another
+        #         else:
+        #             M = max(act1.duration,act2.duration).total_seconds()
+        #             constr_disable_1 = M*(1-model.var_act_indic[act1_uindx])
+        #             constr_disable_2 = M*(1-model.var_act_indic[act2_uindx])
+        
+        #             constr = center_time_diff - time_adjust_1 - time_adjust_2 + constr_disable_1 + constr_disable_2 >= transition_time_req
+
+        #     else:
+        #         # time_adjust_N can go as low as zero, so the constraint violation can be this at its lowest
+        #         min_constr_violation = center_time_diff - max_time_adjust_1 - max_time_adjust_2 - transition_time_req
+
+        #         assert(min_constr_violation < 0)
+
+        #         # deal with adding a variable to represent this constraint violation. ( I hate that I have to do it this way, deep within this function, but it seems like the approach you have to use for dynamically generating variable lists in pyomo, bizarrely. refer to: https://projects.coin-or.org/Coopr/browser/pyomo/trunk/pyomo/core/base/var.py?rev=11067, https://groups.google.com/forum/#!topic/pyomo-forum/modS1VkPxW0
+        #         var_list.add()
+        #         var_constr_violation = var_list[len(var_list)]
+
+        #         #  bounds on range of constraint violation variable
+
+        #         # bound minimum of the constraint violation (where both activities have 1.0 utilization), to keep the problem formulation as tight as possible
+        #         var_constr_violation.setlb(min_constr_violation)
+        #         # want the constraint violation only to go to zero at its maximum, because we don't want to reward times where there is no constraint violation, only penalize
+        #         var_constr_violation.setub(0)
+
+        #         #  the actual time constraint that bounds the constraint violation
+        #         constr = center_time_diff - time_adjust_1 - time_adjust_2 - transition_time_req >= var_constr_violation
+
+        #     return constr, var_constr_violation, min_constr_violation
 
 
-        #  energy constraints [6]
-        model.c6  = pe.ConstraintList()
-        for sat_indx in range (self.num_sats): 
+        # #  intra-satellite activity overlap constraints [4],[5],[5b]
+        # #  well, 5B is activity minimum time duration
+        # # model.c4  = pe.ConstraintList()  # c5 now holds c4 constraints
+        # model.c5  = pe.ConstraintList() # this now contains all of the activity overlap constraints
+        # model.c5b  = pe.ConstraintList()
+        # model.intra_sat_act_constr_bounds  = pe.ConstraintList()
+        # self.intra_sat_act_constr_violation_acts_list = []
+        # for sat_indx in range (self.num_sats):
+        #     num_sat_acts = len(sat_acts[sat_indx])
+        #     for  first_act_indx in  range (num_sat_acts):
 
-            # tp_indx serves as an index into the satellite activity dance cards
-            for tp_indx in model.es_timepoint_indcs:
-                #  constraining first time step to initial energy storage
-                #  continue for loop afterwards because no geq/leq constraints needed for this index
-                if tp_indx == 0:
-                    model.c6.add( model.var_sats_estore[sat_indx,tp_indx] ==  model.par_sats_estore_initial[sat_indx])
-                    continue 
+        #         act1 = sat_acts[sat_indx][first_act_indx]
+        #         # get the unique index into model.acts
+        #         act1_uindx = all_acts_by_obj[act1]
+        #         length_1 = model.par_act_dv[act1_uindx]*model.var_activity_utilization[act1_uindx]/act1.ave_data_rate
+        #         model.c5b.add( length_1 >= model.var_act_indic[act1_uindx] * self.min_act_duration_s[type(act1)])
+                
+        #         for  second_act_indx in  range (first_act_indx+1,num_sat_acts):
+        #             act2 = sat_acts[sat_indx][ second_act_indx]
+        #             # get the unique index into model.acts
+        #             act2_uindx = all_acts_by_obj[act2]
 
-                #  minimum and maximum storage constraints
-                model.c6.add( model.var_sats_estore[sat_indx,tp_indx] >= model.par_sats_estore_min[sat_indx])
-                model.c6.add( model.var_sats_estore[sat_indx,tp_indx] <= model.par_sats_estore_max[sat_indx])
+        #             # act list should be sorted
+        #             assert(act2.center >= act1.center)
 
-                if self.enforce_energy_storage_constr:
-                    # determine activity energy consumption
-                    charging = True
-                    activity_delta_e = 0 
-                    #  get the activities that were active during the time step immediately preceding time point
-                    activities = es_act_dancecards[sat_indx].get_objects_at_ts_pre_tp_indx(tp_indx)
-                    # activities may be none if nothing is happening at timestep, to minimize RAM usage
-                    if activities:
-                        for act in activities:
-                            #  if this is a "standard activity" that we can choose to perform or not
-                            if type(act) in self.standard_activities:
-                                act_uindx = all_acts_by_obj[act]
-                                activity_delta_e += (
-                                    model.par_sats_edot_by_act[sat_indx][self.act_type_map[type(act)]] 
-                                    * model.var_activity_utilization[act_uindx]
-                                    * model.par_resource_delta_t
-                                )
+        #             # get the transition time requirement between these activities
+        #             try:
+        #                 transition_time_req = self.act_transition_time_map[("intra-sat",type(act1),type(act2))]
+        #             # if not explicitly specified, go with default transition time requirement
+        #             except KeyError:
+        #                 used_default_transition_time = True
+        #                 transition_time_req = self.act_transition_time_map["default"]
 
-                            if type(act) == XlnkWindow:
-                                act_uindx = all_acts_by_obj[act]
+        #             # if there is enough transition time between the two activities, no constraint needs to be added
+        #             #  note that we are okay even if for some reason Act 2 starts before Act 1 ends, because time deltas return negative total seconds as well
+        #             if (act2.start - act1.end).total_seconds() >= transition_time_req:
+        #                 #  don't need to do anything,  continue on to next activity pair
+        #                 continue
 
-                                if self.use_symmetric_xlnk_windows:
-                                    xlnk_edot = model.par_sats_edot_by_act[sat_indx]['xlnk-tx']
-                                # note that in the case where we're not using symmetric xlnk windows, both satellites have a copy of each unidirectional window in their list of activity windows, so it'll be added appropriately at each unique sat_indx
-                                else:
-                                    is_rx = act.is_rx(sat_indx)
-                                    if is_rx: 
-                                        xlnk_edot = model.par_sats_edot_by_act[sat_indx]['xlnk-rx']
-                                    else: 
-                                        xlnk_edot = model.par_sats_edot_by_act[sat_indx]['xlnk-tx']
+        #             else:
 
-                                activity_delta_e += (
-                                    xlnk_edot 
-                                    * model.var_activity_utilization[act_uindx]
-                                    * model.par_resource_delta_t
-                                )
+        #                 constr, var_constr_violation, min_constr_violation = gen_inter_act_constraint(
+        #                     model.var_intra_sat_act_constr_violations,
+        #                     model.intra_sat_act_constr_bounds,
+        #                     transition_time_req,
+        #                     act1,
+        #                     act2,
+        #                     act1_uindx,
+        #                     act2_uindx
+        #                 )
 
-                            #  if the satellite is not in sunlight then we can't charge
-                            elif type(act) == EclipseWindow:
-                                charging = False
+        #                 #  add the constraint, regardless of whether or not it's a "big M" constraint, or a constraint violation constraint - they're handled the same
+        #                 model.c5.add( constr )
 
-                    # add in charging energy contribution ( if possible)
-                    charging_delta_e = model.par_sats_edot_by_act[sat_indx]['charging']*model.par_resource_delta_t if charging else 0
-
-                    #  base-level satellite energy usage (not including additional activities)
-                    base_delta_e = model.par_sats_edot_by_act[sat_indx]['base']*model.par_resource_delta_t
-
-                    # maximum bound of energy at current time step based on last time step
-                    model.c6.add( model.var_sats_estore[sat_indx,tp_indx] <= 
-                        model.var_sats_estore[sat_indx,tp_indx-1]
-                        + activity_delta_e
-                        + charging_delta_e
-                        + base_delta_e
-                    )
-
-                    # maximum bound of energy at current time step based on last time step
-                    model.c6.add( model.var_sats_estore[sat_indx,tp_indx] >= 
-                        model.var_sats_estore[sat_indx,tp_indx-1]
-                        + activity_delta_e
-                        + base_delta_e
-                    )
+        #                 #  if it's a constraint violation constraint, then we have a variable to deal with
+        #                 if not min_constr_violation is None:
+        #                     min_var_intra_sat_act_constr_violation_list.append(min_constr_violation)
+        #                     self.intra_sat_act_constr_violation_acts_list.append((act1,act2))
 
 
-        #  data storage constraints [7]
-        model.c7  = pe.ConstraintList()
-        for sat_indx in range (self.num_sats): 
-
-            # tp_indx serves as an index into the satellite data storage dance cards
-            for tp_indx in model.ds_timepoint_indcs:
-
-                # todo: add in an intital data volume value?
-                #  maximum storage constraints
-                model.c7.add( model.var_sats_dstore[sat_indx,tp_indx] <= model.par_sats_dstore_max[sat_indx])
-
-                if self.enforce_data_storage_constr:
-                    routes_storing = ds_route_dancecards[sat_indx][tp_indx]
-
-                    # todo: this may be too slow to use == below. Change it back to >= and use a better approach to extract real data storage values in extract_resource_usage below? Leaving == for now because it means I can use these vars to extract output data usage values
-                    # constrain the minimum data storage at this tp by the amount of data volume being buffered by each route passing through the sat
-                    if routes_storing:
-                        model.c7.add( model.var_sats_dstore[sat_indx,tp_indx] == sum(model.par_dmr_dv[p]*model.var_dmr_utilization[p] for p in routes_storing))
-                    else:
-                        model.c7.add( model.var_sats_dstore[sat_indx,tp_indx] == 0)
-
-
-
-        #  observation latency score factor constraints [8]
-        model.c8  = pe.ConstraintList()
-        for obs_indx in model.obs_acts:
-            dmrs_obs = model.par_dmr_subscrs_by_obs_act[obs_indx]
-
-            #  sort the latency score factors for all the dmrs for this observation in increasing order -  important for constraint construction
-            dmrs_obs.sort(key= lambda p: dmr_latency_sf_by_dmr_indx[p])
-
-            num_dmrs_obs = len(dmrs_obs)
-            #  initial constraint -  score factor for this observation will be equal to zero if no dmrs for this obs were chosen
-            model.c8.add( model.var_dmr_latency_sf_by_obs_indx[obs_indx] <= 0 + self.big_M_lat * sum(model.var_dmr_indic[p] for p in dmrs_obs) )
+        # # inter-satellite downlink overlap constraints [9],[10]
+        # # model.c9  = pe.ConstraintList() # c10 now holds c9 constraints
+        # model.c10  = pe.ConstraintList()
+        # model.inter_sat_act_constr_bounds  = pe.ConstraintList()
+        # self.inter_sat_act_constr_violation_acts_list = []
+        # for sat_indx in range (self.num_sats):
+        #     num_sat_acts = len(sat_dlnks[sat_indx])
             
-            for dmr_obs_indx in range(num_dmrs_obs):
-                #  add constraint that score factor for observation is less than or equal to the score factor for this dmr_obs_indx, plus any big M terms for any dmrs with larger score factors.
-                #  what this does is effectively disable the constraint for the score factor for this dmr_obs_indx if any higher score factor dmrs were chosen 
-                model.c8.add( model.var_dmr_latency_sf_by_obs_indx[obs_indx] <= 
-                    dmr_latency_sf_by_dmr_indx[dmrs_obs[dmr_obs_indx]] + 
-                    self.big_M_lat * sum(model.var_dmr_indic[p] for p in dmrs_obs[dmr_obs_indx+1:num_dmrs_obs]) )
+        #     for other_sat_indx in range (self.num_sats):
+        #         if other_sat_indx == sat_indx:
+        #             continue
 
-                #  note: use model.c8[indx].expr.to_string()  to print out the constraint in a human readable form
-                #                ^ USES BASE 1 INDEXING!!! WTF??
+        #         num_other_sat_acts = len(sat_dlnks[other_sat_indx])
+
+        #         for  sat_act_indx in  range (num_sat_acts):
+
+        #             act1 = sat_dlnks[sat_indx][sat_act_indx]
+        #             # get the unique index into model.acts
+        #             act1_uindx = all_acts_by_obj[act1]
+                    
+        #             for  other_sat_act_indx in  range (num_other_sat_acts):
+        #                 act2 = sat_dlnks[other_sat_indx][other_sat_act_indx]
+        #                 # get the unique index into model.acts
+        #                 act2_uindx = all_acts_by_obj[act2]
+
+        #                 assert(type(act1) == DlnkWindow and type(act2) == DlnkWindow)
+
+        #                 # this line is pretty important - only consider overlap if they're looking at the same GS. I forgot to add this before and spent days wondering why the optimization process was progressing so slowly (hint: it's really freaking constrained and there's not much guidance for finding a good objective value if no downlink can overlap in time with any other downlink)
+        #                 if act1.gs_indx != act2.gs_indx:
+        #                     continue
+
+        #                 # we're considering windows across satellites, so they could be out of order temporally. These constraints are only valid if act2 is after act1 (center time). Don't worry, as we loop through satellites, we consider both directions (i.e. act1 and act2 will be swapped in another iteration, and we'll get past this check and impose the required constraints)
+        #                 if (act2.center - act1.center).total_seconds() < 0:
+        #                     continue
+
+
+        #                 # get the transition time requirement between these activities
+        #                 try:
+        #                     transition_time_req = self.act_transition_time_map[("inter-sat",DlnkWindow,DlnkWindow)]
+        #                 # if not explicitly specified, go with default transition time requirement
+        #                 except KeyError:
+        #                     used_default_transition_time = True
+        #                     transition_time_req = self.act_transition_time_map["default"]
+
+        #                 # if there is enough transition time between the two activities, no constraint needs to be added
+        #                 #  note that we are okay even if for some reason Act 2 starts before Act 1 ends, because time deltas return negative total seconds as well
+        #                 if (act2.start - act1.end).total_seconds() >= transition_time_req:
+        #                     #  don't need to do anything,  continue on to next activity pair
+        #                     continue
+
+        #                 else:
+        #                     constr, var_constr_violation, min_constr_violation = gen_inter_act_constraint(
+        #                         model.var_inter_sat_act_constr_violations,
+        #                         model.inter_sat_act_constr_bounds,
+        #                         transition_time_req,
+        #                         act1,
+        #                         act2,
+        #                         act1_uindx,
+        #                         act2_uindx
+        #                     )
+
+        #                     #  add the constraint, regardless of whether or not it's a "big M" constraint, or a constraint violation constraint - they're handled the same
+        #                     model.c10.add( constr )
+
+        #                     #  if it's a constraint violation constraint, then we have a variable to deal with
+        #                     if not min_constr_violation is None:
+        #                         # model.var_inter_sat_act_constr_violations.add(var_constr_violation)
+        #                         min_var_inter_sat_act_constr_violation_list.append(min_constr_violation)
+        #                         self.inter_sat_act_constr_violation_acts_list.append((act1,act2))
+
+
+        # if verbose:
+        #     if used_default_transition_time:
+        #         print('\nWarning: used default transition time for inter- or intra- satellite activity timing constraints\n')
+
+
+        # #  energy constraints [6]
+        # model.c6  = pe.ConstraintList()
+        # for sat_indx in range (self.num_sats): 
+
+        #     # tp_indx serves as an index into the satellite activity dance cards
+        #     for tp_indx in model.es_timepoint_indcs:
+        #         #  constraining first time step to initial energy storage
+        #         #  continue for loop afterwards because no geq/leq constraints needed for this index
+        #         if tp_indx == 0:
+        #             model.c6.add( model.var_sats_estore[sat_indx,tp_indx] ==  model.par_sats_estore_initial[sat_indx])
+        #             continue 
+
+        #         #  minimum and maximum storage constraints
+        #         model.c6.add( model.var_sats_estore[sat_indx,tp_indx] >= model.par_sats_estore_min[sat_indx])
+        #         model.c6.add( model.var_sats_estore[sat_indx,tp_indx] <= model.par_sats_estore_max[sat_indx])
+
+        #         if self.enforce_energy_storage_constr:
+        #             # determine activity energy consumption
+        #             charging = True
+        #             activity_delta_e = 0 
+        #             #  get the activities that were active during the time step immediately preceding time point
+        #             activities = es_act_dancecards[sat_indx].get_objects_at_ts_pre_tp_indx(tp_indx)
+        #             # activities may be none if nothing is happening at timestep, to minimize RAM usage
+        #             if activities:
+        #                 for act in activities:
+        #                     #  if this is a "standard activity" that we can choose to perform or not
+        #                     if type(act) in self.standard_activities:
+        #                         act_uindx = all_acts_by_obj[act]
+        #                         activity_delta_e += (
+        #                             model.par_sats_edot_by_act[sat_indx][self.act_type_map[type(act)]] 
+        #                             * model.var_activity_utilization[act_uindx]
+        #                             * model.par_resource_delta_t
+        #                         )
+
+        #                     if type(act) == XlnkWindow:
+        #                         act_uindx = all_acts_by_obj[act]
+
+        #                         if self.use_symmetric_xlnk_windows:
+        #                             xlnk_edot = model.par_sats_edot_by_act[sat_indx]['xlnk-tx']
+        #                         # note that in the case where we're not using symmetric xlnk windows, both satellites have a copy of each unidirectional window in their list of activity windows, so it'll be added appropriately at each unique sat_indx
+        #                         else:
+        #                             is_rx = act.is_rx(sat_indx)
+        #                             if is_rx: 
+        #                                 xlnk_edot = model.par_sats_edot_by_act[sat_indx]['xlnk-rx']
+        #                             else: 
+        #                                 xlnk_edot = model.par_sats_edot_by_act[sat_indx]['xlnk-tx']
+
+        #                         activity_delta_e += (
+        #                             xlnk_edot 
+        #                             * model.var_activity_utilization[act_uindx]
+        #                             * model.par_resource_delta_t
+        #                         )
+
+        #                     #  if the satellite is not in sunlight then we can't charge
+        #                     elif type(act) == EclipseWindow:
+        #                         charging = False
+
+        #             # add in charging energy contribution ( if possible)
+        #             charging_delta_e = model.par_sats_edot_by_act[sat_indx]['charging']*model.par_resource_delta_t if charging else 0
+
+        #             #  base-level satellite energy usage (not including additional activities)
+        #             base_delta_e = model.par_sats_edot_by_act[sat_indx]['base']*model.par_resource_delta_t
+
+        #             # maximum bound of energy at current time step based on last time step
+        #             model.c6.add( model.var_sats_estore[sat_indx,tp_indx] <= 
+        #                 model.var_sats_estore[sat_indx,tp_indx-1]
+        #                 + activity_delta_e
+        #                 + charging_delta_e
+        #                 + base_delta_e
+        #             )
+
+        #             # maximum bound of energy at current time step based on last time step
+        #             model.c6.add( model.var_sats_estore[sat_indx,tp_indx] >= 
+        #                 model.var_sats_estore[sat_indx,tp_indx-1]
+        #                 + activity_delta_e
+        #                 + base_delta_e
+        #             )
+
+
+        # #  data storage constraints [7]
+        # model.c7  = pe.ConstraintList()
+        # for sat_indx in range (self.num_sats): 
+
+        #     # tp_indx serves as an index into the satellite data storage dance cards
+        #     for tp_indx in model.ds_timepoint_indcs:
+
+        #         # todo: add in an intital data volume value?
+        #         #  maximum storage constraints
+        #         model.c7.add( model.var_sats_dstore[sat_indx,tp_indx] <= model.par_sats_dstore_max[sat_indx])
+
+        #         if self.enforce_data_storage_constr:
+        #             routes_storing = ds_route_dancecards[sat_indx][tp_indx]
+
+        #             # todo: this may be too slow to use == below. Change it back to >= and use a better approach to extract real data storage values in extract_resource_usage below? Leaving == for now because it means I can use these vars to extract output data usage values
+        #             # constrain the minimum data storage at this tp by the amount of data volume being buffered by each route passing through the sat
+        #             if routes_storing:
+        #                 model.c7.add( model.var_sats_dstore[sat_indx,tp_indx] == sum(model.par_dmr_dv[p]*model.var_dmr_utilization[p] for p in routes_storing))
+        #             else:
+        #                 model.c7.add( model.var_sats_dstore[sat_indx,tp_indx] == 0)
+
+
+
+        # #  observation latency score factor constraints [8]
+        # model.c8  = pe.ConstraintList()
+        # for obs_indx in model.obs_acts:
+        #     dmrs_obs = model.par_dmr_subscrs_by_obs_act[obs_indx]
+
+        #     #  sort the latency score factors for all the dmrs for this observation in increasing order -  important for constraint construction
+        #     dmrs_obs.sort(key= lambda p: dmr_latency_sf_by_dmr_indx[p])
+
+        #     num_dmrs_obs = len(dmrs_obs)
+        #     #  initial constraint -  score factor for this observation will be equal to zero if no dmrs for this obs were chosen
+        #     model.c8.add( model.var_dmr_latency_sf_by_obs_indx[obs_indx] <= 0 + self.big_M_lat * sum(model.var_dmr_indic[p] for p in dmrs_obs) )
+            
+        #     for dmr_obs_indx in range(num_dmrs_obs):
+        #         #  add constraint that score factor for observation is less than or equal to the score factor for this dmr_obs_indx, plus any big M terms for any dmrs with larger score factors.
+        #         #  what this does is effectively disable the constraint for the score factor for this dmr_obs_indx if any higher score factor dmrs were chosen 
+        #         model.c8.add( model.var_dmr_latency_sf_by_obs_indx[obs_indx] <= 
+        #             dmr_latency_sf_by_dmr_indx[dmrs_obs[dmr_obs_indx]] + 
+        #             self.big_M_lat * sum(model.var_dmr_indic[p] for p in dmrs_obs[dmr_obs_indx+1:num_dmrs_obs]) )
+
+        #         #  note: use model.c8[indx].expr.to_string()  to print out the constraint in a human readable form
+        #         #                ^ USES BASE 1 INDEXING!!! WTF??
                 
 
         # from circinus_tools import debug_tools
@@ -702,35 +896,35 @@ class GPActivitySchedulingCoupled():
         ##############################
 
 
-        #  determine which time points to use as "spot checks" on resource margin. These are the points that will be used in the objective function for maximizing resource margin
-        timepoint_spacing = ceil(es_num_timepoints/self.resource_margin_obj_num_timepoints)
-        # need to turn the generator into a list for slicing
-        #  note: have to get the generator again
-        decimated_tp_indcs = list(self.es_time_getter_dc.get_tp_indcs())[::timepoint_spacing]
-        rsrc_norm_f = len(decimated_tp_indcs) * len(model.sats)
+        # #  determine which time points to use as "spot checks" on resource margin. These are the points that will be used in the objective function for maximizing resource margin
+        # timepoint_spacing = ceil(es_num_timepoints/self.resource_margin_obj_num_timepoints)
+        # # need to turn the generator into a list for slicing
+        # #  note: have to get the generator again
+        # decimated_tp_indcs = list(self.es_time_getter_dc.get_tp_indcs())[::timepoint_spacing]
+        # rsrc_norm_f = len(decimated_tp_indcs) * len(model.sats)
 
         def obj_rule(model):
-            total_dv_term = self.obj_weights['obs_dv'] * 1/model.par_total_obs_dv * sum(model.par_dmr_dv[p]*model.var_dmr_utilization[p] for p in model.dmrs) 
-                # + self.obj_weights['route_latency'] * 1/len(model.obs_acts) * sum(dmr_latency_sf_by_dmr_indx[p]*model.var_dmr_utilization[p] for p in model.dmrs)
+            total_dv_term = self.obj_weights['obs_dv'] * 1/model.par_total_obs_dv * sum(model.var_act_dv_utilization[o] for o in model.obs_windids) 
 
-            latency_term = self.obj_weights['route_latency'] * 1/len(model.obs_acts) * sum(model.var_dmr_latency_sf_by_obs_indx[o] for o in model.obs_acts)
+            # latency_term = self.obj_weights['route_latency'] * 1/len(model.obs_acts) * sum(model.var_dmr_latency_sf_by_obs_indx[o] for o in model.obs_acts)
             
-            energy_margin_term = self.obj_weights['energy_storage'] * 1/rsrc_norm_f * sum(model.var_sats_estore[sat_indx,tp_indx]/model.par_sats_estore_max[sat_indx] for tp_indx in decimated_tp_indcs for sat_indx in model.sats)
+            # energy_margin_term = self.obj_weights['energy_storage'] * 1/rsrc_norm_f * sum(model.var_sats_estore[sat_indx,tp_indx]/model.par_sats_estore_max[sat_indx] for tp_indx in decimated_tp_indcs for sat_indx in model.sats)
 
-            if len(min_var_inter_sat_act_constr_violation_list) > 0:
-                inter_sat_act_constr_violations_term = self.obj_weights['inter_sat_act_constr_violations'] * 1/sum(min_var_inter_sat_act_constr_violation_list) * sum(model.var_inter_sat_act_constr_violations[indx] for indx in range(1,len(model.var_inter_sat_act_constr_violations)+1))
-            else:
-                inter_sat_act_constr_violations_term = 0
+            # if len(min_var_inter_sat_act_constr_violation_list) > 0:
+            #     inter_sat_act_constr_violations_term = self.obj_weights['inter_sat_act_constr_violations'] * 1/sum(min_var_inter_sat_act_constr_violation_list) * sum(model.var_inter_sat_act_constr_violations[indx] for indx in range(1,len(model.var_inter_sat_act_constr_violations)+1))
+            # else:
+            #     inter_sat_act_constr_violations_term = 0
 
-            if len(min_var_intra_sat_act_constr_violation_list) > 0:
-                intra_sat_act_constr_violations_term = self.obj_weights['intra_sat_act_constr_violations'] * 1/sum(min_var_intra_sat_act_constr_violation_list) * sum(model.var_intra_sat_act_constr_violations[indx] for indx in range(1,len(model.var_inter_sat_act_constr_violations)+1))
-            else:
-                intra_sat_act_constr_violations_term = 0
+            # if len(min_var_intra_sat_act_constr_violation_list) > 0:
+            #     intra_sat_act_constr_violations_term = self.obj_weights['intra_sat_act_constr_violations'] * 1/sum(min_var_intra_sat_act_constr_violation_list) * sum(model.var_intra_sat_act_constr_violations[indx] for indx in range(1,len(model.var_inter_sat_act_constr_violations)+1))
+            # else:
+            #     intra_sat_act_constr_violations_term = 0
 
             # from circinus_tools import debug_tools
             # debug_tools.debug_breakpt()
 
-            return total_dv_term + latency_term + energy_margin_term - inter_sat_act_constr_violations_term - intra_sat_act_constr_violations_term
+            # return total_dv_term + latency_term + energy_margin_term - inter_sat_act_constr_violations_term - intra_sat_act_constr_violations_term
+            return total_dv_term
             
         model.obj = pe.Objective( rule=obj_rule, sense=pe.maximize )
 
@@ -783,40 +977,56 @@ class GPActivitySchedulingCoupled():
 
     def print_sol(self):
         for v in self.model.component_objects(pe.Var, active=True):
-            if str (v) =='var_activity_utilization': 
+            if str (v) =='var_act_dv_utilization': 
                 print ("Variable",v)
                 varobject = getattr(self.model, str(v))
                 for index in varobject:
                     val  = varobject[index].value
-                    print (" %d %0.3f  %s"%(index, val, self.all_acts_by_indx[index]))
+                    # index is actually a window id
+                    act = self.all_act_objs_by_windid[index]
+                    if type(act) == ObsWindow:
+                        print (" %d %0.3f   %s"%(index, val, act))
 
-            elif str (v) =='var_dmr_utilization': 
+            if str (v) =='var_act_obs_dv_utilization': 
                 print ("Variable",v)
                 varobject = getattr(self.model, str(v))
                 for index in varobject:
                     val  = varobject[index].value
-                    print (" ",index, val)
-            
-            elif str (v) =='var_dmr_indic': 
-                print ("Variable",v)
-                varobject = getattr(self.model, str(v))
-                for index in varobject:
-                    val  = varobject[index].value
-                    print (" ",index, val)
+                    # index is actually a window id
+                    # if type(self.all_act_objs_by_windid[index[0]]) == DlnkWindow:
+                    if val>0.001:
+                        print (" %s %0.3f   %s %s"%(index, val, self.all_act_objs_by_windid[index[1]],self.all_act_objs_by_windid[index[0]]))
 
-            elif str (v) =='var_inter_sat_act_constr_violations': 
-                print ("Variable",v)
-                varobject = getattr(self.model, str(v))
-                for index in varobject:
-                    val  = varobject[index].value
-                    print (" %d %0.3f   %s"%(index, val, self.inter_sat_act_constr_violation_acts_list[index-1]))
 
-            elif str (v) =='var_intra_sat_act_constr_violations': 
+            if str (v) =='var_sat_obs_time_dv': 
+                sorted_var_sat_obs_time_dv = [[] for sat_indx in range(self.num_sats)]
+
                 print ("Variable",v)
                 varobject = getattr(self.model, str(v))
                 for index in varobject:
                     val  = varobject[index].value
-                    print (" %d %0.3f   %s"%(index, val, self.intra_sat_act_constr_violation_acts_list[index-1]))
+
+                    # index is (sat_indx,obs windid, time index)
+                    sat_indx = index[0]
+                    obs_windid = index[1]
+                    time_indx = index[2]
+                    sorted_var_sat_obs_time_dv[sat_indx].append(index)
+
+                    # if sat_indx == 3 and  obs_windid == 41:
+                    #     print (" %s %0.3f   %s"%(index, val, self.time_by_sat_obs_time_dv_subscript[index]))
+
+                for sat_indx in range(self.num_sats):
+                    # sort by time index
+                    sorted_var_sat_obs_time_dv[sat_indx].sort(key= lambda subscr: subscr[2])
+
+                    for index in sorted_var_sat_obs_time_dv[sat_indx]:
+                        val  = varobject[index].value
+                        obs_windid = index[1]
+                        # if sat_indx == 4 and  obs_windid == 41:
+                        if sat_indx == 5:
+                            print (" %s %0.3f   %s"%(index, val, self.time_by_sat_obs_time_dv_subscript[index]))
+
+                    
 
     def extract_utilized_routes( self, copy_routes = True, verbose = False):
         # scheduled_dv
