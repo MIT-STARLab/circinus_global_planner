@@ -112,8 +112,10 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         sat_obs_time_dv_subscripts = []
         # this is the actual time corresponding to the subscript stored in sat_obs_time_dv_subscripts
         time_by_sat_obs_time_dv_subscript = {}
-        # keeps track of the v_(s,o,t) subscripts corresponding to "the start of" a given activity 
+        # keeps track of the v_(s,o,t) subscripts corresponding to dv availability for a given activity (v_(x,o)^-, v_(d,o))
         sat_obs_time_dv_subscripts_by_link_obj = {}
+        # opposite direction of the above - look up link objects by v_(s,o,t) subscript
+        link_objs_by_sat_obs_time_dv_subscripts = {}
 
         # making these sets because xlnks are repeated across xlnk.sat_indx, xlnk.xsat_indx, and want to use same data structure for both dlnks and xlnks
         dlnk_obs_windids = set()
@@ -196,7 +198,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
         all_link_times_link_objs_by_sat_indx_merged = {sat_indx: [] for sat_indx in range(self.num_sats)}  
 
-        # deal with the fact that some activities have pretty much the same center time, and we'd like to merge those into a single timepoint in T_s rather than multiple, to avoid that extra hit in computational complexity
+        # deal with the fact that some activities have pretty much the same center time, and we need to merge those into a single timepoint in T_s rather than multiple. This is necessary because we need to be able to sum together the effects of all links that are overlapping in time, so that we can account for their combined effect in constraints. E.g., the sum of data volume sent out from a satellite over two outgoing, concurrent crosslinks <= available dv before their mutual center time. Note that this is not strictly necessary for when we constrain each satellite to only allow a single activity at a time, but it's good to build this in now so that the underlying model is safer and less able to bug out.
         for sat_indx,time_link_objs_list in all_link_times_link_objs_by_sat_indx.items():
             # grab the first time in the list
             # curr_time = time_link_objs_list[0][0]
@@ -240,6 +242,8 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                             sat_obs_time_subscr = (sat_indx,obs.window_ID,time_index)
                             sat_obs_time_dv_subscripts.append(sat_obs_time_subscr)
                             time_by_sat_obs_time_dv_subscript[sat_obs_time_subscr] = time
+                            link_objs_by_sat_obs_time_dv_subscripts[sat_obs_time_subscr] = link_objs
+                            
                             for link_obj in link_objs:
                                 # if sat_indx ==4 and obs.window_ID == 41 and link_obj.window_ID == 5303:
                                 #     from circinus_tools import debug_tools
@@ -256,7 +260,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
 
 
-        return sats_acts,all_acts_windids,all_obs_windids,all_dlnk_windids,all_xlnk_windids,all_act_objs_by_windid,capacity_by_act_windid,dlnk_obs_windids,xlnk_obs_windids,obs_windids_by_lnk_windid,obs_windids_by_dlnk_windid,obs_windids_by_xlnk_windid,dlnk_windids_by_obs_windid,xlnk_windids_by_obs_windid,all_link_times_by_sat_indx,sat_obs_time_dv_subscripts,time_by_sat_obs_time_dv_subscript,sat_obs_time_dv_subscripts_by_link_obj
+        return sats_acts,all_acts_windids,all_obs_windids,all_dlnk_windids,all_xlnk_windids,all_act_objs_by_windid,capacity_by_act_windid,dlnk_obs_windids,xlnk_obs_windids,obs_windids_by_lnk_windid,obs_windids_by_dlnk_windid,obs_windids_by_xlnk_windid,dlnk_windids_by_obs_windid,xlnk_windids_by_obs_windid,all_link_times_by_sat_indx,sat_obs_time_dv_subscripts,time_by_sat_obs_time_dv_subscript,sat_obs_time_dv_subscripts_by_link_obj,link_objs_by_sat_obs_time_dv_subscripts
 
 
     def make_model ( self,obs_winds,dlnk_winds_flat,xlnk_winds_flat, ecl_winds, verbose = False):
@@ -309,7 +313,8 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                 all_link_times_by_sat_indx,
                 sat_obs_time_dv_subscripts,
                 time_by_sat_obs_time_dv_subscript,
-                sat_obs_time_dv_subscripts_by_link_obj
+                sat_obs_time_dv_subscripts_by_link_obj,
+                link_objs_by_sat_obs_time_dv_subscripts
                  ) = self.get_activity_structs(
                         obs_winds_filt,
                         dlnk_winds_filt,
@@ -587,28 +592,53 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
         # c6
         model.c6  = pe.ConstraintList()
-        for s in model.sat_indcs:
-            for lnk in sats_acts[s]:
+
+        for sat_obs_time_dv_subscript,link_objs in link_objs_by_sat_obs_time_dv_subscripts.items():
+            # sum of all the links with outgoing dv at s,o,t
+            outgoing_dv_sum = 0
+
+            s = sat_obs_time_dv_subscript[0]
+            o = sat_obs_time_dv_subscript[1]
+
+            for lnk in link_objs:
                 # verify lnk is actually a link act
                 if not (type(lnk) == DlnkWindow or type(lnk) == XlnkWindow):
                     continue
 
-                # this loop handles all observations that a link might be able to route
-                for sat_obs_time_dv_subscript in sat_obs_time_dv_subscripts_by_link_obj[lnk]:
-                    
-                    # if receiving, we're not constrained by any dv availability
-                    # need to consider this here because the sat_obs_time_dv_subscripts_by_link_obj mapping holds both tx and rx directions for every link
-                    sat_indx_tmp = sat_obs_time_dv_subscript[0]
-                    if type(lnk) == XlnkWindow: 
-                        # this code won't work if we're assuming symmetric xlnk windows
-                        assert(not lnk.symmetric)
-                        if lnk.is_rx(sat_indx_tmp):
-                                continue
+                # if receiving, we're not constrained by any dv availability
+                # need to consider this here because the link_objs_by_sat_obs_time_dv_subscripts mapping holds both tx and rx directions for every link
+                if type(lnk) == XlnkWindow: 
+                    # this code won't work if we're assuming symmetric xlnk windows
+                    assert(not lnk.symmetric)
+                    if lnk.is_rx(s):
+                        continue # corresponds to for lnk in link_objs loop
 
-                    # quick sanity check that it's the right satellite while we're here
-                    # assert(s == sat_obs_time_dv_subscript[0])
-                    o = sat_obs_time_dv_subscript[1]
-                    model.c6.add( model.var_lnk_obs_dv_utilization[lnk.window_ID,o] <= model.var_sat_obs_time_dv[sat_obs_time_dv_subscript])
+                outgoing_dv_sum += model.var_lnk_obs_dv_utilization[lnk.window_ID,o]
+
+            model.c6.add( outgoing_dv_sum <= model.var_sat_obs_time_dv[sat_obs_time_dv_subscript])
+
+            # old version
+            # for lnk in sats_acts[s]:
+            #     # verify lnk is actually a link act
+            #     if not (type(lnk) == DlnkWindow or type(lnk) == XlnkWindow):
+            #         continue
+
+            #     # this loop handles all observations that a link might be able to route
+            #     for sat_obs_time_dv_subscript in sat_obs_time_dv_subscripts_by_link_obj[lnk]:
+                    
+            #         # if receiving, we're not constrained by any dv availability
+            #         # need to consider this here because the sat_obs_time_dv_subscripts_by_link_obj mapping holds both tx and rx directions for every link
+            #         sat_indx_tmp = sat_obs_time_dv_subscript[0]
+            #         if type(lnk) == XlnkWindow: 
+            #             # this code won't work if we're assuming symmetric xlnk windows
+            #             assert(not lnk.symmetric)
+            #             if lnk.is_rx(sat_indx_tmp):
+            #                     continue
+
+            #         # quick sanity check that it's the right satellite while we're here
+            #         # assert(s == sat_obs_time_dv_subscript[0])
+            #         o = sat_obs_time_dv_subscript[1]
+            #         model.c6.add( model.var_lnk_obs_dv_utilization[lnk.window_ID,o] <= model.var_sat_obs_time_dv[sat_obs_time_dv_subscript])
 
                     # if lnk.window_ID == 6735:
                     #     print(model.c6[len(model.c6)].expr.to_string())
@@ -1064,7 +1094,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                         val  = varobject[index].value
                         obs_windid = index[1]
                         # if sat_indx == 4 and  obs_windid == 41:
-                        if sat_indx == 4 and obs_windid == 64:
+                        if sat_indx == 4 and obs_windid == 41:
                             print (" %s %0.3f   %s"%(index, val, self.time_by_sat_obs_time_dv_subscript[index]))
 
     def fabricate_routes(self):
@@ -1102,9 +1132,9 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                         # sanity check
                         raise RuntimeWarning("Should only find dlnks and xlnks here")
 
-            # sort these now in reverse order, so we favor picking latest links first. This ensures that throughput is grabbed in order
+            # sort these now in order, so we favor picking earliest links first. This ensures that we choose to construct data routes through the hardest-to-reach (earliest) links first
             for lnks_o in lnks_o_by_sat_indx:
-                lnks_o.sort(key= lambda l: l.center,reverse=True)
+                lnks_o.sort(key= lambda l: l.center)
 
             # for each iteration of this loop, we create a new dr
             while remaining_obs_dv > self.dv_epsilon:
@@ -1181,7 +1211,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
 
         for dr in found_routes:
-            dr.validate()
+            dr.validate(time_option='center')
             print(str(dr))
 
         return found_routes, dr_uid

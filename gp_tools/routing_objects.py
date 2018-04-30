@@ -311,7 +311,7 @@ class DataRoute():
             elif type(wind) == XlnkWindow:
                 self.route[windex] = xlnk_winds_dict[wind]
 
-    def validate (self):
+    def validate (self,time_option='start_end'):
         """ validates timing and ordering of route
         
         [description]
@@ -344,7 +344,15 @@ class DataRoute():
             if self.window_start_sats[wind] != next_sat_indx:
                 string = 'routing_objects.py: Found the incorrect sat indx at window indx %d in route. Route string: %s'%( windex, self.get_route_string())
                 raise RuntimeError(string)
-            if not wind.start >= last_time or not wind.end >= last_time:
+            
+            if time_option=='start_end':
+                time_valid = wind.start >= last_time and wind.end >= last_time
+            elif time_option=='center':
+                time_valid = wind.center >= last_time
+            else:
+                raise NotImplementedError
+
+            if not time_valid:
                 string ='routing_objects.py: Found a bad start time at window indx %d in route. Route string: %s'%( windex, self.get_route_string())
                 raise RuntimeError( string)
 
@@ -364,7 +372,11 @@ class DataRoute():
                     string ='routing_objects.py: Found incorrect tx sat at window indx %d in route. Route string: %s'%( windex, self.get_route_string())
                     raise RuntimeError(string)
 
-            last_time = wind.end
+            if time_option=='start_end':
+                last_time = wind.end
+            elif time_option=='center':
+                last_time = wind.center
+
 
     def get_split(self,other):
         """ return the last window in common with other data route
