@@ -129,8 +129,8 @@ class GlobalPlannerRunner:
         routes = gp_as.extract_utilized_routes ( copy_routes = True, verbose  = False)
         energy_usage,data_usage = gp_as.extract_resource_usage(  decimation_factor =1)
 
-        from circinus_tools import debug_tools
-        debug_tools.debug_breakpt()
+        # from circinus_tools import debug_tools
+        # debug_tools.debug_breakpt()
 
         time_elapsed = t_b-t_a
 
@@ -442,6 +442,8 @@ class GlobalPlannerRunner:
             # run coupled route selection/act sched solver (slow, optimal)
             elif run_coupled_rs_as:
                 scheduled_routes,energy_usage,data_usage = self.run_activity_scheduling_coupled(obs_winds,dlnk_winds_flat,xlnk_winds_flat,ecl_winds)
+                # we didn't run RS, so there are no "selected routes", just scheduled
+                sel_routes_by_obs = {}
             else:
                 scheduled_routes,energy_usage,data_usage = ([],None,None)
                 print('No routes were found in route selection; not running activity selection')

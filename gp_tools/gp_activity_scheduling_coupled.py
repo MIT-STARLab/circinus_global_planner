@@ -585,10 +585,6 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                     # note using inequality to reduce computation time (maybe)
                     model.c5.add(model.var_sat_obs_time_dv[s,o,t_indx] == dv_sum)
 
-                    # if s==4 and o == 41 and t_indx == 205:
-                    # if s==4 and o == 64:
-                    #     from circinus_tools import debug_tools
-                    #     debug_tools.debug_breakpt()    
 
         # c6
         model.c6  = pe.ConstraintList()
@@ -617,34 +613,6 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
             model.c6.add( outgoing_dv_sum <= model.var_sat_obs_time_dv[sat_obs_time_dv_subscript])
 
-            # old version
-            # for lnk in sats_acts[s]:
-            #     # verify lnk is actually a link act
-            #     if not (type(lnk) == DlnkWindow or type(lnk) == XlnkWindow):
-            #         continue
-
-            #     # this loop handles all observations that a link might be able to route
-            #     for sat_obs_time_dv_subscript in sat_obs_time_dv_subscripts_by_link_obj[lnk]:
-                    
-            #         # if receiving, we're not constrained by any dv availability
-            #         # need to consider this here because the sat_obs_time_dv_subscripts_by_link_obj mapping holds both tx and rx directions for every link
-            #         sat_indx_tmp = sat_obs_time_dv_subscript[0]
-            #         if type(lnk) == XlnkWindow: 
-            #             # this code won't work if we're assuming symmetric xlnk windows
-            #             assert(not lnk.symmetric)
-            #             if lnk.is_rx(sat_indx_tmp):
-            #                     continue
-
-            #         # quick sanity check that it's the right satellite while we're here
-            #         # assert(s == sat_obs_time_dv_subscript[0])
-            #         o = sat_obs_time_dv_subscript[1]
-            #         model.c6.add( model.var_lnk_obs_dv_utilization[lnk.window_ID,o] <= model.var_sat_obs_time_dv[sat_obs_time_dv_subscript])
-
-                    # if lnk.window_ID == 6735:
-                    #     print(model.c6[len(model.c6)].expr.to_string())
-                    # from circinus_tools import debug_tools
-                    # debug_tools.debug_breakpt()
-                    
 
 
         # # keep track of this, so we know to warn user about default transition time usage
@@ -1220,13 +1188,8 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
     def extract_utilized_routes( self, copy_routes = True, verbose = False):
 
+        # create the basic set of data routes from scheduled windows, dv usage
         data_routes,dr_uid = self.fabricate_routes()
-
-        from circinus_tools import debug_tools
-        debug_tools.debug_breakpt()
-
-        # scheduled_dv
-        scheduled_routes_flat = []
 
         if verbose:
             print ('utilized routes:')
@@ -1239,16 +1202,21 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         #     else:
         #         return route
 
-        # figure out which dmrs were used, and add the scheduled data volume to each
-        for p in self.model.dmrs:
-            if pe.value(self.model.var_dmr_indic[p]) >= 1.0 - self.binary_epsilon:
-                # scheduled_route =  copy_choice (self.routes_flat[p]) 
-                scheduled_route =  self.routes_flat[p]
-                scheduled_route.set_scheduled_dv_frac(pe.value(self.model.var_dmr_utilization[p]))  #* self.model.par_dmr_dv[p])
-                scheduled_routes_flat. append (scheduled_route)
 
-                if verbose:
-                    print(scheduled_route)
+        # the rest of the code expects DataMultiRoute objects, so we'll create these as shallow wrappers around the data routes we just fabricated
+        scheduled_routes_flat = []
+        for dr in data_routes:
+            scheduled_route = DataMultiRoute(dr_uid,[dr],dv_epsilon=self.dv_epsilon)
+            # the dr within is fully utilized (1.0) 
+            scheduled_route.set_scheduled_dv_frac(1.0)
+            scheduled_routes_flat.append(scheduled_route)
+            if verbose:
+                print(scheduled_route)
+                
+            dr_uid+=1
+
+        # the below check code is adapted from gp_activity_scheduling_separate, and might be a bit superfluous...
+        # todo: update the code?
 
         # examine the schedulable data volume for every activity window, checking as we go that the data volume is sufficient for at least the route in which the window is found
         #  note that this code is slightly inefficient because it might duplicate windows across routes. that's fine though, because we're thorough in checking across all routes
@@ -1257,9 +1225,8 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         for dmr in scheduled_routes_flat:
             # wind may get set multiple times due to Windows appearing across routes, but that's not really a big deal
             for wind in dmr.get_winds():
-                act_indx = self.all_acts_by_obj[wind]
-                # wind_sched_dv_check[wind] = wind.data_vol * pe.value(self.model.var_act_indic[act_indx])
-                wind_sched_dv_check[wind] = wind.data_vol * pe.value(self.model.var_activity_utilization[act_indx])
+                # var_act_dv_utilization is a lower bound on how much data volume was used by the window
+                wind_sched_dv_check[wind] = pe.value(self.model.var_act_dv_utilization[wind.window_ID])
                 #  initialize this while we're here
                 wind.scheduled_data_vol = 0
 
@@ -1270,7 +1237,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                 dr.scheduled_dv = dmr.scheduled_dv_by_dr[dr] 
 
 
-        #  now we want to mark the real scheduled data volume for every window. We need to do this separately because the model.var_act_indic continuous variables only give an upper bound on the data volume for an activity. we only actually need to use as much data volume as the data routes want to push through the window
+        #  now we want to mark the real scheduled data volume for every window. we only actually need to use as much data volume as the data routes want to push through the window
         #  add data volume for every route passing through every window
         for dmr in scheduled_routes_flat:
             for wind in dmr.get_winds():
@@ -1282,7 +1249,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         updated_winds = set()
         for dmr in scheduled_routes_flat:
             # validate the data multi route (and in turn, the scheduled data vols of all the data routes under it)
-            dmr.validate()
+            dmr.validate(time_option='center')
 
             for wind in dmr.get_winds():
                 #  this check should be at least as big as the scheduled data volume as calculated from all of the route data volumes. (it's not constrained from above, so it could be bigger)
@@ -1297,6 +1264,9 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         return scheduled_routes_flat
 
     def extract_resource_usage( self, decimation_factor =1, verbose = False):
+
+        # todo: REMOVE!!!!
+        return  None, None
 
         energy_usage = {}
 

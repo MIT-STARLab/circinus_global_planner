@@ -122,71 +122,88 @@ class GPMetrics():
         sched_dvs_by_obs =  {}
         num_sched_obs = 0
         num_rs_obs_dv_not_zero = 0
-        for obs in rs_routes_by_obs.keys ():
-            rs_collectible_dvs_by_obs[obs] = min(obs.data_vol,sum (rt.data_vol for rt in rs_routes_by_obs[obs]))
-            if rs_collectible_dvs_by_obs[obs] > 0:
-                num_rs_obs_dv_not_zero += 1
 
-            # todo: figure out what's up with this
-            cum_dv_dlnkable = 0
-            for rt in rs_routes_by_obs[obs]:
-                dlnk =rt.get_dlnk()
-                dlnk_dv_check.setdefault(dlnk,dlnk.data_vol)
-                dv_dlnkable = min(dlnk_dv_check[dlnk],rt.data_vol)
+        rs_obs = rs_routes_by_obs.keys()
+        obs_to_consider = rs_obs if len(rs_obs)>0 else sched_rts_by_obs.keys()
+        for obs in obs_to_consider:
+            if obs in rs_routes_by_obs.keys():
+                rs_collectible_dvs_by_obs[obs] = min(obs.data_vol,sum (rt.data_vol for rt in rs_routes_by_obs[obs]))
+                if rs_collectible_dvs_by_obs[obs] > 0:
+                    num_rs_obs_dv_not_zero += 1
 
-                cum_dv_dlnkable += dv_dlnkable
-                dlnk_dv_check[dlnk] -= dv_dlnkable
+                cum_dv_dlnkable = 0
+                for rt in rs_routes_by_obs[obs]:
+                    dlnk =rt.get_dlnk()
+                    dlnk_dv_check.setdefault(dlnk,dlnk.data_vol)
+                    dv_dlnkable = min(dlnk_dv_check[dlnk],rt.data_vol)
 
-            rs_collectible_dlnkable_dvs_by_obs[obs] = min(obs.data_vol,cum_dv_dlnkable)
+                    cum_dv_dlnkable += dv_dlnkable
+                    dlnk_dv_check[dlnk] -= dv_dlnkable
 
+                rs_collectible_dlnkable_dvs_by_obs[obs] = min(obs.data_vol,cum_dv_dlnkable)
 
             if obs in sched_rts_by_obs.keys():
                 sched_dvs_by_obs[obs] = sum (rt.scheduled_dv for rt in sched_rts_by_obs[obs])
                 num_sched_obs +=1
-            else:
-                sched_dvs_by_obs[obs] = 0
 
 
         rs_dvs = [dv for dv in rs_collectible_dvs_by_obs. values ()]
         rs_real_dvs = [dv for dv in rs_collectible_dlnkable_dvs_by_obs. values ()]
         sched_dvs = [dv for dv in sched_dvs_by_obs. values ()]
         
-        valid = len(rs_dvs) > 0
+        valid_rs = len(rs_dvs) > 0
+        valid_sched = len(sched_dvs) > 0
 
         stats['num_obs_rs'] = len(rs_dvs)
         stats['num_obs_rs_pos_dv'] = num_rs_obs_dv_not_zero
         stats['num_obs_sched'] = num_sched_obs
-        stats['total_collectible_dv'] = sum(rs_dvs) if valid else 0
-        stats['total_collect&dlnkable_dv'] = sum(rs_real_dvs) if valid else 0
-        stats['total_sched_dv'] = sum(sched_dvs) if valid else 0
-        stats['ave_obs_dv_rs'] = np.mean(rs_dvs) if valid else 0
-        stats['ave_obs_dv_sched'] = np.mean(sched_dvs) if valid else 0
-        stats['std_obs_dv_rs'] = np.std(rs_dvs) if valid else 0
-        stats['std_obs_dv_sched'] = np.std(sched_dvs) if valid else 0
-        stats['min_obs_dv_rs'] = np.min(rs_dvs) if valid else 0
-        stats['min_obs_dv_sched'] = np.min(sched_dvs) if valid else 0
-        stats['max_obs_dv_rs'] = np.max(rs_dvs) if valid else 0
-        stats['max_obs_dv_sched'] = np.max(sched_dvs) if valid else 0
+        stats['total_collectible_dv'] = sum(rs_dvs) if valid_rs else 0
+        stats['total_collect&dlnkable_dv'] = sum(rs_real_dvs) if valid_sched else 0
+        stats['total_sched_dv'] = sum(sched_dvs) if valid_sched else 0
+        stats['ave_obs_dv_rs'] = np.mean(rs_dvs) if valid_rs else 0
+        stats['ave_obs_dv_sched'] = np.mean(sched_dvs) if valid_sched else 0
+        stats['std_obs_dv_rs'] = np.std(rs_dvs) if valid_rs else 0
+        stats['std_obs_dv_sched'] = np.std(sched_dvs) if valid_sched else 0
+        stats['min_obs_dv_rs'] = np.min(rs_dvs) if valid_rs else 0
+        stats['min_obs_dv_sched'] = np.min(sched_dvs) if valid_sched else 0
+        stats['max_obs_dv_rs'] = np.max(rs_dvs) if valid_rs else 0
+        stats['max_obs_dv_sched'] = np.max(sched_dvs) if valid_sched else 0
 
         stats['rs_collectible_dvs_by_obs'] = rs_collectible_dvs_by_obs
 
         if verbose:
             print('------------------------------')
             print('data volume by observation')
-            print("%s: %f"%('num_obs_rs',stats['num_obs_rs']))
-            print("%s: \t\t\t %f"%('num_obs_rs_pos_dv',stats['num_obs_rs_pos_dv']))
-            print("%s: \t\t\t\t %f"%('num_obs_sched',stats['num_obs_sched']))
-            print("%s: \t\t\t %f"%('total_collectible_dv',stats['total_collectible_dv']))
-            print("%s: \t %f"%('total_collect&dlnk_dv (dlnk conf)',stats['total_collect&dlnkable_dv']))
-            print("%s: \t\t\t %f"%('total_sched_dv',stats['total_sched_dv']))
-            print("%s: %f"%('ave_obs_dv_rs',stats['ave_obs_dv_rs']))
-            print("%s: %f"%('std_obs_dv_rs',stats['std_obs_dv_rs']))
-            print("%s: %f"%('min_obs_dv_rs',stats['min_obs_dv_rs']))
-            print("%s: %f"%('max_obs_dv_rs',stats['max_obs_dv_rs']))
-            print("%s: %f"%('ave_obs_dv_sched',stats['ave_obs_dv_sched']))
-            print("%s: %f"%('std_obs_dv_sched',stats['std_obs_dv_sched']))
-            print("%s: %f"%('min_obs_dv_sched',stats['min_obs_dv_sched']))
-            print("%s: %f"%('max_obs_dv_sched',stats['max_obs_dv_sched']))
+
+            if not (valid_rs or valid_sched):
+                print('no routes found, no valid statistics to display')
+                return stats
+
+            if not valid_rs:
+                print('no RS routes found')
+            if not valid_sched:
+                print('no scheduled routes found')
+
+            if valid_rs:
+                print("%s: %f"%('num_obs_rs',stats['num_obs_rs']))
+                print("%s: \t\t\t %f"%('num_obs_rs_pos_dv',stats['num_obs_rs_pos_dv']))
+            if valid_sched:
+                print("%s: \t\t\t\t %f"%('num_obs_sched',stats['num_obs_sched']))
+            if valid_rs:
+                print("%s: \t\t\t %f"%('total_collectible_dv',stats['total_collectible_dv']))
+                print("%s: \t %f"%('total_collect&dlnk_dv (dlnk conf)',stats['total_collect&dlnkable_dv']))
+            if valid_sched:
+                print("%s: \t\t\t %f"%('total_sched_dv',stats['total_sched_dv']))
+            if valid_rs:
+                print("%s: %f"%('ave_obs_dv_rs',stats['ave_obs_dv_rs']))
+                print("%s: %f"%('std_obs_dv_rs',stats['std_obs_dv_rs']))
+                print("%s: %f"%('min_obs_dv_rs',stats['min_obs_dv_rs']))
+                print("%s: %f"%('max_obs_dv_rs',stats['max_obs_dv_rs']))
+            if valid_sched:
+                print("%s: %f"%('ave_obs_dv_sched',stats['ave_obs_dv_sched']))
+                print("%s: %f"%('std_obs_dv_sched',stats['std_obs_dv_sched']))
+                print("%s: %f"%('min_obs_dv_sched',stats['min_obs_dv_sched']))
+                print("%s: %f"%('max_obs_dv_sched',stats['max_obs_dv_sched']))
 
             # for obs, dv in dvs_by_obs.items ():
             #     print("%s: %f"%(obs,dv))
@@ -311,28 +328,28 @@ class GPMetrics():
             )
 
         i_lats_rs = [lat for lat in initial_lat_by_obs_rs. values ()]
-        i_lats = [lat for lat in initial_lat_by_obs. values ()]
-        f_lats = [lat for lat in final_lat_by_obs. values ()]
+        i_lats_sched = [lat for lat in initial_lat_by_obs. values ()]
+        f_lats_sched = [lat for lat in final_lat_by_obs. values ()]
         
-        i_rs_valid = len(i_lats_rs) > 0
-        i_valid = len(i_lats) > 0
-        f_valid = len(f_lats) > 0
+        i_valid_rs = len(i_lats_rs) > 0
+        i_valid_sched = len(i_lats_sched) > 0
+        f_valid_sched = len(f_lats_sched) > 0
 
         # from circinus_tools import debug_tools
         # debug_tools.debug_breakpt()
 
         #  note that if center times are not used  with both the observation and downlink for calculating latency, then the route selection and scheduled the numbers might differ. this is because the scheduled numbers reflect the updated start and end time for the Windows
-        stats['ave_obs_initial_lat_rs'] = np.mean(i_lats_rs) if i_valid else None
-        stats['std_obs_initial_lat_rs'] = np.std(i_lats_rs) if i_valid else None
-        stats['min_obs_initial_lat_rs'] = np.min(i_lats_rs) if i_valid else None
-        stats['max_obs_initial_lat_rs'] = np.max(i_lats_rs) if i_valid else None
-        stats['ave_obs_initial_lat'] = np.mean(i_lats) if i_valid else None
-        stats['std_obs_initial_lat'] = np.std(i_lats) if i_valid else None
-        stats['min_obs_initial_lat'] = np.min(i_lats) if i_valid else None
-        stats['max_obs_initial_lat'] = np.max(i_lats) if i_valid else None
-        stats['ave_obs_final_lat'] = np.mean(f_lats) if f_valid else None
-        stats['min_obs_final_lat'] = np.min(f_lats) if f_valid else None
-        stats['max_obs_final_lat'] = np.max(f_lats) if f_valid else None
+        stats['ave_obs_initial_lat_rs'] = np.mean(i_lats_rs) if i_valid_rs else None
+        stats['std_obs_initial_lat_rs'] = np.std(i_lats_rs) if i_valid_rs else None
+        stats['min_obs_initial_lat_rs'] = np.min(i_lats_rs) if i_valid_rs else None
+        stats['max_obs_initial_lat_rs'] = np.max(i_lats_rs) if i_valid_rs else None
+        stats['ave_obs_initial_lat_sched'] = np.mean(i_lats_sched) if i_valid_sched else None
+        stats['std_obs_initial_lat_sched'] = np.std(i_lats_sched) if i_valid_sched else None
+        stats['min_obs_initial_lat_sched'] = np.min(i_lats_sched) if i_valid_sched else None
+        stats['max_obs_initial_lat_sched'] = np.max(i_lats_sched) if i_valid_sched else None
+        stats['ave_obs_final_lat_sched'] = np.mean(f_lats_sched) if f_valid_sched else None
+        stats['min_obs_final_lat_sched'] = np.min(f_lats_sched) if f_valid_sched else None
+        stats['max_obs_final_lat_sched'] = np.max(f_lats_sched) if f_valid_sched else None
 
         stats['initial_lat_by_obs_rs'] = initial_lat_by_obs_rs
         stats['initial_lat_by_obs'] = initial_lat_by_obs
@@ -342,21 +359,29 @@ class GPMetrics():
             print('------------------------------')
             print('latencies by observation (only considering scheduled obs windows)')
 
-            if not i_rs_valid:
+            if not (i_valid_rs or i_valid_sched):
                 print('no routes found, no valid statistics to display')
                 return stats
 
-            print("%s: \t\t %f"%('ave_obs_initial_lat_rs',stats['ave_obs_initial_lat_rs']))
-            print("%s: \t\t %f"%('std_obs_initial_lat_rs',stats['std_obs_initial_lat_rs']))
-            print("%s: %f"%('min_obs_initial_lat_rs',stats['min_obs_initial_lat_rs']))
-            print("%s: %f"%('max_obs_initial_lat_rs',stats['max_obs_initial_lat_rs']))
-            print("%s: \t\t\t %f"%('ave_obs_initial_lat',stats['ave_obs_initial_lat']))
-            print("%s: \t\t\t %f"%('std_obs_initial_lat',stats['std_obs_initial_lat']))
-            print("%s: %f"%('min_obs_initial_lat',stats['min_obs_initial_lat']))
-            print("%s: %f"%('max_obs_initial_lat',stats['max_obs_initial_lat']))
-            print("%s: %f"%('ave_obs_final_lat',stats['ave_obs_final_lat']))
-            print("%s: %f"%('min_obs_final_lat',stats['min_obs_final_lat']))
-            print("%s: %f"%('max_obs_final_lat',stats['max_obs_final_lat']))
+            if not i_valid_rs:
+                print('no RS routes found')
+            if not i_valid_sched:
+                print('no scheduled routes found')
+
+            if i_valid_rs:
+                print("%s: \t\t %f"%('ave_obs_initial_lat_rs',stats['ave_obs_initial_lat_rs']))
+                print("%s: \t\t %f"%('std_obs_initial_lat_rs',stats['std_obs_initial_lat_rs']))
+                print("%s: %f"%('min_obs_initial_lat_rs',stats['min_obs_initial_lat_rs']))
+                print("%s: %f"%('max_obs_initial_lat_rs',stats['max_obs_initial_lat_rs']))
+
+            if i_valid_sched:
+                print("%s: \t\t\t %f"%('ave_obs_initial_lat_sched',stats['ave_obs_initial_lat_sched']))
+                print("%s: \t\t\t %f"%('std_obs_initial_lat_sched',stats['std_obs_initial_lat_sched']))
+                print("%s: %f"%('min_obs_initial_lat_sched',stats['min_obs_initial_lat_sched']))
+                print("%s: %f"%('max_obs_initial_lat_sched',stats['max_obs_initial_lat_sched']))
+                print("%s: %f"%('ave_obs_final_lat_sched',stats['ave_obs_final_lat_sched']))
+                print("%s: %f"%('min_obs_final_lat_sched',stats['min_obs_final_lat_sched']))
+                print("%s: %f"%('max_obs_final_lat_sched',stats['max_obs_final_lat_sched']))
 
             # for obs in final_lat_by_obs.keys ():
             #     i = initial_lat_by_obs.get(obs,99999.0)
@@ -634,29 +659,29 @@ class GPMetrics():
                             #  break because we shouldn't count additional down links from the same observation ( they aren't delivering updated information)
                             break
 
+        if len(rts_by_obs.keys()) > 0:
+            for targ_indx in range(self.num_targ):
 
-        for targ_indx in range(self.num_targ):
+                targ_ID = self.all_targ_IDs[targ_indx]
 
-            targ_ID = self.all_targ_IDs[targ_indx]
+                # skip explicitly ignored targets
+                if targ_ID in  self.targ_id_ignore_list:
+                    continue
 
-            # skip explicitly ignored targets
-            if targ_ID in  self.targ_id_ignore_list:
-                continue
+                dlnk_obs_times_mat_targ = dlnk_obs_times_mat[targ_indx]
 
-            dlnk_obs_times_mat_targ = dlnk_obs_times_mat[targ_indx]
+                if not include_routing:
+                    dlnk_obs_times_mat_targ.sort(key=lambda row: row[1])  # sort by creation time
 
-            if not include_routing:
-                dlnk_obs_times_mat_targ.sort(key=lambda row: row[1])  # sort by creation time
+                    av_aoi,aoi_curve = self.get_av_aoi_no_routing(dlnk_obs_times_mat_targ, self.met_obs_start_dt, self.met_obs_end_dt,aoi_units=self.aoi_units,aoi_plot_t_units=self.aoi_plot_t_units)
 
-                av_aoi,aoi_curve = self.get_av_aoi_no_routing(dlnk_obs_times_mat_targ, self.met_obs_start_dt, self.met_obs_end_dt,aoi_units=self.aoi_units,aoi_plot_t_units=self.aoi_plot_t_units)
+                else:
+                    dlnk_obs_times_mat_targ.sort(key=lambda row: row[0])  # sort by downlink time
 
-            else:
-                dlnk_obs_times_mat_targ.sort(key=lambda row: row[0])  # sort by downlink time
-
-                av_aoi,aoi_curve = self.get_av_aoi_routing(dlnk_obs_times_mat_targ,  self.met_obs_start_dt,self.met_obs_end_dt,self.dlnk_same_time_slop_s,aoi_units=self.aoi_units,aoi_plot_t_units=self.aoi_plot_t_units)
-            
-            av_aoi_by_targID[targ_ID] = av_aoi
-            aoi_curves_by_targID[targ_ID] = aoi_curve
+                    av_aoi,aoi_curve = self.get_av_aoi_routing(dlnk_obs_times_mat_targ,  self.met_obs_start_dt,self.met_obs_end_dt,self.dlnk_same_time_slop_s,aoi_units=self.aoi_units,aoi_plot_t_units=self.aoi_plot_t_units)
+                
+                av_aoi_by_targID[targ_ID] = av_aoi
+                aoi_curves_by_targID[targ_ID] = aoi_curve
 
         return av_aoi_by_targID,aoi_curves_by_targID
 
@@ -672,21 +697,23 @@ class GPMetrics():
         av_aoi_by_targID_rs,aoi_curves_by_targID_rs = self.preprocess_and_get_aoi(rs_routes_by_obs,include_routing,dv_option='possible_dv')
         av_aoi_by_targID_sched,aoi_curves_by_targID_sched = self.preprocess_and_get_aoi(sched_rts_by_obs,include_routing,dv_option='scheduled_dv')
 
-        valid = len(av_aoi_by_targID_rs) > 0
+        valid_rs = len(av_aoi_by_targID_rs.keys()) > 0
+        valid_sched = len(av_aoi_by_targID_sched.keys()) > 0
 
         stats =  {}
         av_aoi_vals_rs = [av_aoi for targID,av_aoi in av_aoi_by_targID_rs.items() if targID in rs_targIDs_found]
-        av_aoi_vals_sched = [av_aoi for targID,av_aoi in av_aoi_by_targID_sched.items() if targID in rs_targIDs_found]
-        stats['av_av_aoi_rs'] = np.mean(av_aoi_vals_rs) if valid else None
-        stats['av_av_aoi_sched'] = np.mean(av_aoi_vals_sched) if valid else None
-        stats['std_av_aoi_rs'] = np.std(av_aoi_vals_rs) if valid else None
-        stats['std_av_aoi_sched'] = np.std(av_aoi_vals_sched) if valid else None
-        stats['min_av_aoi_rs'] = np.min(av_aoi_vals_rs) if valid else None
-        stats['min_av_aoi_sched'] = np.min(av_aoi_vals_sched) if valid else None
-        stats['max_av_aoi_rs'] = np.max(av_aoi_vals_rs) if valid else None
-        stats['max_av_aoi_sched'] = np.max(av_aoi_vals_sched) if valid else None
+        av_aoi_vals_sched = [av_aoi for targID,av_aoi in av_aoi_by_targID_sched.items() if targID in as_targIDs_found]
+        stats['av_av_aoi_rs'] = np.mean(av_aoi_vals_rs) if valid_rs else None
+        stats['av_av_aoi_sched'] = np.mean(av_aoi_vals_sched) if valid_sched else None
+        stats['std_av_aoi_rs'] = np.std(av_aoi_vals_rs) if valid_rs else None
+        stats['std_av_aoi_sched'] = np.std(av_aoi_vals_sched) if valid_sched else None
+        stats['min_av_aoi_rs'] = np.min(av_aoi_vals_rs) if valid_rs else None
+        stats['min_av_aoi_sched'] = np.min(av_aoi_vals_sched) if valid_sched else None
+        stats['max_av_aoi_rs'] = np.max(av_aoi_vals_rs) if valid_rs else None
+        stats['max_av_aoi_sched'] = np.max(av_aoi_vals_sched) if valid_sched else None
 
         stats['rs_targIDs_found'] = rs_targIDs_found
+        stats['as_targIDs_found'] = as_targIDs_found
         stats['av_aoi_by_targID_rs'] = av_aoi_by_targID_rs
         stats['av_aoi_by_targID_sched'] = av_aoi_by_targID_sched
         stats['aoi_curves_by_targID_rs'] = aoi_curves_by_targID_rs
@@ -695,16 +722,28 @@ class GPMetrics():
         if verbose:
             print('------------------------------')
             print('AoI values (considering all obs windows from RS)')
-            print('num rs targ IDs: %d'%(len(rs_targIDs_found)))
-            print('num as targ IDs: %d'%(len(as_targIDs_found)))
-            print("%s: \t\t\t\t %f"%('av_av_aoi_rs',stats['av_av_aoi_rs']))
-            print("%s: %f"%('std_av_aoi_rs',stats['std_av_aoi_rs']))
-            print("%s: %f"%('min_av_aoi_rs',stats['min_av_aoi_rs']))
-            print("%s: %f"%('max_av_aoi_rs',stats['max_av_aoi_rs']))
-            print("%s: \t\t\t %f"%('av_av_aoi_sched',stats['av_av_aoi_sched']))
-            print("%s: %f"%('std_av_aoi_sched',stats['std_av_aoi_sched']))
-            print("%s: %f"%('min_av_aoi_sched',stats['min_av_aoi_sched']))
-            print("%s: %f"%('max_av_aoi_sched',stats['max_av_aoi_sched']))
+
+            if not (valid_rs or valid_sched):
+                print('no routes found, no valid statistics to display')
+                return stats
+
+            if not valid_rs:
+                print('no RS routes found')
+            if not valid_sched:
+                print('no scheduled routes found')
+
+            if valid_rs:
+                print('num rs targ IDs: %d'%(len(rs_targIDs_found)))
+                print("%s: \t\t\t\t %f"%('av_av_aoi_rs',stats['av_av_aoi_rs']))
+                print("%s: %f"%('std_av_aoi_rs',stats['std_av_aoi_rs']))
+                print("%s: %f"%('min_av_aoi_rs',stats['min_av_aoi_rs']))
+                print("%s: %f"%('max_av_aoi_rs',stats['max_av_aoi_rs']))
+            if valid_sched:
+                print('num as targ IDs: %d'%(len(as_targIDs_found)))
+                print("%s: \t\t\t %f"%('av_av_aoi_sched',stats['av_av_aoi_sched']))
+                print("%s: %f"%('std_av_aoi_sched',stats['std_av_aoi_sched']))
+                print("%s: %f"%('min_av_aoi_sched',stats['min_av_aoi_sched']))
+                print("%s: %f"%('max_av_aoi_sched',stats['max_av_aoi_sched']))
 
             # for targ_ID in av_aoi_by_targID.keys ():
             #     avaoi = av_aoi_by_targID.get(targ_ID,None)

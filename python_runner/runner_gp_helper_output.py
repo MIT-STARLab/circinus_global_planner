@@ -19,6 +19,8 @@ def calc_activity_scheduling_results ( gp_runner_inst,obs_winds,dlnk_winds_flat,
 
     print('------------------------------')
     print('in scheduling window:')
+    if len(rs_routes_by_obs.keys()) == 0:
+        print('no RS routes found')
     print('len(rs_output_routes)')
     print(len(rs_output_routes))
     print('len(sched_routes)')
@@ -53,6 +55,7 @@ def calc_activity_scheduling_results ( gp_runner_inst,obs_winds,dlnk_winds_flat,
 
     plot_outputs = {}
     plot_outputs['rs_targIDs_found'] = aoi_targ_stats['rs_targIDs_found']
+    plot_outputs['as_targIDs_found'] = aoi_targ_stats['as_targIDs_found']
     plot_outputs['obs_aoi_curves_by_targID'] = aoi_targ_stats['aoi_curves_by_targID_sched']
     plot_outputs['obs_aoi_curves_by_targID'] = aoi_targ_stats['aoi_curves_by_targID_sched']
     plot_outputs['initial_lat_by_obs_rs'] = lat_obs_stats['initial_lat_by_obs_rs']
@@ -264,7 +267,8 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
         fig_name='plots/test_data.pdf'
     )
 
-    found_targIDs = metrics_plot_inputs['rs_targIDs_found']
+    # found_targIDs = metrics_plot_inputs['rs_targIDs_found']
+    found_targIDs = metrics_plot_inputs['as_targIDs_found']
     # targs_to_include = [targ['id'] for targ in gp_runner_inst.obs_params['targets']]
     # targs_to_include = [0,3,4,7,8]
     # targs_to_include = range(15)

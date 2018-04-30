@@ -110,7 +110,7 @@ class DataMultiRoute():
     def __repr__(self):
         return  '(DataMultiRoute %d, routes: %s)'%(self.ID,{dr.ID: self.data_vol_by_dr[dr] for dr in self.data_routes})
 
-    def validate (self):
+    def validate (self,time_option='start_end'):
 
         # todo: remove this hack! It's for dealing with already-pickled RS outputs
         try:
@@ -120,7 +120,7 @@ class DataMultiRoute():
 
         for dr in self.data_routes:
             #  validate the data routes individually - this checks for temporal and data volume consistency within those routes
-            dr.validate()
+            dr.validate(time_option)
             #  validate that they all have the same initial observation and the same final downlink
             assert(dr.get_obs() == self.get_obs())
             assert(dr.get_dlnk() == self.get_dlnk())
