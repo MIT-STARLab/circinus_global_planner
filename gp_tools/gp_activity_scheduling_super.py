@@ -36,6 +36,8 @@ class GPActivityScheduling():
         sat_params = gp_params['gp_orbit_prop_params']['sat_params']
         as_params = gp_params['gp_general_params']['activity_scheduling_params']
         gp_inst_params = gp_params['gp_instance_params']['planning_params']
+
+        self.scenario_timestep_s = scenario_params['timestep_s']
         
         self.latency_params = gp_params['gp_general_params']['other_params']['latency_calculation']
         self.solver_name =as_params['solver_name']

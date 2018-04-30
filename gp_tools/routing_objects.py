@@ -212,8 +212,9 @@ class DataRoute():
         #  the amount of capacity on the path that actually ends up scheduled for usage
         self.scheduled_dv = const.UNASSIGNED
 
-        self.sort_windows()   
+        # self.sort_windows()   
 
+        # The data route is allowed to push through obs_dv * obs_dv_multiplier total throughput. While there is not actually more observation data volume available to route then is present in the observation window, we can still allow the route to be larger. This is used as a bit of a hack in route selection v2. The very first data route on the observing sat is marked as having more dv capacity than the obs actually has, so that it can be used to fork a multitude of routes through crosslinks that, when put together, provide more total throughput than the obs. This helps add more potential routability for any given obs, and was added as a fix for the situation where two observations would like to arrive at a single destination sat, but they're close enough together in time that almost all of the xlnk windows in their data routes from RS will overlap. If those xlnks carry more than the obs dv, then AS can select different subsets of xlnk windows for each obs. 
         self.obs_dv_multiplier = obs_dv_multiplier
 
         self.dv_epsilon = dv_epsilon

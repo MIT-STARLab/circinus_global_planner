@@ -184,6 +184,10 @@ class XlnkWindow(CommWindow):
 
         super(XlnkWindow, self).__init__(start, end, window_ID)
 
+    @property
+    def rx_sat(self):
+        return self.sat_indx if self.sat_indx != self.tx_sat else self.xsat_indx
+
     def print_self(self,  print_data_vol = True):
         print('XlnkWindow')
         print('sat_indx: ' + str(self.sat_indx))

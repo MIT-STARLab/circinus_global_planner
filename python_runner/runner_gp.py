@@ -124,13 +124,13 @@ class GlobalPlannerRunner:
         t_b = time.time()
         gp_as.print_sol ()
 
-        from circinus_tools import debug_tools
-        debug_tools.debug_breakpt()
-
         print('extract_routes')
         #  make a copy of the windows in the extracted routes so we don't mess with the original objects ( just to be extra careful)
         routes = gp_as.extract_utilized_routes ( copy_routes = True, verbose  = False)
         energy_usage,data_usage = gp_as.extract_resource_usage(  decimation_factor =1)
+
+        from circinus_tools import debug_tools
+        debug_tools.debug_breakpt()
 
         time_elapsed = t_b-t_a
 
