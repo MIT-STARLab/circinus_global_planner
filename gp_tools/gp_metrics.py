@@ -313,12 +313,24 @@ class GPMetrics():
 
             #  figure out the latency for the first route that got downlinked.
             # sanity check that its scheduled data volume meets the minimum requirement
-            assert(rts[0].scheduled_dv >= self.min_as_route_dv - self.min_as_obs_dv_slop)
-            initial_lat_by_obs[obs] = rts[0].get_latency(
-                'minutes',
-                obs_option = self.latency_params['obs'], 
-                dlnk_option = self.latency_params['dlnk']
-            )
+            # assert(rts[0].scheduled_dv >= self.min_as_route_dv - self.min_as_obs_dv_slop)
+
+            #  figure out the latency for the initial minimum DV downlink
+            #  have to accumulate data volume because route selection minimum data volume might be less than that for activity scheduling
+            cum_dv = 0
+            for dr in rts:
+                cum_dv += dr.data_vol
+                
+                #  if we have reached our minimum required data volume amount to deem the observation downlinked for the purposes of latency calculation...
+                if cum_dv >= self.min_as_route_dv - self.min_as_obs_dv_slop :
+                    initial_lat_by_obs[obs] = rts[0].get_latency(
+                        'minutes',
+                        obs_option = self.latency_params['obs'], 
+                        dlnk_option = self.latency_params['dlnk']
+                    )
+
+                    #  break so that we don't continue considering the rest of the data volume
+                    break
 
             # figure out the latency for downlink of all observation data that we chose to downlink
             final_lat_by_obs[obs] = rts[-1].get_latency(

@@ -121,10 +121,56 @@ class GPActivityScheduling():
         # this big M should be twice as large as any activity data volume 
         self.big_M_act_dv = 200000 # in Mb
 
-    def get_planning_horizon(self):
-        end_dt_obs
-        end_dt_xlnk
-        end_dt_dlnk
+    def gen_inter_act_constraint(self,var_list,constr_list,transition_time_req,model_objs_act1,model_objs_act2,allow_act_timing_constr_violations):
+
+            var_constr_violation = None
+            min_constr_violation = None
+
+            act1 = model_objs_act1['act_object']
+            act2 = model_objs_act2['act_object']
+
+            center_time_diff = (act2.center - act1.center).total_seconds()
+            # var is a variable, the amount of dv used for the link
+            time_adjust_1 = model_objs_act1['var_dv_utilization']/2/act1.ave_data_rate
+            time_adjust_2 = model_objs_act2['var_dv_utilization']/2/act2.ave_data_rate
+            # par is a parameter
+            max_time_adjust_1 = model_objs_act1['par_dv_capacity']*1/2/act1.ave_data_rate
+            max_time_adjust_2 = model_objs_act2['par_dv_capacity']*1/2/act2.ave_data_rate
+
+            if not allow_act_timing_constr_violations:
+                #  if the activities overlap in center time (including  transition time), then it's not possible to have sufficient transition time between them.  only allow one
+                if (act2.center - act1.center).total_seconds() <= transition_time_req:
+                    constr = model_objs_act1['var_act_indic']+ model_objs_act2['var_act_indic'] <= 1
+
+                # If they don't overlap in center time, but they do overlap to some amount, then we need to constrain their end and start times to be consistent with one another
+                else:
+                    M = max(act1.duration,act2.duration).total_seconds()
+                    constr_disable_1 = M*(1-model_objs_act1['var_act_indic'])
+                    constr_disable_2 = M*(1-model_objs_act2['var_act_indic'])
+        
+                    constr = center_time_diff - time_adjust_1 - time_adjust_2 + constr_disable_1 + constr_disable_2 >= transition_time_req
+
+            else:
+                # time_adjust_N can go as low as zero, so the constraint violation can be this at its lowest
+                min_constr_violation = center_time_diff - max_time_adjust_1 - max_time_adjust_2 - transition_time_req
+
+                assert(min_constr_violation < 0)
+
+                # deal with adding a variable to represent this constraint violation. ( I hate that I have to do it this way, deep within this function, but it seems like the approach you have to use for dynamically generating variable lists in pyomo, bizarrely. refer to: https://projects.coin-or.org/Coopr/browser/pyomo/trunk/pyomo/core/base/var.py?rev=11067, https://groups.google.com/forum/#!topic/pyomo-forum/modS1VkPxW0
+                var_list.add()
+                var_constr_violation = var_list[len(var_list)]
+
+                #  bounds on range of constraint violation variable
+
+                # bound minimum of the constraint violation (where both activities have 1.0 utilization), to keep the problem formulation as tight as possible
+                var_constr_violation.setlb(min_constr_violation)
+                # want the constraint violation only to go to zero at its maximum, because we don't want to reward times where there is no constraint violation, only penalize
+                var_constr_violation.setub(0)
+
+                #  the actual time constraint that bounds the constraint violation
+                constr = center_time_diff - time_adjust_1 - time_adjust_2 - transition_time_req >= var_constr_violation
+
+            return constr, var_constr_violation, min_constr_violation
 
 
     def solve(self):
