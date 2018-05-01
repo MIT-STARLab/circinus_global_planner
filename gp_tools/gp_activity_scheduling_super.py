@@ -121,7 +121,9 @@ class GPActivityScheduling():
         # this big M should be twice as large as any activity data volume 
         self.big_M_act_dv = 200000 # in Mb
 
-    def gen_inter_act_constraint(self,var_list,constr_list,transition_time_req,model_objs_act1,model_objs_act2,allow_act_timing_constr_violations):
+        self.allow_act_timing_constr_violations = False
+
+    def gen_inter_act_constraint(self,var_list,constr_list,transition_time_req,model_objs_act1,model_objs_act2):
 
             var_constr_violation = None
             min_constr_violation = None
@@ -137,7 +139,7 @@ class GPActivityScheduling():
             max_time_adjust_1 = model_objs_act1['par_dv_capacity']*1/2/act1.ave_data_rate
             max_time_adjust_2 = model_objs_act2['par_dv_capacity']*1/2/act2.ave_data_rate
 
-            if not allow_act_timing_constr_violations:
+            if not self.allow_act_timing_constr_violations:
                 #  if the activities overlap in center time (including  transition time), then it's not possible to have sufficient transition time between them.  only allow one
                 if (act2.center - act1.center).total_seconds() <= transition_time_req:
                     constr = model_objs_act1['var_act_indic']+ model_objs_act2['var_act_indic'] <= 1
@@ -171,6 +173,64 @@ class GPActivityScheduling():
                 constr = center_time_diff - time_adjust_1 - time_adjust_2 - transition_time_req >= var_constr_violation
 
             return constr, var_constr_violation, min_constr_violation
+
+
+    def gen_intra_sat_act_overlap_constraints(self,c_overlap,c_duration,sats_acts,act_model_objs_getter,constraint_violation_model_objs):
+
+        intra_sat_act_constr_violation_acts_list = constraint_violation_model_objs['intra_sat_act_constr_violation_acts_list']
+        var_intra_sat_act_constr_violations = constraint_violation_model_objs['var_intra_sat_act_constr_violations']
+        intra_sat_act_constr_bounds = constraint_violation_model_objs['intra_sat_act_constr_bounds']
+        min_var_intra_sat_act_constr_violation_list = constraint_violation_model_objs['min_var_intra_sat_act_constr_violation_list']
+
+        for sat_indx in range (self.num_sats):
+            num_sat_acts = len(sats_acts[sat_indx])
+            for  first_act_indx in  range (num_sat_acts):
+                act1 = sats_acts[sat_indx][first_act_indx]
+                # note: generally a function from the AS subclass
+                model_objs_act1 = act_model_objs_getter(act1)
+
+                length_1 = model_objs_act1['var_dv_utilization']/act1.ave_data_rate
+                c_duration.add( length_1 >= model_objs_act1['var_act_indic'] * self.min_act_duration_s[type(act1)])
+                
+                for  second_act_indx in  range (first_act_indx+1,num_sat_acts):
+                    act2 = sats_acts[sat_indx][second_act_indx]
+
+                    # act list should be sorted
+                    assert(act2.center >= act1.center)
+
+                    # get the transition time requirement between these activities
+                    try:
+                        transition_time_req = self.act_transition_time_map[("intra-sat",type(act1),type(act2))]
+                    # if not explicitly specified, go with default transition time requirement
+                    except KeyError:
+                        used_default_transition_time = True
+                        transition_time_req = self.act_transition_time_map["default"]
+
+                    # if there is enough transition time between the two activities, no constraint needs to be added
+                    #  note that we are okay even if for some reason Act 2 starts before Act 1 ends, because time deltas return negative total seconds as well
+                    if (act2.start - act1.end).total_seconds() >= transition_time_req:
+                        #  don't need to do anything,  continue on to next activity pair
+                        continue
+
+                    else:
+                        # note: generally a function from the AS subclass
+                        model_objs_act2 = act_model_objs_getter(act2)
+
+                        constr, var_constr_violation, min_constr_violation = self.gen_inter_act_constraint(
+                            var_intra_sat_act_constr_violations,
+                            intra_sat_act_constr_bounds,
+                            transition_time_req,
+                            model_objs_act1,
+                            model_objs_act2
+                        )
+
+                        #  add the constraint, regardless of whether or not it's a "big M" constraint, or a constraint violation constraint - they're handled the same
+                        c_overlap.add( constr )
+
+                        #  if it's a constraint violation constraint, then we have a variable to deal with
+                        if not min_constr_violation is None:
+                            min_var_intra_sat_act_constr_violation_list.append(min_constr_violation)
+                            intra_sat_act_constr_violation_acts_list.append((act1,act2))
 
 
     def solve(self):

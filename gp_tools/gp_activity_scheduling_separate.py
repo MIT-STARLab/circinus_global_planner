@@ -89,6 +89,17 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
         return stats
 
+    def get_act_model_objs(self,act):
+
+        model_objs_act = {
+            'act_object': act,
+            'var_dv_utilization': self.model.var_activity_utilization[act.window_ID]*self.model.par_act_capacity[act.window_ID],
+            'par_dv_capacity': self.model.par_act_capacity[act.window_ID],
+            'var_act_indic': self.model.var_act_indic[act.window_ID],
+        }
+
+        return model_objs_act
+
     def get_activity_structs( self,routes_flat):
 
         #  all activities are uniquely indexed. these structures keep track of those, and the mapping to activity objects
@@ -108,7 +119,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         dv_by_obs_act_windid = {}
         dv_by_act_windid = {}
 
-        sat_acts = [[] for sat_indx in range (self.num_sats)]
+        sats_acts = [[] for sat_indx in range (self.num_sats)]
         sat_dlnks = [[] for sat_indx in range (self.num_sats)]
 
         for dmr_indx, dmr in enumerate (routes_flat):
@@ -127,7 +138,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
                     # also need to add it to the list and dictionary for observations
                     if type(act) == ObsWindow:
-                        sat_acts[act.sat_indx].append(act)
+                        sats_acts[act.sat_indx].append(act)
                         obs_act_windids.append(act_windid)
                         dmr_indcs_by_obs_act_windid[act_windid] = []
                         dmr_indcs_by_obs_act_windid[act_windid].append (dmr_indx)
@@ -139,7 +150,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                         dmr_indcs_by_link_act_windid[act_windid] = []
                         dmr_indcs_by_link_act_windid[act_windid].append (dmr_indx)
                         dv_by_link_act_windid[act_windid] = act.data_vol
-                        sat_acts[act.sat_indx].append(act)
+                        sats_acts[act.sat_indx].append(act)
                         # grab the dlnks for each sat too, while we're looping through
                         sat_dlnks[act.sat_indx].append(act)
 
@@ -148,8 +159,8 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                         dmr_indcs_by_link_act_windid[act_windid] = []
                         dmr_indcs_by_link_act_windid[act_windid].append (dmr_indx)
                         dv_by_link_act_windid[act_windid] = act.data_vol
-                        sat_acts[act.sat_indx].append(act)
-                        sat_acts[act.xsat_indx].append(act)
+                        sats_acts[act.sat_indx].append(act)
+                        sats_acts[act.xsat_indx].append(act)
 
                 #  if we have already seen the activity,  then just need to update the appropriate structures
                 else:
@@ -167,10 +178,10 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
         #  sort the activities, because we'll need that for constructing constraints
         for sat_indx in range (self.num_sats):
-            sat_acts[sat_indx].sort(key=lambda x: x.center)
+            sats_acts[sat_indx].sort(key=lambda x: x.center)
             sat_dlnks[sat_indx].sort(key=lambda x: x.center)
 
-        return sat_acts,sat_dlnks,all_acts_windids,dmr_indcs_by_act_windid,dv_by_act_windid,all_act_windids_by_obj,all_acts_by_windid,obs_act_windids,dmr_indcs_by_obs_act_windid,dv_by_obs_act_windid,link_act_windids,dmr_indcs_by_link_act_windid,dv_by_link_act_windid
+        return sats_acts,sat_dlnks,all_acts_windids,dmr_indcs_by_act_windid,dv_by_act_windid,all_act_windids_by_obj,all_acts_by_windid,obs_act_windids,dmr_indcs_by_obs_act_windid,dv_by_obs_act_windid,link_act_windids,dmr_indcs_by_link_act_windid,dv_by_link_act_windid
                     
 
     def filter_routes( self,routes_flat):
@@ -222,6 +233,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         # important assumption: all activity window IDs are unique!
 
         model = pe.ConcreteModel()
+        self.model = model
 
         # filter the routes to make sure that  none of their activities fall outside the scheduling window
         routes_flat = self.filter_routes(routes_flat)
@@ -242,7 +254,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         ##############################
 
         try:
-            (sat_acts,
+            (sats_acts,
                 sat_dlnks,
                 all_acts_windids,
                 dmr_indcs_by_act_windid,
@@ -271,7 +283,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             es_act_dancecards = [Dancecard(self.planning_start_dt,self.planning_end_dt,self.resource_delta_t_s,item_init=None,mode='timestep') for sat_indx in range (self.num_sats)]
             
             for sat_indx in range (self.num_sats): 
-                es_act_dancecards[sat_indx].add_winds_to_dancecard(sat_acts[sat_indx])
+                es_act_dancecards[sat_indx].add_winds_to_dancecard(sats_acts[sat_indx])
                 es_act_dancecards[sat_indx].add_winds_to_dancecard(ecl_winds[sat_indx])
 
             # this is for data storage
@@ -343,10 +355,10 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         ##############################
 
         model.par_min_as_route_dv = pe.Param (initialize=self.min_as_route_dv)
-        model.par_obs_dv = pe.Param(model.obs_act_windids,initialize =dv_by_obs_act_windid)
+        model.par_obs_capacity = pe.Param(model.obs_act_windids,initialize =dv_by_obs_act_windid)
         model.par_total_obs_dv = sum(dv_by_obs_act_windid.values())
-        model.par_link_dv = pe.Param(model.link_act_windids,initialize =dv_by_link_act_windid)
-        model.par_act_dv = pe.Param(model.act_windids,initialize =dv_by_act_windid)
+        model.par_link_capacity = pe.Param(model.link_act_windids,initialize =dv_by_link_act_windid)
+        model.par_act_capacity = pe.Param(model.act_windids,initialize =dv_by_act_windid)
         #  data volume for each data multi-route
         model.par_dmr_dv = pe.Param(model.dmrs,initialize ={ dmr_indx: dmr.data_vol for dmr_indx,dmr in enumerate (routes_flat)})
         #  data volume for each activity in each data multi-route
@@ -410,10 +422,21 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         #  variables for handling the allowance of inter-activity timing constraint violations. these are only generated if allow_act_timing_constr_violations is True
         model.var_intra_sat_act_constr_violations = pe.VarList()
         model.var_inter_sat_act_constr_violations = pe.VarList()
+        model.intra_sat_act_constr_bounds  = pe.ConstraintList()
+        model.inter_sat_act_constr_bounds  = pe.ConstraintList()
 
         #  stores all of the lower bounds of the constraint violation variables, for use in normalization for objective function
         min_var_intra_sat_act_constr_violation_list = [] 
         min_var_inter_sat_act_constr_violation_list = [] 
+
+        constraint_violation_model_objs = {}
+        constraint_violation_model_objs['intra_sat_act_constr_violation_acts_list'] = []
+        constraint_violation_model_objs['var_intra_sat_act_constr_violations'] = model.var_intra_sat_act_constr_violations
+        constraint_violation_model_objs['var_inter_sat_act_constr_violations'] = model.var_inter_sat_act_constr_violations
+        constraint_violation_model_objs['intra_sat_act_constr_bounds'] = model.intra_sat_act_constr_bounds
+        constraint_violation_model_objs['inter_sat_act_constr_bounds'] = model.inter_sat_act_constr_bounds
+        constraint_violation_model_objs['min_var_intra_sat_act_constr_violation_list'] = min_var_intra_sat_act_constr_violation_list 
+        constraint_violation_model_objs['min_var_inter_sat_act_constr_violation_list'] = min_var_inter_sat_act_constr_violation_list 
 
         ##############################
         #  Make constraints
@@ -423,7 +446,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
         # note that the observations show up within model.act_windids as well, so we also constraint route scheduled DV by the real available DV from each observation
         def c1_rule( model,a):
-            return (model.par_act_dv[a]*model.var_activity_utilization[a] -
+            return (model.par_act_capacity[a]*model.var_activity_utilization[a] -
                         sum(model.par_dmr_act_dv[p,a]*model.var_dmr_utilization[p] 
                             for p in model.par_dmr_subscrs_by_act[a]) 
                     >= 0)
@@ -458,10 +481,10 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             min_constr_violation = None
 
             center_time_diff = (act2.center - act1.center).total_seconds()
-            time_adjust_1 = model.par_act_dv[act1_windid]*model.var_activity_utilization[act1_windid]/2/act1.ave_data_rate
-            time_adjust_2 = model.par_act_dv[act2_windid]*model.var_activity_utilization[act2_windid]/2/act2.ave_data_rate
-            max_time_adjust_1 = model.par_act_dv[act1_windid]*1/2/act1.ave_data_rate
-            max_time_adjust_2 = model.par_act_dv[act2_windid]*1/2/act2.ave_data_rate
+            time_adjust_1 = model.par_act_capacity[act1_windid]*model.var_activity_utilization[act1_windid]/2/act1.ave_data_rate
+            time_adjust_2 = model.par_act_capacity[act2_windid]*model.var_activity_utilization[act2_windid]/2/act2.ave_data_rate
+            max_time_adjust_1 = model.par_act_capacity[act1_windid]*1/2/act1.ave_data_rate
+            max_time_adjust_2 = model.par_act_capacity[act2_windid]*1/2/act2.ave_data_rate
 
             if not allow_act_timing_constr_violations:
                 #  if the activities overlap in center time (including  transition time), then it's not possible to have sufficient transition time between them.  only allow one
@@ -498,71 +521,20 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
             return constr, var_constr_violation, min_constr_violation
 
-
+            
         #  intra-satellite activity overlap constraints [4],[5],[5b]
         #  well, 5B is activity minimum time duration
-        # model.c4  = pe.ConstraintList()  # c5 now holds c4 constraints
-        model.c5  = pe.ConstraintList() # this now contains all of the activity overlap constraints
+        model.c4_5  = pe.ConstraintList() # this now contains all of the activity overlap constraints
         model.c5b  = pe.ConstraintList()
-        model.intra_sat_act_constr_bounds  = pe.ConstraintList()
-        self.intra_sat_act_constr_violation_acts_list = []
-        for sat_indx in range (self.num_sats):
-            num_sat_acts = len(sat_acts[sat_indx])
-            for  first_act_indx in  range (num_sat_acts):
 
-                act1 = sat_acts[sat_indx][first_act_indx]
-                # get the unique index into model.act_windids
-                act1_windid = all_act_windids_by_obj[act1]
-                length_1 = model.par_act_dv[act1_windid]*model.var_activity_utilization[act1_windid]/act1.ave_data_rate
-                model.c5b.add( length_1 >= model.var_act_indic[act1_windid] * self.min_act_duration_s[type(act1)])
-                
-                for  second_act_indx in  range (first_act_indx+1,num_sat_acts):
-                    act2 = sat_acts[sat_indx][ second_act_indx]
-                    # get the unique index into model.act_windids
-                    act2_windid = all_act_windids_by_obj[act2]
+        # pass the model objects getter function so it can be called in place
+        self.gen_intra_sat_act_overlap_constraints(model.c4_5,model.c5b,sats_acts,self.get_act_model_objs,constraint_violation_model_objs)
 
-                    # act list should be sorted
-                    assert(act2.center >= act1.center)
-
-                    # get the transition time requirement between these activities
-                    try:
-                        transition_time_req = self.act_transition_time_map[("intra-sat",type(act1),type(act2))]
-                    # if not explicitly specified, go with default transition time requirement
-                    except KeyError:
-                        used_default_transition_time = True
-                        transition_time_req = self.act_transition_time_map["default"]
-
-                    # if there is enough transition time between the two activities, no constraint needs to be added
-                    #  note that we are okay even if for some reason Act 2 starts before Act 1 ends, because time deltas return negative total seconds as well
-                    if (act2.start - act1.end).total_seconds() >= transition_time_req:
-                        #  don't need to do anything,  continue on to next activity pair
-                        continue
-
-                    else:
-
-                        constr, var_constr_violation, min_constr_violation = gen_inter_act_constraint(
-                            model.var_intra_sat_act_constr_violations,
-                            model.intra_sat_act_constr_bounds,
-                            transition_time_req,
-                            act1,
-                            act2,
-                            act1_windid,
-                            act2_windid
-                        )
-
-                        #  add the constraint, regardless of whether or not it's a "big M" constraint, or a constraint violation constraint - they're handled the same
-                        model.c5.add( constr )
-
-                        #  if it's a constraint violation constraint, then we have a variable to deal with
-                        if not min_constr_violation is None:
-                            min_var_intra_sat_act_constr_violation_list.append(min_constr_violation)
-                            self.intra_sat_act_constr_violation_acts_list.append((act1,act2))
 
 
         # inter-satellite downlink overlap constraints [9],[10]
         # model.c9  = pe.ConstraintList() # c10 now holds c9 constraints
         model.c10  = pe.ConstraintList()
-        model.inter_sat_act_constr_bounds  = pe.ConstraintList()
         self.inter_sat_act_constr_violation_acts_list = []
         for sat_indx in range (self.num_sats):
             num_sat_acts = len(sat_dlnks[sat_indx])
@@ -798,8 +770,6 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             return total_dv_term + latency_term + energy_margin_term - inter_sat_act_constr_violations_term - intra_sat_act_constr_violations_term
             
         model.obj = pe.Objective( rule=obj_rule, sense=pe.maximize )
-
-        self.model = model
 
     # taken in part from Jeff Menezes' code at https://github.mit.edu/jmenezes/Satellite-MILP/blob/master/sat_milp_pyomo.py
     def solve(self):

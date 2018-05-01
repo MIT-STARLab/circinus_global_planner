@@ -90,6 +90,17 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
         return obs_winds_filtered, dlink_winds_flat_filtered, xlink_winds_flat_filtered
 
+    def get_act_model_objs(self,act):
+
+        model_objs_act = {
+            'act_object': act,
+            'var_dv_utilization': self.model.var_act_dv_utilization[act.window_ID],
+            'par_dv_capacity': self.model.par_act_capacity[act.window_ID],
+            'var_act_indic': self.model.var_act_indic[act.window_ID],
+        }
+
+        return model_objs_act
+
     def get_activity_structs(self,obs_winds_filt,dlnk_winds_filt,xlnk_winds_filt):
         """Get the structures representing activity subscripts for variables, parameters that are used in creating the pyomo model"""
 
@@ -267,6 +278,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         # note this model only works for non-symmetric crosslink windows!
 
         model = pe.ConcreteModel()
+        self.model = model
 
         # filter the routes to make sure that  none of their activities fall outside the scheduling window
         obs_winds_filt,dlnk_winds_filt,xlnk_winds_filt = self.filter_windows(obs_winds,dlnk_winds_flat,xlnk_winds_flat,self.num_sats)
@@ -501,17 +513,27 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
         # model.var_dmr_latency_sf_by_obs_indx = pe.Var (model.obs_acts,  within = pe.NonNegativeReals)
         
-        allow_act_timing_constr_violations = False
-        if allow_act_timing_constr_violations:
+        if self.allow_act_timing_constr_violations:
             print('allow_act_timing_constr_violations is True')
 
         #  variables for handling the allowance of inter-activity timing constraint violations. these are only generated if allow_act_timing_constr_violations is True
         model.var_intra_sat_act_constr_violations = pe.VarList()
         model.var_inter_sat_act_constr_violations = pe.VarList()
+        model.intra_sat_act_constr_bounds  = pe.ConstraintList()
+        model.inter_sat_act_constr_bounds  = pe.ConstraintList()
 
         #  stores all of the lower bounds of the constraint violation variables, for use in normalization for objective function
         min_var_intra_sat_act_constr_violation_list = [] 
         min_var_inter_sat_act_constr_violation_list = [] 
+
+        constraint_violation_model_objs = {}
+        constraint_violation_model_objs['intra_sat_act_constr_violation_acts_list'] = []
+        constraint_violation_model_objs['var_intra_sat_act_constr_violations'] = model.var_intra_sat_act_constr_violations
+        constraint_violation_model_objs['var_inter_sat_act_constr_violations'] = model.var_inter_sat_act_constr_violations
+        constraint_violation_model_objs['intra_sat_act_constr_bounds'] = model.intra_sat_act_constr_bounds
+        constraint_violation_model_objs['inter_sat_act_constr_bounds'] = model.inter_sat_act_constr_bounds
+        constraint_violation_model_objs['min_var_intra_sat_act_constr_violation_list'] = min_var_intra_sat_act_constr_violation_list 
+        constraint_violation_model_objs['min_var_inter_sat_act_constr_violation_list'] = min_var_inter_sat_act_constr_violation_list 
 
         ##############################
         #  Make constraints
@@ -624,77 +646,15 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         #  note: this is not a parameter! it's merely helpful for reporting warnings
         used_default_transition_time = False
 
-        
-
 
         #  intra-satellite activity overlap constraints [10],[11],[12]
+
         #  well, 12 is activity minimum time duration
         model.c10_11  = pe.ConstraintList() # this now contains all of the activity overlap constraints
         model.c12  = pe.ConstraintList()
-        model.intra_sat_act_constr_bounds  = pe.ConstraintList()
-        self.intra_sat_act_constr_violation_acts_list = []
-        for sat_indx in range (self.num_sats):
-            num_sat_acts = len(sats_acts[sat_indx])
-            for  first_act_indx in  range (num_sat_acts):
 
-                act1 = sats_acts[sat_indx][first_act_indx]
-                act1_windid = act1.window_ID
-                length_1 = model.var_act_dv_utilization[act1_windid]/act1.ave_data_rate
-                model.c12.add( length_1 >= model.var_act_indic[act1_windid] * self.min_act_duration_s[type(act1)])
-                
-                for  second_act_indx in  range (first_act_indx+1,num_sat_acts):
-                    act2 = sats_acts[sat_indx][second_act_indx]
-                    # get the unique index into model.acts
-                    act2_windid = act2.window_ID
-
-                    # act list should be sorted
-                    assert(act2.center >= act1.center)
-
-                    # get the transition time requirement between these activities
-                    try:
-                        transition_time_req = self.act_transition_time_map[("intra-sat",type(act1),type(act2))]
-                    # if not explicitly specified, go with default transition time requirement
-                    except KeyError:
-                        used_default_transition_time = True
-                        transition_time_req = self.act_transition_time_map["default"]
-
-                    # if there is enough transition time between the two activities, no constraint needs to be added
-                    #  note that we are okay even if for some reason Act 2 starts before Act 1 ends, because time deltas return negative total seconds as well
-                    if (act2.start - act1.end).total_seconds() >= transition_time_req:
-                        #  don't need to do anything,  continue on to next activity pair
-                        continue
-
-                    else:
-                        model_objs_act1 = {
-                            'act_object': act1,
-                            'var_dv_utilization': model.var_act_dv_utilization[act1.window_ID],
-                            'par_dv_capacity': model.par_act_capacity[act1.window_ID],
-                            'var_act_indic': model.var_act_indic[act1.window_ID],
-                        }
-
-                        model_objs_act2 = {
-                            'act_object': act2,
-                            'var_dv_utilization': model.var_act_dv_utilization[act2.window_ID],
-                            'par_dv_capacity': model.par_act_capacity[act2.window_ID],
-                            'var_act_indic': model.var_act_indic[act2.window_ID],
-                        }
-
-                        constr, var_constr_violation, min_constr_violation = self.gen_inter_act_constraint(
-                            model.var_intra_sat_act_constr_violations,
-                            model.intra_sat_act_constr_bounds,
-                            transition_time_req,
-                            model_objs_act1,
-                            model_objs_act2,
-                            allow_act_timing_constr_violations
-                        )
-
-                        #  add the constraint, regardless of whether or not it's a "big M" constraint, or a constraint violation constraint - they're handled the same
-                        model.c10_11.add( constr )
-
-                        #  if it's a constraint violation constraint, then we have a variable to deal with
-                        if not min_constr_violation is None:
-                            min_var_intra_sat_act_constr_violation_list.append(min_constr_violation)
-                            self.intra_sat_act_constr_violation_acts_list.append((act1,act2))
+        # pass the model objects getter function so it can be called in place
+        self.gen_intra_sat_act_overlap_constraints(model.c10_11,model.c12,sats_acts,self.get_act_model_objs,constraint_violation_model_objs)
 
 
         # # inter-satellite downlink overlap constraints [9],[10]
@@ -937,8 +897,6 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
             return total_dv_term
             
         model.obj = pe.Objective( rule=obj_rule, sense=pe.maximize )
-
-        self.model = model
 
     # taken in part from Jeff Menezes' code at https://github.mit.edu/jmenezes/Satellite-MILP/blob/master/sat_milp_pyomo.py
     def solve(self):
