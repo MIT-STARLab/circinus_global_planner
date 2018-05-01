@@ -121,6 +121,7 @@ class GPActivityScheduling():
         # this big M should be twice as large as any activity data volume 
         self.big_M_act_dv = 200000 # in Mb
 
+        # allow activities to overlap, and penalize them for doing so. The code should work, but hasn't been extensively vetted for its usefulness (does seem surprisingly unresponsive to changing weights for constraint violation in the obj function...). Note having these violations allowed generally won't play well with extracting routes in coupled AS due to data route validation checks. 
         self.allow_act_timing_constr_violations = False
 
     def gen_inter_act_constraint(self,var_list,constr_list,transition_time_req,model_objs_act1,model_objs_act2):

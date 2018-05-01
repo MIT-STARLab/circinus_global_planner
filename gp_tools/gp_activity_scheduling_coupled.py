@@ -1185,6 +1185,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                     updated_winds.add(wind)
 
             # validate the data multi route (and in turn, the scheduled data vols of all the data routes under it)
+            # dmr.validate(time_option='center') # this is bad to use in general, allows window overlaps to occur
             dmr.validate()
 
         return scheduled_routes_flat
