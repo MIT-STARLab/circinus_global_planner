@@ -654,28 +654,22 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         #  note: this is not a parameter! it's merely helpful for reporting warnings
         used_default_transition_time = False
 
-
         #  intra-satellite activity overlap constraints [10],[11],[12]
-
         #  well, 12 is activity minimum time duration
         model.c10_11  = pe.ConstraintList()
         model.c12  = pe.ConstraintList()
-
         # pass the model objects getter function so it can be called in place
-        self.gen_intra_sat_act_overlap_constraints(model.c10_11,model.c12,sats_acts,self.get_act_model_objs,constraint_violation_model_objs)
+        used_default_transition_time &= self.gen_intra_sat_act_overlap_constraints(model.c10_11,model.c12,sats_acts,self.get_act_model_objs,constraint_violation_model_objs)
 
 
         # inter-satellite downlink overlap constraints [9],[10]
-        
         model.c14_15  = pe.ConstraintList()
-
         # pass the model objects getter function so it can be called in place
-        self.gen_inter_sat_act_overlap_constraints(model.c14_15,sats_dlnks,self.get_act_model_objs,constraint_violation_model_objs)
+        used_default_transition_time &= self.gen_inter_sat_act_overlap_constraints(model.c14_15,sats_dlnks,self.get_act_model_objs,constraint_violation_model_objs)
 
-
-        # if verbose:
-        #     if used_default_transition_time:
-        #         print('\nWarning: used default transition time for inter- or intra- satellite activity timing constraints\n')
+        if verbose:
+            if used_default_transition_time:
+                print('\nWarning: used default transition time for inter- or intra- satellite activity timing constraints\n')
 
 
         # #  energy constraints [6]

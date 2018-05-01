@@ -472,74 +472,26 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             return model.var_dmr_indic[p] >=  model.var_dmr_utilization[p]
         model.c3c =pe.Constraint ( model.dmrs,  rule=c3c_rule)
 
+
         # keep track of this, so we know to warn user about default transition time usage
         #  note: this is not a parameter! it's merely helpful for reporting warnings
         used_default_transition_time = False
-
-        def gen_inter_act_constraint(var_list,constr_list,transition_time_req,act1,act2,act1_windid,act2_windid):
-
-            var_constr_violation = None
-            min_constr_violation = None
-
-            center_time_diff = (act2.center - act1.center).total_seconds()
-            time_adjust_1 = model.par_act_capacity[act1_windid]*model.var_activity_utilization[act1_windid]/2/act1.ave_data_rate
-            time_adjust_2 = model.par_act_capacity[act2_windid]*model.var_activity_utilization[act2_windid]/2/act2.ave_data_rate
-            max_time_adjust_1 = model.par_act_capacity[act1_windid]*1/2/act1.ave_data_rate
-            max_time_adjust_2 = model.par_act_capacity[act2_windid]*1/2/act2.ave_data_rate
-
-            if not allow_act_timing_constr_violations:
-                #  if the activities overlap in center time (including  transition time), then it's not possible to have sufficient transition time between them.  only allow one
-                if (act2.center - act1.center).total_seconds() <= transition_time_req:
-                    constr = model.var_act_indic[act1_windid]+ model.var_act_indic[act2_windid] <= 1
-
-                # If they don't overlap in center time, but they do overlap to some amount, then we need to constrain their end and start times to be consistent with one another
-                else:
-                    M = max(act1.duration,act2.duration).total_seconds()
-                    constr_disable_1 = M*(1-model.var_act_indic[act1_windid])
-                    constr_disable_2 = M*(1-model.var_act_indic[act2_windid])
-        
-                    constr = center_time_diff - time_adjust_1 - time_adjust_2 + constr_disable_1 + constr_disable_2 >= transition_time_req
-
-            else:
-                # time_adjust_N can go as low as zero, so the constraint violation can be this at its lowest
-                min_constr_violation = center_time_diff - max_time_adjust_1 - max_time_adjust_2 - transition_time_req
-
-                assert(min_constr_violation < 0)
-
-                # deal with adding a variable to represent this constraint violation. ( I hate that I have to do it this way, deep within this function, but it seems like the approach you have to use for dynamically generating variable lists in pyomo, bizarrely. refer to: https://projects.coin-or.org/Coopr/browser/pyomo/trunk/pyomo/core/base/var.py?rev=11067, https://groups.google.com/forum/#!topic/pyomo-forum/modS1VkPxW0
-                var_list.add()
-                var_constr_violation = var_list[len(var_list)]
-
-                #  bounds on range of constraint violation variable
-
-                # bound minimum of the constraint violation (where both activities have 1.0 utilization), to keep the problem formulation as tight as possible
-                var_constr_violation.setlb(min_constr_violation)
-                # want the constraint violation only to go to zero at its maximum, because we don't want to reward times where there is no constraint violation, only penalize
-                var_constr_violation.setub(0)
-
-                #  the actual time constraint that bounds the constraint violation
-                constr = center_time_diff - time_adjust_1 - time_adjust_2 - transition_time_req >= var_constr_violation
-
-            return constr, var_constr_violation, min_constr_violation
-
 
         #  intra-satellite activity overlap constraints [4],[5],[5b]
         #  well, 5B is activity minimum time duration
         model.c4_5  = pe.ConstraintList() # this now contains all of the activity overlap constraints
         model.c5b  = pe.ConstraintList()
-
         # pass the model objects getter function so it can be called in place
-        self.gen_intra_sat_act_overlap_constraints(model.c4_5,model.c5b,sats_acts,self.get_act_model_objs,constraint_violation_model_objs)
-
+        used_default_transition_time &=  self.gen_intra_sat_act_overlap_constraints(model.c4_5,model.c5b,sats_acts,self.get_act_model_objs,constraint_violation_model_objs)
 
         # inter-satellite downlink overlap constraints [9],[10]
         model.c9_10  = pe.ConstraintList()
-        self.gen_inter_sat_act_overlap_constraints(model.c9_10,sats_dlnks,self.get_act_model_objs,constraint_violation_model_objs)
-
+        used_default_transition_time &= self.gen_inter_sat_act_overlap_constraints(model.c9_10,sats_dlnks,self.get_act_model_objs,constraint_violation_model_objs)
 
         if verbose:
             if used_default_transition_time:
                 print('\nWarning: used default transition time for inter- or intra- satellite activity timing constraints\n')
+
 
 
         #  energy constraints [6]

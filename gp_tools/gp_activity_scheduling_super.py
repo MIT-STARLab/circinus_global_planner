@@ -178,6 +178,10 @@ class GPActivityScheduling():
 
     def gen_intra_sat_act_overlap_constraints(self,c_overlap,c_duration,sats_acts,act_model_objs_getter,constraint_violation_model_objs):
 
+        # keep track of this, so we know to warn user about default transition time usage
+        #  note: this is not a parameter! it's merely helpful for reporting warnings
+        used_default_transition_time = False
+
         intra_sat_act_constr_violation_acts_list = constraint_violation_model_objs['intra_sat_act_constr_violation_acts_list']
         var_intra_sat_act_constr_violations = constraint_violation_model_objs['var_intra_sat_act_constr_violations']
         intra_sat_act_constr_bounds = constraint_violation_model_objs['intra_sat_act_constr_bounds']
@@ -233,8 +237,14 @@ class GPActivityScheduling():
                             min_var_intra_sat_act_constr_violation_list.append(min_constr_violation)
                             intra_sat_act_constr_violation_acts_list.append((act1,act2))
 
+        return used_default_transition_time
+
 
     def gen_inter_sat_act_overlap_constraints(self,c_overlap,sats_dlnks,act_model_objs_getter,constraint_violation_model_objs):
+
+        # keep track of this, so we know to warn user about default transition time usage
+        #  note: this is not a parameter! it's merely helpful for reporting warnings
+        used_default_transition_time = False
 
         inter_sat_act_constr_violation_acts_list = constraint_violation_model_objs['inter_sat_act_constr_violation_acts_list']
         var_inter_sat_act_constr_violations = constraint_violation_model_objs['var_inter_sat_act_constr_violations']
@@ -305,6 +315,7 @@ class GPActivityScheduling():
                                 min_var_inter_sat_act_constr_violation_list.append(min_constr_violation)
                                 inter_sat_act_constr_violation_acts_list.append((act1,act2))
 
+        return used_default_transition_time
 
     def solve(self):
 
