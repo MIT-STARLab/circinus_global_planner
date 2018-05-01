@@ -110,6 +110,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         all_dlnk_windids = set()
         all_xlnk_windids = set()
         all_act_objs_by_windid = {}
+        all_act_windids_by_obj = {}
         capacity_by_act_windid = {}
 
         # all acts for a given sat
@@ -121,13 +122,17 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         # this is used for producing T^s
         all_link_times_link_objs_by_sat_indx = {sat_indx: [] for sat_indx in range(self.num_sats)}  
         # this is a list of all the (s,o,t) in v_(s,o,t) in the formulation (where t is an index, starting at 0 for each sat)
-        sat_obs_time_dv_subscripts = []
-        # this is the actual time corresponding to the subscript stored in sat_obs_time_dv_subscripts
-        time_by_sat_obs_time_dv_subscript = {}
+        sat_obs_time_subscripts = []
+        # same as above, but just (s,t)
+        sat_time_subscripts = set()
+        # this is the actual time corresponding to the subscript stored in sat_obs_time_subscripts
+        time_by_sat_time_subscript = {}
         # keeps track of the v_(s,o,t) subscripts corresponding to dv availability for a given activity (v_(x,o)^-, v_(d,o))
-        sat_obs_time_dv_subscripts_by_link_obj = {}
+        sat_obs_time_subscripts_by_link_obj = {}
         # opposite direction of the above - look up link objects by v_(s,o,t) subscript
-        link_objs_by_sat_obs_time_dv_subscripts = {}
+        link_objs_by_sat_obs_time_subscripts = {}
+        # all the obs found at (s,t)
+        obs_windids_by_sat_time_subscript = {}
 
         # making these sets because xlnks are repeated across xlnk.sat_indx, xlnk.xsat_indx, and want to use same data structure for both dlnks and xlnks
         dlnk_obs_windids = set()
@@ -144,12 +149,13 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                 # grab the windid/obj mapping while we're here
                 dlnk_windid = dlnk.window_ID
                 all_act_objs_by_windid[dlnk_windid] = dlnk
+                all_act_windids_by_obj[dlnk] = dlnk_windid
                 all_acts_windids.add(dlnk_windid)
                 all_dlnk_windids.add(dlnk_windid)
                 capacity_by_act_windid[dlnk_windid] = dlnk.data_vol
                 obs_windids_by_dlnk_windid.setdefault(dlnk_windid, set())
                 all_link_times_link_objs_by_sat_indx[sat_indx].append((dlnk.center,[dlnk]))
-                sat_obs_time_dv_subscripts_by_link_obj.setdefault(dlnk, [])
+                sat_obs_time_subscripts_by_link_obj.setdefault(dlnk, [])
                 sats_acts_set[sat_indx].add(dlnk)
                 sats_dlnks_set[sat_indx].add(dlnk)
 
@@ -158,6 +164,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                         # we'll do this obs storing again for every subsequent downlink, of course...it's fine, we'll survive
                         obs_windid = obs.window_ID
                         all_act_objs_by_windid[obs_windid] = obs
+                        all_act_windids_by_obj[obs] = obs_windid
                         all_acts_windids.add(obs_windid)
                         all_obs_windids.add(obs_windid)
                         capacity_by_act_windid[obs_windid] = obs.data_vol
@@ -177,6 +184,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
             for xlnk in xlnk_winds_filt[sat_indx]:
                 xlnk_windid = xlnk.window_ID
                 all_act_objs_by_windid[xlnk_windid] = xlnk
+                all_act_windids_by_obj[xlnk] = xlnk_windid
                 all_acts_windids.add(xlnk_windid)
                 all_xlnk_windids.add(xlnk_windid)
                 capacity_by_act_windid[xlnk_windid] = xlnk.data_vol
@@ -185,7 +193,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                 # note that we can't use xlnk.sat_indx below below every xlnk wind has a sat_indx and an xsat_indx (sat_indx < xsat_indx) and it's incorrect to use sat_indx straight
                 all_link_times_link_objs_by_sat_indx[sat_indx].append((xlnk.center,[xlnk]))
                 sats_acts_set[sat_indx].add(xlnk)
-                sat_obs_time_dv_subscripts_by_link_obj.setdefault(xlnk, [])
+                sat_obs_time_subscripts_by_link_obj.setdefault(xlnk, [])
 
                 for obs_sat in obs_winds_filt:
                     for obs in obs_sat:
@@ -249,20 +257,24 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         for obs_sat in obs_winds_filt:
             for obs in obs_sat:
                 for sat_indx in range(self.num_sats):
-                    for time_index,(time,link_objs) in enumerate(all_link_times_link_objs_by_sat_indx_merged[sat_indx]):
+                    for time_indx,(time,link_objs) in enumerate(all_link_times_link_objs_by_sat_indx_merged[sat_indx]):
+                        sat_time_subscr = (sat_indx,time_indx)
+                        time_by_sat_time_subscript[sat_time_subscr] = time
+                        obs_windids_by_sat_time_subscript.setdefault(sat_time_subscr,[])
 
                         if time > obs.center:
-                            sat_obs_time_subscr = (sat_indx,obs.window_ID,time_index)
-                            sat_obs_time_dv_subscripts.append(sat_obs_time_subscr)
-                            time_by_sat_obs_time_dv_subscript[sat_obs_time_subscr] = time
-                            link_objs_by_sat_obs_time_dv_subscripts[sat_obs_time_subscr] = link_objs
+                            sat_obs_time_subscr = (sat_indx,obs.window_ID,time_indx)
+                            sat_obs_time_subscripts.append(sat_obs_time_subscr)
+                            sat_time_subscripts.add(sat_time_subscr)
+                            obs_windids_by_sat_time_subscript[sat_time_subscr].append(obs.window_ID)
+                            link_objs_by_sat_obs_time_subscripts[sat_obs_time_subscr] = link_objs
                             
                             for link_obj in link_objs:
                                 # if sat_indx ==4 and obs.window_ID == 41 and link_obj.window_ID == 5303:
                                 #     from circinus_tools import debug_tools
                                 #     debug_tools.debug_breakpt()
 
-                                sat_obs_time_dv_subscripts_by_link_obj[link_obj].append(sat_obs_time_subscr)
+                                sat_obs_time_subscripts_by_link_obj[link_obj].append(sat_obs_time_subscr)
 
 
         sats_acts = []
@@ -277,7 +289,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
             sat_dlnk_list.sort(key= lambda a: a.center)
             sats_dlnks.append(sat_dlnk_list)
 
-        return sats_acts,sats_dlnks,all_acts_windids,all_obs_windids,all_dlnk_windids,all_xlnk_windids,all_act_objs_by_windid,capacity_by_act_windid,dlnk_obs_windids,xlnk_obs_windids,obs_windids_by_lnk_windid,obs_windids_by_dlnk_windid,obs_windids_by_xlnk_windid,dlnk_windids_by_obs_windid,xlnk_windids_by_obs_windid,all_link_times_by_sat_indx,sat_obs_time_dv_subscripts,time_by_sat_obs_time_dv_subscript,sat_obs_time_dv_subscripts_by_link_obj,link_objs_by_sat_obs_time_dv_subscripts
+        return sats_acts,sats_dlnks,all_acts_windids,all_obs_windids,all_dlnk_windids,all_xlnk_windids,all_act_objs_by_windid,all_act_windids_by_obj,capacity_by_act_windid,dlnk_obs_windids,xlnk_obs_windids,obs_windids_by_lnk_windid,obs_windids_by_dlnk_windid,obs_windids_by_xlnk_windid,dlnk_windids_by_obs_windid,xlnk_windids_by_obs_windid,all_link_times_by_sat_indx,sat_obs_time_subscripts,time_by_sat_time_subscript,sat_obs_time_subscripts_by_link_obj,link_objs_by_sat_obs_time_subscripts,sat_time_subscripts,obs_windids_by_sat_time_subscript
 
 
     def make_model ( self,obs_winds,dlnk_winds_flat,xlnk_winds_flat, ecl_winds, verbose = False):
@@ -305,7 +317,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
             #     all_acts_indcs,
             #     dmr_indcs_by_act,
             #     dv_by_act,
-            #     all_acts_by_obj,
+            #     all_act_windids_by_obj,
             #     all_acts_by_indx,
             #     obs_act_indcs,
             #     dmr_indcs_by_obs_act,
@@ -321,6 +333,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                 all_dlnk_windids,
                 all_xlnk_windids,
                 all_act_objs_by_windid,
+                all_act_windids_by_obj,
                 capacity_by_act_windid,
                 dlnk_obs_windids,
                 xlnk_obs_windids,
@@ -330,10 +343,12 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                 dlnk_windids_by_obs_windid,
                 xlnk_windids_by_obs_windid,
                 all_link_times_by_sat_indx,
-                sat_obs_time_dv_subscripts,
-                time_by_sat_obs_time_dv_subscript,
-                sat_obs_time_dv_subscripts_by_link_obj,
-                link_objs_by_sat_obs_time_dv_subscripts
+                sat_obs_time_subscripts,
+                time_by_sat_time_subscript,
+                sat_obs_time_subscripts_by_link_obj,
+                link_objs_by_sat_obs_time_subscripts,
+                sat_time_subscripts,
+                obs_windids_by_sat_time_subscript
                  ) = self.get_activity_structs(
                         obs_winds_filt,
                         dlnk_winds_filt,
@@ -345,7 +360,9 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
             self.all_dlnk_windids = all_acts_windids
             self.all_xlnk_windids = all_acts_windids
             self.all_act_objs_by_windid = all_act_objs_by_windid
-            self.time_by_sat_obs_time_dv_subscript = time_by_sat_obs_time_dv_subscript
+            self.time_by_sat_time_subscript = time_by_sat_time_subscript
+            self.all_link_times_by_sat_indx = all_link_times_by_sat_indx
+            self.obs_windids_by_sat_time_subscript = obs_windids_by_sat_time_subscript
             # combine xlnk and dlnks windids by obs windid together
             self.lnk_windids_by_obs_windid = copy(xlnk_windids_by_obs_windid)
             for obs_windid,dlnk_windids in dlnk_windids_by_obs_windid.items():
@@ -365,39 +382,27 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
             # this is for constructing energy storage constraints
             # using resource_delta_t_s because this dancecard is solely for use in constructing resource constraints
             # note that these dancecards will baloon in size pretty quickly as the planning_end_dt increases. However most of the complexity they introduce is before planning_end_obs_xlnk_dt because that's the horizon where obs,xlnk actitivities are included. After that there should only be sparse downlinks
-        #     es_act_dancecards = [Dancecard(self.planning_start_dt,self.planning_end_dt,self.resource_delta_t_s,item_init=None,mode='timestep') for sat_indx in range (self.num_sats)]
+            es_act_dancecards = [Dancecard(self.planning_start_dt,self.planning_end_dt,self.resource_delta_t_s,item_init=None,mode='timestep') for sat_indx in range (self.num_sats)]
             
-        #     for sat_indx in range (self.num_sats): 
-        #         es_act_dancecards[sat_indx].add_winds_to_dancecard(sat_acts[sat_indx])
-        #         es_act_dancecards[sat_indx].add_winds_to_dancecard(ecl_winds[sat_indx])
+            for sat_indx in range (self.num_sats): 
+                es_act_dancecards[sat_indx].add_winds_to_dancecard(sats_acts[sat_indx])
+                es_act_dancecards[sat_indx].add_winds_to_dancecard(ecl_winds[sat_indx])
 
-        #     # this is for data storage
-        #     # for each sat/timepoint, we store a list of all those data multi routes that are storing data on the sat at that timepoint
-        #     ds_route_dancecards = [Dancecard(self.planning_start_dt,self.planning_end_dt,self.resource_delta_t_s,item_init=None,mode='timepoint') for sat_indx in range (self.num_sats)]
+            # this is for data storage
+            # for each sat/timepoint, we store a list of all those data multi routes that are storing data on the sat at that timepoint
+            # ds_route_dancecards = [Dancecard(self.planning_start_dt,self.planning_end_dt,self.resource_delta_t_s,item_init=None,mode='timepoint') for sat_indx in range (self.num_sats)]
             
-        #     # add data routes to the dancecard
-        #     for dmr_indx,dmr in enumerate(routes_flat):
-        #         # list of type routing_objects.SatStorageInterval
-        #         dmr_ds_intervs = dmr.get_data_storage_intervals()
+            # # add data routes to the dancecard
+            # for dmr_indx,dmr in enumerate(routes_flat):
+            #     # list of type routing_objects.SatStorageInterval
+            #     dmr_ds_intervs = dmr.get_data_storage_intervals()
 
-        #         for interv in dmr_ds_intervs:
-        #             # store the dmr object at this timepoint
-        #             ds_route_dancecards[interv.sat_indx].add_item_in_interval(dmr_indx,interv.start,interv.end)
+            #     for interv in dmr_ds_intervs:
+            #         # store the dmr object at this timepoint
+            #         ds_route_dancecards[interv.sat_indx].add_item_in_interval(dmr_indx,interv.start,interv.end)
 
         except IndexError:
             raise RuntimeWarning('sat_indx out of range. Are you sure all of your input files are consistent? (including pickles)')        
-        # self.dmr_indcs_by_act = dmr_indcs_by_act
-        # self.all_acts_indcs = all_acts_indcs
-        # self.obs_act_indcs = obs_act_indcs
-        # self.link_act_indcs = link_act_indcs
-        # self.all_acts_by_obj = all_acts_by_obj
-        # self.all_acts_by_indx = all_acts_by_indx
-
-        # # these subscripts probably should've been done using the unique IDs for the objects, rather than their arbitrary locations within a list. Live and learn, hélas...
-
-        # #  subscript for each dmr (data multi route) p  (p index is a hold-over from when I called them paths)
-        # model.dmrs = pe.Set(initialize= range(len(routes_flat)))
-        
         #  subscript for each activity a
         model.act_windids = pe.Set(initialize= all_acts_windids)
         #  subscript for each obs o
@@ -409,22 +414,18 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         #  subscript for each satellite
         model.sat_indcs = pe.Set(initialize= range(self.num_sats))
         #  subscript for each s,o,t in v_(s,o,t)
-        # t in model.sat_obs_time_dv_subscripts is index into all_link_times_by_sat_indx
-        model.sat_obs_time_dv_subscripts = pe.Set(initialize= sat_obs_time_dv_subscripts,dimen=3)
+        # t in model.sat_obs_time_subscripts is index into all_link_times_by_sat_indx
+        model.sat_obs_time_subscripts = pe.Set(initialize= sat_obs_time_subscripts,dimen=3)
 
 
-        # # timepoints is the indices, which starts at 0 
-        # #  NOTE: we assume the same time system for every satellite
-        # self.es_time_getter_dc = es_act_dancecards[0]
-        # es_num_timepoints = es_act_dancecards[0].num_timepoints
-        # model.es_timepoint_indcs = pe.Set(initialize=  self.es_time_getter_dc.get_tp_indcs())
+        # timepoints is the indices, which starts at 0 
+        #  NOTE: we assume the same time system for every satellite
+        self.es_time_getter_dc = es_act_dancecards[0]
+        es_num_timepoints = es_act_dancecards[0].num_timepoints
+        model.es_timepoint_indcs = pe.Set(initialize=  self.es_time_getter_dc.get_tp_indcs())
 
         # self.ds_time_getter_dc = ds_route_dancecards[0]
         # model.ds_timepoint_indcs = pe.Set(initialize=  self.ds_time_getter_dc.get_tp_indcs())
-
-        # #  unique indices for observation and link acts
-        # model.obs_acts = pe.Set(initialize= obs_act_indcs)
-        # model.link_acts = pe.Set(initialize= link_act_indcs)
 
         # if self.solver_name == 'gurobi' or self.solver_name == 'cplex':
         #     int_feas_tol = self.solver_params['integer_feasibility_tolerance']
@@ -435,7 +436,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         #     if lat_sf > int_feas_tol*self.big_M_lat:
         #         raise RuntimeWarning('big_M_lat (%f) is not large enough for latency score factor %f and integer feasibility tolerance %f (dmr index %d)'%(self.big_M_lat,lat_sf,int_feas_tol,p))
 
-        # for act_obj in all_acts_by_obj.keys():
+        # for act_obj in all_act_windids_by_obj.keys():
         #     if 2*(act_obj.end-act_obj.start).total_seconds() > self.big_M_act_t_dur_s:
         #         raise RuntimeWarning('big_M_act_t_dur_s (%f) is not large enough for act of duration %s and integer feasibility tolerance %f (act string %s)'%(self.big_M_act_t_dur_s,act_obj.end-act_obj.start,int_feas_tol,act_obj))
         #     # if 2*(act_obj.end-act_obj.start).total_seconds() > (1-int_feas_tol) *  self.big_M_act_t_dur_s:
@@ -450,42 +451,20 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         #  Make parameters
         ##############################
 
-        # model.par_min_as_route_dv = pe.Param (initialize=self.min_as_route_dv)
-        # model.par_obs_dv = pe.Param(model.obs_acts,initialize =dv_by_obs_act)
         model.par_total_obs_dv = sum(capacity_by_act_windid[o] for o in all_obs_windids)
-        # model.par_link_dv = pe.Param(model.link_acts,initialize =dv_by_link_act)
         model.par_act_capacity = pe.Param(model.act_windids,initialize =capacity_by_act_windid)
-        # #  data volume for each data multi-route
-        # model.par_dmr_dv = pe.Param(model.dmrs,initialize ={ dmr_indx: dmr.data_vol for dmr_indx,dmr in enumerate (routes_flat)})
-        # #  data volume for each activity in each data multi-route
 
-        # # todo: will probably have to fix this to not be the full set multiplication of model.dmrs, model.acts - can use dmr_indcs_by_act
-        # model.par_dmr_act_dv = pe.Param(
-        #     model.dmrs,
-        #     model.acts,
-        #     initialize = { (dmr_indx,self.all_acts_by_obj[act]): 
-        #         dmr.data_vol_for_wind(act) for dmr_indx,dmr in enumerate (routes_flat) for act in dmr.get_winds()
-        #     }
-        # )
+        if self.energy_unit == "Wh":
+            model.par_resource_delta_t = pe.Param (initialize= self.resource_delta_t_s/3600)
+        else: 
+            raise NotImplementedError
+        model.par_sats_estore_initial = pe.Param ( model.sat_indcs,initialize= { i: item for i,item in enumerate (self.sats_init_estate_Wh)})
+        model.par_sats_estore_min = pe.Param ( model.sat_indcs,initialize= { i: item for i,item in enumerate (self.sats_emin_Wh)})
+        model.par_sats_estore_max = pe.Param ( model.sat_indcs,initialize= { i: item for i,item in enumerate (self.sats_emax_Wh)})
+        model.par_sats_edot_by_act = pe.Param ( model.sat_indcs,initialize= { i: item for i,item in enumerate (self.sats_edot_by_act_W)})
 
-        # # each of these is essentially a dictionary indexed by link or obs act indx, with  the value being a list of dmr indices that are included within that act
-        # # these are valid indices into model.dmrs
-        # model.par_dmr_subscrs_by_link_act = pe.Param(model.link_acts,initialize =dmr_indcs_by_link_act)
-        # model.par_dmr_subscrs_by_obs_act = pe.Param(model.obs_acts,initialize =dmr_indcs_by_obs_act)
-        # model.par_dmr_subscrs_by_act = pe.Param(model.acts,initialize =dmr_indcs_by_act)
-
-
-        # if self.energy_unit == "Wh":
-        #     model.par_resource_delta_t = pe.Param (initialize= self.resource_delta_t_s/3600)
-        # else: 
-        #     raise NotImplementedError
-        # model.par_sats_estore_initial = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_init_estate_Wh)})
-        # model.par_sats_estore_min = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_emin_Wh)})
-        # model.par_sats_estore_max = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_emax_Wh)})
-        # model.par_sats_edot_by_act = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_edot_by_act_W)})
-
-        # model.par_sats_dstore_min = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_dmin_Mb)})
-        # model.par_sats_dstore_max = pe.Param ( model.sats,initialize= { i: item for i,item in enumerate (self.sats_dmax_Mb)})
+        model.par_sats_dstore_min = pe.Param ( model.sat_indcs,initialize= { i: item for i,item in enumerate (self.sats_dmin_Mb)})
+        model.par_sats_dstore_max = pe.Param ( model.sat_indcs,initialize= { i: item for i,item in enumerate (self.sats_dmax_Mb)})
 
         ##############################
         #  Make variables
@@ -496,27 +475,14 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         # v_(a,o), variables [2]
         model.var_lnk_obs_dv_utilization  = pe.Var (model.lnk_obs_subscripts,  within = pe.NonNegativeReals)
         # v_(s,o,t), variables [3]
-        model.var_sat_obs_time_dv  = pe.Var (model.sat_obs_time_dv_subscripts,  within = pe.NonNegativeReals)
-
+        model.var_sat_obs_time_dv  = pe.Var (model.sat_obs_time_subscripts,  within = pe.NonNegativeReals)
+        # I_a, variables [6]
         model.var_act_indic  = pe.Var (model.act_windids, within = pe.Binary)
-
-
-
-        # # activity utilization variable indicating how much of an activity's capacity is used [1]
-        # model.var_activity_utilization  = pe.Var (model.acts, bounds =(0,1))
-        # # dmr utilization variable indicating how much of a dmr's capacity is used [2]
-        # model.var_dmr_utilization  = pe.Var (model.dmrs, bounds =(0,1))
-        # #  indicator variables for whether or not dmrs [3] and activities [4] have been chosen
-        # model.var_dmr_indic  = pe.Var (model.dmrs, within = pe.Binary)
-        # # model.var_dmr_indic  = pe.Var (model.dmrs, bounds =(0,1))
-        # model.var_act_indic  = pe.Var (model.acts, bounds =(0,1))
-
-        
-        # # satellite energy storage
-        # model.var_sats_estore  = pe.Var (model.sats,  model.es_timepoint_indcs,  within = pe.NonNegativeReals)
+        # satellite energy storage, e_(s,t), variables [7]
+        model.var_sats_estore  = pe.Var (model.sat_indcs,  model.es_timepoint_indcs,  within = pe.NonNegativeReals)
 
         # # satellite data storage (data buffers)
-        # model.var_sats_dstore  = pe.Var (model.sats,  model.ds_timepoint_indcs,  within = pe.NonNegativeReals)
+        # model.var_sats_dstore  = pe.Var (model.sat_indcs,  model.ds_timepoint_indcs,  within = pe.NonNegativeReals)
 
         # model.var_dmr_latency_sf_by_obs_indx = pe.Var (model.obs_acts,  within = pe.NonNegativeReals)
         
@@ -617,19 +583,19 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                             else:
                                 dv_sum -= model.var_lnk_obs_dv_utilization[lnk.window_ID,o]
 
-                    # note using inequality to reduce computation time (maybe)
+                    # note this needs to be an equality in order to use var_sat_obs_time_dv to produce data storage output in extract_resource_usage below
                     model.c5.add(model.var_sat_obs_time_dv[s,o,t_indx] == dv_sum)
 
 
         # c6
         model.c6  = pe.ConstraintList()
 
-        for sat_obs_time_dv_subscript,link_objs in link_objs_by_sat_obs_time_dv_subscripts.items():
+        for sat_obs_time_subscript,link_objs in link_objs_by_sat_obs_time_subscripts.items():
             # sum of all the links with outgoing dv at s,o,t
             outgoing_dv_sum = 0
 
-            s = sat_obs_time_dv_subscript[0]
-            o = sat_obs_time_dv_subscript[1]
+            s = sat_obs_time_subscript[0]
+            o = sat_obs_time_subscript[1]
 
             for lnk in link_objs:
                 # verify lnk is actually a link act
@@ -637,7 +603,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                     continue
 
                 # if receiving, we're not constrained by any dv availability
-                # need to consider this here because the link_objs_by_sat_obs_time_dv_subscripts mapping holds both tx and rx directions for every link
+                # need to consider this here because the link_objs_by_sat_obs_time_subscripts mapping holds both tx and rx directions for every link
                 if type(lnk) == XlnkWindow: 
                     # this code won't work if we're assuming symmetric xlnk windows
                     assert(not lnk.symmetric)
@@ -646,7 +612,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
                 outgoing_dv_sum += model.var_lnk_obs_dv_utilization[lnk.window_ID,o]
 
-            model.c6.add( outgoing_dv_sum <= model.var_sat_obs_time_dv[sat_obs_time_dv_subscript])
+            model.c6.add( outgoing_dv_sum <= model.var_sat_obs_time_dv[sat_obs_time_subscript])
 
 
 
@@ -671,88 +637,99 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
             if used_default_transition_time:
                 print('\nWarning: used default transition time for inter- or intra- satellite activity timing constraints\n')
 
+        #  energy constraints [6]
+        # todo: maybe this ought to be moved to the super class, but i don't anticipate this code changing much any time soon, so i'll punt that.
+        model.c13  = pe.ConstraintList()
+        for sat_indx in range (self.num_sats): 
 
-        # #  energy constraints [6]
-        # model.c6  = pe.ConstraintList()
-        # for sat_indx in range (self.num_sats): 
+            # tp_indx serves as an index into the satellite activity dance cards
+            for tp_indx in model.es_timepoint_indcs:
+                #  constraining first time step to initial energy storage
+                #  continue for loop afterwards because no geq/leq constraints needed for this index
+                if tp_indx == 0:
+                    model.c13.add( model.var_sats_estore[sat_indx,tp_indx] ==  model.par_sats_estore_initial[sat_indx])
+                    continue 
 
-        #     # tp_indx serves as an index into the satellite activity dance cards
-        #     for tp_indx in model.es_timepoint_indcs:
-        #         #  constraining first time step to initial energy storage
-        #         #  continue for loop afterwards because no geq/leq constraints needed for this index
-        #         if tp_indx == 0:
-        #             model.c6.add( model.var_sats_estore[sat_indx,tp_indx] ==  model.par_sats_estore_initial[sat_indx])
-        #             continue 
+                #  minimum and maximum storage constraints
+                model.c13.add( model.var_sats_estore[sat_indx,tp_indx] >= model.par_sats_estore_min[sat_indx])
+                model.c13.add( model.var_sats_estore[sat_indx,tp_indx] <= model.par_sats_estore_max[sat_indx])
 
-        #         #  minimum and maximum storage constraints
-        #         model.c6.add( model.var_sats_estore[sat_indx,tp_indx] >= model.par_sats_estore_min[sat_indx])
-        #         model.c6.add( model.var_sats_estore[sat_indx,tp_indx] <= model.par_sats_estore_max[sat_indx])
+                if self.enforce_energy_storage_constr:
+                    # determine activity energy consumption
+                    charging = True
+                    activity_delta_e = 0 
+                    #  get the activities that were active during the time step immediately preceding time point
+                    activities = es_act_dancecards[sat_indx].get_objects_at_ts_pre_tp_indx(tp_indx)
+                    # activities may be none if nothing is happening at timestep, to minimize RAM usage
+                    if activities:
+                        for act in activities:
+                            #  if this is a "standard activity" that we can choose to perform or not
+                            if type(act) in self.standard_activities:
+                                act_windid = all_act_windids_by_obj[act]
+                                activity_delta_e += (
+                                    model.par_sats_edot_by_act[sat_indx][self.act_type_map[type(act)]] 
+                                    * model.var_act_dv_utilization[act_windid]/model.par_act_capacity[act_windid]
+                                    * model.par_resource_delta_t
+                                )
 
-        #         if self.enforce_energy_storage_constr:
-        #             # determine activity energy consumption
-        #             charging = True
-        #             activity_delta_e = 0 
-        #             #  get the activities that were active during the time step immediately preceding time point
-        #             activities = es_act_dancecards[sat_indx].get_objects_at_ts_pre_tp_indx(tp_indx)
-        #             # activities may be none if nothing is happening at timestep, to minimize RAM usage
-        #             if activities:
-        #                 for act in activities:
-        #                     #  if this is a "standard activity" that we can choose to perform or not
-        #                     if type(act) in self.standard_activities:
-        #                         act_uindx = all_acts_by_obj[act]
-        #                         activity_delta_e += (
-        #                             model.par_sats_edot_by_act[sat_indx][self.act_type_map[type(act)]] 
-        #                             * model.var_activity_utilization[act_uindx]
-        #                             * model.par_resource_delta_t
-        #                         )
+                            if type(act) == XlnkWindow:
+                                act_windid = all_act_windids_by_obj[act]
 
-        #                     if type(act) == XlnkWindow:
-        #                         act_uindx = all_acts_by_obj[act]
+                                if self.use_symmetric_xlnk_windows:
+                                    xlnk_edot = model.par_sats_edot_by_act[sat_indx]['xlnk-tx']
+                                # note that in the case where we're not using symmetric xlnk windows, both satellites have a copy of each unidirectional window in their list of activity windows, so it'll be added appropriately at each unique sat_indx
+                                else:
+                                    is_rx = act.is_rx(sat_indx)
+                                    if is_rx: 
+                                        xlnk_edot = model.par_sats_edot_by_act[sat_indx]['xlnk-rx']
+                                    else: 
+                                        xlnk_edot = model.par_sats_edot_by_act[sat_indx]['xlnk-tx']
 
-        #                         if self.use_symmetric_xlnk_windows:
-        #                             xlnk_edot = model.par_sats_edot_by_act[sat_indx]['xlnk-tx']
-        #                         # note that in the case where we're not using symmetric xlnk windows, both satellites have a copy of each unidirectional window in their list of activity windows, so it'll be added appropriately at each unique sat_indx
-        #                         else:
-        #                             is_rx = act.is_rx(sat_indx)
-        #                             if is_rx: 
-        #                                 xlnk_edot = model.par_sats_edot_by_act[sat_indx]['xlnk-rx']
-        #                             else: 
-        #                                 xlnk_edot = model.par_sats_edot_by_act[sat_indx]['xlnk-tx']
+                                activity_delta_e += (
+                                    xlnk_edot 
+                                    * model.var_act_dv_utilization[act_windid]/model.par_act_capacity[act_windid]
+                                    * model.par_resource_delta_t
+                                )
 
-        #                         activity_delta_e += (
-        #                             xlnk_edot 
-        #                             * model.var_activity_utilization[act_uindx]
-        #                             * model.par_resource_delta_t
-        #                         )
+                            #  if the satellite is not in sunlight then we can't charge
+                            elif type(act) == EclipseWindow:
+                                charging = False
 
-        #                     #  if the satellite is not in sunlight then we can't charge
-        #                     elif type(act) == EclipseWindow:
-        #                         charging = False
+                    # add in charging energy contribution ( if possible)
+                    charging_delta_e = model.par_sats_edot_by_act[sat_indx]['charging']*model.par_resource_delta_t if charging else 0
 
-        #             # add in charging energy contribution ( if possible)
-        #             charging_delta_e = model.par_sats_edot_by_act[sat_indx]['charging']*model.par_resource_delta_t if charging else 0
+                    #  base-level satellite energy usage (not including additional activities)
+                    base_delta_e = model.par_sats_edot_by_act[sat_indx]['base']*model.par_resource_delta_t
 
-        #             #  base-level satellite energy usage (not including additional activities)
-        #             base_delta_e = model.par_sats_edot_by_act[sat_indx]['base']*model.par_resource_delta_t
+                    # maximum bound of energy at current time step based on last time step
+                    model.c13.add( model.var_sats_estore[sat_indx,tp_indx] <= 
+                        model.var_sats_estore[sat_indx,tp_indx-1]
+                        + activity_delta_e
+                        + charging_delta_e
+                        + base_delta_e
+                    )
 
-        #             # maximum bound of energy at current time step based on last time step
-        #             model.c6.add( model.var_sats_estore[sat_indx,tp_indx] <= 
-        #                 model.var_sats_estore[sat_indx,tp_indx-1]
-        #                 + activity_delta_e
-        #                 + charging_delta_e
-        #                 + base_delta_e
-        #             )
-
-        #             # maximum bound of energy at current time step based on last time step
-        #             model.c6.add( model.var_sats_estore[sat_indx,tp_indx] >= 
-        #                 model.var_sats_estore[sat_indx,tp_indx-1]
-        #                 + activity_delta_e
-        #                 + base_delta_e
-        #             )
+                    # maximum bound of energy at current time step based on last time step
+                    model.c13.add( model.var_sats_estore[sat_indx,tp_indx] >= 
+                        model.var_sats_estore[sat_indx,tp_indx-1]
+                        + activity_delta_e
+                        + base_delta_e
+                    )
 
 
-        # #  data storage constraints [7]
-        # model.c7  = pe.ConstraintList()
+        #  data storage constraints [7]
+        model.c7  = pe.ConstraintList()
+        if self.enforce_data_storage_constr:
+            for sat_time_subscr in sat_time_subscripts:
+                dv_sum = 0
+                for obs_windid in obs_windids_by_sat_time_subscript[sat_time_subscr]:
+                    sat_indx = sat_time_subscr[0]
+                    time_indx = sat_time_subscr[1]
+                    sat_obs_time_subscr = (sat_indx,obs_windid,time_indx)
+                    dv_sum += model.var_sat_obs_time_dv[sat_obs_time_subscr]
+                
+                model.c7.add( dv_sum <= model.par_sats_dstore_max[sat_indx])
+
         # for sat_indx in range (self.num_sats): 
 
         #     # tp_indx serves as an index into the satellite data storage dance cards
@@ -805,19 +782,19 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         ##############################
 
 
-        # #  determine which time points to use as "spot checks" on resource margin. These are the points that will be used in the objective function for maximizing resource margin
-        # timepoint_spacing = ceil(es_num_timepoints/self.resource_margin_obj_num_timepoints)
-        # # need to turn the generator into a list for slicing
-        # #  note: have to get the generator again
-        # decimated_tp_indcs = list(self.es_time_getter_dc.get_tp_indcs())[::timepoint_spacing]
-        # rsrc_norm_f = len(decimated_tp_indcs) * len(model.sats)
+        #  determine which time points to use as "spot checks" on resource margin. These are the points that will be used in the objective function for maximizing resource margin
+        timepoint_spacing = ceil(es_num_timepoints/self.resource_margin_obj_num_timepoints)
+        # need to turn the generator into a list for slicing
+        #  note: have to get the generator again
+        decimated_tp_indcs = list(self.es_time_getter_dc.get_tp_indcs())[::timepoint_spacing]
+        rsrc_norm_f = len(decimated_tp_indcs) * len(model.sat_indcs)
 
         def obj_rule(model):
             total_dv_term = self.obj_weights['obs_dv'] * 1/model.par_total_obs_dv * sum(model.var_act_dv_utilization[o] for o in model.obs_windids) 
 
             # latency_term = self.obj_weights['route_latency'] * 1/len(model.obs_acts) * sum(model.var_dmr_latency_sf_by_obs_indx[o] for o in model.obs_acts)
             
-            # energy_margin_term = self.obj_weights['energy_storage'] * 1/rsrc_norm_f * sum(model.var_sats_estore[sat_indx,tp_indx]/model.par_sats_estore_max[sat_indx] for tp_indx in decimated_tp_indcs for sat_indx in model.sats)
+            energy_margin_term = self.obj_weights['energy_storage'] * 1/rsrc_norm_f * sum(model.var_sats_estore[sat_indx,tp_indx]/model.par_sats_estore_max[sat_indx] for tp_indx in decimated_tp_indcs for sat_indx in model.sat_indcs)
 
             # if len(min_var_inter_sat_act_constr_violation_list) > 0:
             #     inter_sat_act_constr_violations_term = self.obj_weights['inter_sat_act_constr_violations'] * 1/sum(min_var_inter_sat_act_constr_violation_list) * sum(model.var_inter_sat_act_constr_violations[indx] for indx in range(1,len(model.var_inter_sat_act_constr_violations)+1))
@@ -833,7 +810,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
             # debug_tools.debug_breakpt()
 
             # return total_dv_term + latency_term + energy_margin_term - inter_sat_act_constr_violations_term - intra_sat_act_constr_violations_term
-            return total_dv_term
+            return total_dv_term + energy_margin_term
             
         model.obj = pe.Objective( rule=obj_rule, sense=pe.maximize )
 
@@ -922,7 +899,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                         sorted_var_sat_obs_time_dv[sat_indx].append(index)
 
                         # if sat_indx == 3 and  obs_windid == 41:
-                        #     print (" %s %0.3f   %s"%(index, val, self.time_by_sat_obs_time_dv_subscript[index]))
+                        #     print (" %s %0.3f   %s"%(index, val, self.time_by_sat_time_subscript[index]))
 
                     for sat_indx in range(self.num_sats):
                         # sort by time index
@@ -931,9 +908,10 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                         for index in sorted_var_sat_obs_time_dv[sat_indx]:
                             val  = varobject[index].value
                             obs_windid = index[1]
+                            time_indx = index[2]
                             # if sat_indx == 4 and  obs_windid == 41:
                             if sat_indx == 4 and obs_windid == 41:
-                                print (" %s %0.3f   %s"%(index, val, self.time_by_sat_obs_time_dv_subscript[index]))
+                                print (" %s %0.3f   %s"%(index, val, self.time_by_sat_time_subscript[(sat_indx,time_indx)]))
 
     def fabricate_routes(self):
 
@@ -1131,17 +1109,15 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
     def extract_resource_usage( self, decimation_factor =1, verbose = False):
 
-        # todo: REMOVE!!!!
-        return  None, None
-
         energy_usage = {}
 
-        t_vals = []
+        # note t_vals is relative time to start
+        t_vals = [[] for sat_indx in range ( self.num_sats)]
         e_vals = [[] for sat_indx in range ( self.num_sats)]
 
         # note that this extraction uses the energy variables from the optimization, which are currently not constrained to be exactly equal to the energy delta from t-1 to t; they are merely bounded by it. Todo: extract concrete values based on activity execution times
         # TODO: this code feels super inefficient somehow.  make it better?
-        for sat_indx, sat in enumerate (self.model.sats):
+        for sat_indx, sat in enumerate (self.model.sat_indcs):
             last_tp_indx = 0
             for tp_indx in self.model.es_timepoint_indcs:
 
@@ -1150,8 +1126,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                 else:
                     e_vals[sat_indx].append(pe.value(self.model.var_sats_estore[sat,tp_indx]))
 
-                    if sat_indx == 0:
-                        t_vals.append(self.es_time_getter_dc.get_tp_from_tp_indx(tp_indx,out_units='minutes'))
+                    t_vals[sat_indx].append(self.es_time_getter_dc.get_tp_from_tp_indx(tp_indx,out_units='minutes'))
 
         energy_usage['time_mins'] = t_vals
         energy_usage['e_sats'] = e_vals
@@ -1159,21 +1134,50 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
         data_usage = {}
 
-        t_vals = []
+        # note t_vals is relative time to start
+        t_vals = [[] for sat_indx in range ( self.num_sats)]
         d_vals = [[] for sat_indx in range ( self.num_sats)]
 
+        t_val_initial = 0
+        # starts out with zero DV todo: fix this if incorrect...
+        d_val_initial = 0
+
         # TODO: this code feels super inefficient somehow.  make it better?
-        for sat_indx, sat in enumerate (self.model.sats):
-            last_tp_indx = 0
-            for tp_indx in self.model.ds_timepoint_indcs:
+        for sat_indx, sat in enumerate (self.model.sat_indcs):
 
-                if (tp_indx - last_tp_indx) < decimation_factor:
-                    continue
-                else:
-                    d_vals[sat_indx].append(pe.value(self.model.var_sats_dstore[sat,tp_indx]))
+            t_vals[sat_indx].append(t_val_initial)
+            d_vals[sat_indx].append(d_val_initial)
+            last_d_val = d_val_initial
 
-                    if sat_indx == 0:
-                        t_vals.append(self.ds_time_getter_dc.get_tp_from_tp_indx(tp_indx,out_units='minutes'))
+            # last_tp_indx = 0
+            # for tp_indx in self.model.ds_timepoint_indcs:
+            for time_indx,time in enumerate(self.all_link_times_by_sat_indx[sat_indx]):
+
+                # assuming output in minutes for now
+                curr_time = (time-self.planning_start_dt).total_seconds()/60
+
+                curr_dv = 0
+                for obs_windid in self.obs_windids_by_sat_time_subscript[(sat_indx,time_indx)]:
+                    curr_dv += pe.value(self.model.var_sat_obs_time_dv[(sat_indx,obs_windid,time_indx)])
+
+
+                # note that these times and dvs are based on activity center times (we're repurposing the variables used in constraint construction, for output). This is a bit of an artifact, but is okay because we DO meet DV constraints. This will show up on the output plot as an inprecise match between the times of executed activities and the changes in stored DV they cause. This is because we constrain the DV used for a link at timepoint t by the DV contributions from all acts up to t-1. That means that the DV contribution of a crosslink, say, that was in the middle of executing at t-1 will only be seen at t.
+                # This is similar to the situation in the separate AS model
+                # todo: if a more precise accounting of the dv on each satellite at each time is needed, then one should go through all windows and do bookkeeping on when exactly DV is moved from sat to sat.
+
+                # want the output to be represented as a step change, so add the last dv val, at the current time, as well
+                t_vals[sat_indx].append(curr_time)
+                d_vals[sat_indx].append(last_d_val)
+                t_vals[sat_indx].append(curr_time)
+                d_vals[sat_indx].append(curr_dv)
+
+                last_d_val = curr_dv
+
+            # also add last time
+            curr_time = (time-self.planning_end_dt).total_seconds()/60
+            t_vals[sat_indx].append(curr_time)
+            d_vals[sat_indx].append(last_d_val)
+
 
         data_usage['time_mins'] = t_vals
         data_usage['d_sats'] = d_vals

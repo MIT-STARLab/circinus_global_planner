@@ -220,25 +220,25 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
         fig_name='plots/test_activity_times.pdf'
     )
 
-    # gp_runner_inst.gp_plot.plot_data_circles(
-    #     sats_to_include,
-    #     sched_obs_winds_flat,
-    #     sched_obs_winds_flat,
-    #     sched_dlnk_winds_flat,
-    #     sched_dlnk_winds_flat,
-    #     sched_xlnk_winds_flat,
-    #     sched_xlnk_winds_flat,
-    #     route_indcs_by_wind,
-    #     gp_runner_inst.gp_inst_params['planning_start_dt'],
-    #     # gp_runner_inst.gp_inst_params['planning_start_dt'] + timedelta( seconds= gp_runner_inst.rs_general_params['wind_filter_duration_s']),
-    #     gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
-          # base_time = gp_runner_inst.scenario_params['start_utc_dt'],
-    #     plot_title = 'Activity Data Volumes',
-    #     plot_size_inches = (18,12),
-    #     plot_include_labels = gp_runner_inst.as_params['plot_include_labels'],
-    #     show=  False,
-    #     fig_name='plots/test_data_volume.pdf'
-    # )
+    # # gp_runner_inst.gp_plot.plot_data_circles(
+    # #     sats_to_include,
+    # #     sched_obs_winds_flat,
+    # #     sched_obs_winds_flat,
+    # #     sched_dlnk_winds_flat,
+    # #     sched_dlnk_winds_flat,
+    # #     sched_xlnk_winds_flat,
+    # #     sched_xlnk_winds_flat,
+    # #     route_indcs_by_wind,
+    # #     gp_runner_inst.gp_inst_params['planning_start_dt'],
+    # #     # gp_runner_inst.gp_inst_params['planning_start_dt'] + timedelta( seconds= gp_runner_inst.rs_general_params['wind_filter_duration_s']),
+    # #     gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
+    #       # base_time = gp_runner_inst.scenario_params['start_utc_dt'],
+    # #     plot_title = 'Activity Data Volumes',
+    # #     plot_size_inches = (18,12),
+    # #     plot_include_labels = gp_runner_inst.as_params['plot_include_labels'],
+    # #     show=  False,
+    # #     fig_name='plots/test_data_volume.pdf'
+    # # )
 
     gp_runner_inst.gp_plot.plot_energy_usage(
         sats_to_include,
@@ -267,104 +267,104 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
         fig_name='plots/test_data.pdf'
     )
 
-    # found_targIDs = metrics_plot_inputs['rs_targIDs_found']
-    found_targIDs = metrics_plot_inputs['as_targIDs_found']
-    # targs_to_include = [targ['id'] for targ in gp_runner_inst.obs_params['targets']]
-    # targs_to_include = [0,3,4,7,8]
-    # targs_to_include = range(15)
-    # targs_to_include = found_targIDs[0:10]
-    targs_to_include = found_targIDs
+    # # found_targIDs = metrics_plot_inputs['rs_targIDs_found']
+    # found_targIDs = metrics_plot_inputs['as_targIDs_found']
+    # # targs_to_include = [targ['id'] for targ in gp_runner_inst.obs_params['targets']]
+    # # targs_to_include = [0,3,4,7,8]
+    # # targs_to_include = range(15)
+    # # targs_to_include = found_targIDs[0:10]
+    # targs_to_include = found_targIDs
 
-    gp_runner_inst.gp_plot.plot_obs_aoi(
-        targs_to_include,
-        metrics_plot_inputs['obs_aoi_curves_by_targID'],
-        gp_runner_inst.gp_inst_params['planning_start_dt'],
-        gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
-        base_time = gp_runner_inst.scenario_params['start_utc_dt'],
-        plot_title = 'Observation Target AoI',
-        plot_size_inches = (18,12),
-        show=False,
-        fig_name='plots/test_obs_aoi_plot.pdf'
-    )
+    # gp_runner_inst.gp_plot.plot_obs_aoi(
+    #     targs_to_include,
+    #     metrics_plot_inputs['obs_aoi_curves_by_targID'],
+    #     gp_runner_inst.gp_inst_params['planning_start_dt'],
+    #     gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
+    #     base_time = gp_runner_inst.scenario_params['start_utc_dt'],
+    #     plot_title = 'Observation Target AoI',
+    #     plot_size_inches = (18,12),
+    #     show=False,
+    #     fig_name='plots/test_obs_aoi_plot.pdf'
+    # )
 
-    # plot obs latency histogram
-    gp_runner_inst.gp_plot.plot_histogram(
-        data=metrics_plot_inputs['initial_lat_by_obs'].values(),
-        num_bins = 40,
-        plot_type = 'histogram',
-        x_title='Latency (mins)',
-        y_title='Number of observations',
-        plot_title = 'Histogram of initial latency by obs - scheduled (min dv %.1f Mb)'%(gp_runner_inst.as_params['min_as_route_dv_Mb']), 
-        plot_size_inches = (12,6),
-        show=False,
-        fig_name='plots/obs_lat_sched_hist.pdf'
-    )
+    # # plot obs latency histogram
+    # gp_runner_inst.gp_plot.plot_histogram(
+    #     data=metrics_plot_inputs['initial_lat_by_obs'].values(),
+    #     num_bins = 40,
+    #     plot_type = 'histogram',
+    #     x_title='Latency (mins)',
+    #     y_title='Number of observations',
+    #     plot_title = 'Histogram of initial latency by obs - scheduled (min dv %.1f Mb)'%(gp_runner_inst.as_params['min_as_route_dv_Mb']), 
+    #     plot_size_inches = (12,6),
+    #     show=False,
+    #     fig_name='plots/obs_lat_sched_hist.pdf'
+    # )
 
-    # plot obs latency histogram
-    gp_runner_inst.gp_plot.plot_histogram(
-        data=metrics_plot_inputs['initial_lat_by_obs'].values(),
-        num_bins = 40,
-        plot_type = 'cdf',
-        x_title='Latency (mins)',
-        y_title='Number of observations',
-        plot_title = 'Histogram of initial latency by obs - scheduled (min dv %.1f Mb)'%(gp_runner_inst.as_params['min_as_route_dv_Mb']), 
-        plot_size_inches = (12,6),
-        show=False,
-        fig_name='plots/obs_lat_sched_cdf.pdf'
-    )
+    # # plot obs latency histogram
+    # gp_runner_inst.gp_plot.plot_histogram(
+    #     data=metrics_plot_inputs['initial_lat_by_obs'].values(),
+    #     num_bins = 40,
+    #     plot_type = 'cdf',
+    #     x_title='Latency (mins)',
+    #     y_title='Number of observations',
+    #     plot_title = 'Histogram of initial latency by obs - scheduled (min dv %.1f Mb)'%(gp_runner_inst.as_params['min_as_route_dv_Mb']), 
+    #     plot_size_inches = (12,6),
+    #     show=False,
+    #     fig_name='plots/obs_lat_sched_cdf.pdf'
+    # )
 
-    # plot obs latency histogram
-    gp_runner_inst.gp_plot.plot_histogram(
-        data=metrics_plot_inputs['initial_lat_by_obs_rs'].values(),
-        num_bins = 40,
-        plot_type = 'histogram',
-        x_title='Latency (mins)',
-        y_title='Number of observations',
-        plot_title = 'Histogram of initial latency by obs - RS output (min dv %.1f Mb)'%(gp_runner_inst.as_params['min_as_route_dv_Mb']), 
-        plot_size_inches = (12,6),
-        show=False,
-        fig_name='plots/obs_lat_rs_hist.pdf'
-    )
+    # # plot obs latency histogram
+    # gp_runner_inst.gp_plot.plot_histogram(
+    #     data=metrics_plot_inputs['initial_lat_by_obs_rs'].values(),
+    #     num_bins = 40,
+    #     plot_type = 'histogram',
+    #     x_title='Latency (mins)',
+    #     y_title='Number of observations',
+    #     plot_title = 'Histogram of initial latency by obs - RS output (min dv %.1f Mb)'%(gp_runner_inst.as_params['min_as_route_dv_Mb']), 
+    #     plot_size_inches = (12,6),
+    #     show=False,
+    #     fig_name='plots/obs_lat_rs_hist.pdf'
+    # )
 
-    # plot obs latency histogram
-    gp_runner_inst.gp_plot.plot_histogram(
-        data=metrics_plot_inputs['initial_lat_by_obs_rs'].values(),
-        num_bins = 40,
-        plot_type = 'cdf',
-        x_title='Latency (mins)',
-        y_title='Number of observations',
-        plot_title = 'Histogram of initial latency by obs - RS output (min dv %.1f Mb)'%(gp_runner_inst.as_params['min_as_route_dv_Mb']), 
-        plot_size_inches = (12,6),
-        show=False,
-        fig_name='plots/obs_lat_rs_cdf.pdf'
-    )
+    # # plot obs latency histogram
+    # gp_runner_inst.gp_plot.plot_histogram(
+    #     data=metrics_plot_inputs['initial_lat_by_obs_rs'].values(),
+    #     num_bins = 40,
+    #     plot_type = 'cdf',
+    #     x_title='Latency (mins)',
+    #     y_title='Number of observations',
+    #     plot_title = 'Histogram of initial latency by obs - RS output (min dv %.1f Mb)'%(gp_runner_inst.as_params['min_as_route_dv_Mb']), 
+    #     plot_size_inches = (12,6),
+    #     show=False,
+    #     fig_name='plots/obs_lat_rs_cdf.pdf'
+    # )
 
-    # sats_to_include =  [sat_p['sat_id'] for sat_p in gp_runner_inst.sat_orbit_params]
-    # sats_to_include =  range(10)
-    aoi_option = 'cmd'
-    gp_runner_inst.gp_plot.plot_sat_tlm_cmd_aoi(
-        sats_to_include,
-        metrics_plot_inputs['cmd_aoi_curves_by_sat_indx'],
-        aoi_option,
-        gp_runner_inst.gp_inst_params['planning_start_dt'],
-        gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
-        base_time = gp_runner_inst.scenario_params['start_utc_dt'],
-        plot_title = 'Satellite Command Uplink AoI',
-        plot_size_inches = (18,12),
-        show=False,
-        fig_name='plots/test_cmd_aoi_plot.pdf'
-    )
+    # # sats_to_include =  [sat_p['sat_id'] for sat_p in gp_runner_inst.sat_orbit_params]
+    # # sats_to_include =  range(10)
+    # aoi_option = 'cmd'
+    # gp_runner_inst.gp_plot.plot_sat_tlm_cmd_aoi(
+    #     sats_to_include,
+    #     metrics_plot_inputs['cmd_aoi_curves_by_sat_indx'],
+    #     aoi_option,
+    #     gp_runner_inst.gp_inst_params['planning_start_dt'],
+    #     gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
+    #     base_time = gp_runner_inst.scenario_params['start_utc_dt'],
+    #     plot_title = 'Satellite Command Uplink AoI',
+    #     plot_size_inches = (18,12),
+    #     show=False,
+    #     fig_name='plots/test_cmd_aoi_plot.pdf'
+    # )
 
-    aoi_option = 'tlm'
-    gp_runner_inst.gp_plot.plot_sat_tlm_cmd_aoi(
-        sats_to_include,
-        metrics_plot_inputs['tlm_aoi_curves_by_sat_indx'],
-        aoi_option,
-        gp_runner_inst.gp_inst_params['planning_start_dt'],
-        gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
-        base_time = gp_runner_inst.scenario_params['start_utc_dt'],
-        plot_title = 'Satellite Telemetry Downlink AoI',
-        plot_size_inches = (18,12),
-        show=False,
-        fig_name='plots/test_tlm_aoi_plot.pdf'
-    )
+    # aoi_option = 'tlm'
+    # gp_runner_inst.gp_plot.plot_sat_tlm_cmd_aoi(
+    #     sats_to_include,
+    #     metrics_plot_inputs['tlm_aoi_curves_by_sat_indx'],
+    #     aoi_option,
+    #     gp_runner_inst.gp_inst_params['planning_start_dt'],
+    #     gp_runner_inst.gp_inst_params['planning_end_dlnk_dt'],
+    #     base_time = gp_runner_inst.scenario_params['start_utc_dt'],
+    #     plot_title = 'Satellite Telemetry Downlink AoI',
+    #     plot_size_inches = (18,12),
+    #     show=False,
+    #     fig_name='plots/test_tlm_aoi_plot.pdf'
+    # )
