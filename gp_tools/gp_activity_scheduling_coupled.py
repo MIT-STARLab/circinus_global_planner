@@ -114,6 +114,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
         # all acts for a given sat
         sats_acts_set = [set() for sat_indx in range (self.num_sats)]
+        sats_dlnks_set = [set() for sat_indx in range (self.num_sats)]
 
         # this is T^s - defines a unique time system for every satellite based on where the activities actually take place, as opposed to a finely granularized, monolithic list of times that could impose MILP constraints even when there are no activities happening during most of the times.
         all_link_times_by_sat_indx = {sat_indx: [] for sat_indx in range(self.num_sats)}  
@@ -148,8 +149,9 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                 capacity_by_act_windid[dlnk_windid] = dlnk.data_vol
                 obs_windids_by_dlnk_windid.setdefault(dlnk_windid, set())
                 all_link_times_link_objs_by_sat_indx[sat_indx].append((dlnk.center,[dlnk]))
-                sats_acts_set[sat_indx].add(dlnk)
                 sat_obs_time_dv_subscripts_by_link_obj.setdefault(dlnk, [])
+                sats_acts_set[sat_indx].add(dlnk)
+                sats_dlnks_set[sat_indx].add(dlnk)
 
                 for obs_sat in obs_winds_filt:
                     for obs in obs_sat:
@@ -264,14 +266,18 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
 
         sats_acts = []
-        for sat_act_set in sats_acts_set:
-            sat_act_list = list(sat_act_set)
+        sats_dlnks = []
+        for sat_indx in range(self.num_sats):
+
+            sat_act_list = list(sats_acts_set[sat_indx])
             sat_act_list.sort(key= lambda a: a.center)
             sats_acts.append(sat_act_list)
 
+            sat_dlnk_list = list(sats_dlnks_set[sat_indx])
+            sat_dlnk_list.sort(key= lambda a: a.center)
+            sats_dlnks.append(sat_dlnk_list)
 
-
-        return sats_acts,all_acts_windids,all_obs_windids,all_dlnk_windids,all_xlnk_windids,all_act_objs_by_windid,capacity_by_act_windid,dlnk_obs_windids,xlnk_obs_windids,obs_windids_by_lnk_windid,obs_windids_by_dlnk_windid,obs_windids_by_xlnk_windid,dlnk_windids_by_obs_windid,xlnk_windids_by_obs_windid,all_link_times_by_sat_indx,sat_obs_time_dv_subscripts,time_by_sat_obs_time_dv_subscript,sat_obs_time_dv_subscripts_by_link_obj,link_objs_by_sat_obs_time_dv_subscripts
+        return sats_acts,sats_dlnks,all_acts_windids,all_obs_windids,all_dlnk_windids,all_xlnk_windids,all_act_objs_by_windid,capacity_by_act_windid,dlnk_obs_windids,xlnk_obs_windids,obs_windids_by_lnk_windid,obs_windids_by_dlnk_windid,obs_windids_by_xlnk_windid,dlnk_windids_by_obs_windid,xlnk_windids_by_obs_windid,all_link_times_by_sat_indx,sat_obs_time_dv_subscripts,time_by_sat_obs_time_dv_subscript,sat_obs_time_dv_subscripts_by_link_obj,link_objs_by_sat_obs_time_dv_subscripts
 
 
     def make_model ( self,obs_winds,dlnk_winds_flat,xlnk_winds_flat, ecl_winds, verbose = False):
@@ -309,6 +315,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
             #     dv_by_link_act) =  self.get_activity_structs(routes_flat)
 
             (sats_acts,
+                sats_dlnks,
                 all_acts_windids,
                 all_obs_windids,
                 all_dlnk_windids,
@@ -528,6 +535,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
         constraint_violation_model_objs = {}
         constraint_violation_model_objs['intra_sat_act_constr_violation_acts_list'] = []
+        constraint_violation_model_objs['inter_sat_act_constr_violation_acts_list'] = []
         constraint_violation_model_objs['var_intra_sat_act_constr_violations'] = model.var_intra_sat_act_constr_violations
         constraint_violation_model_objs['var_inter_sat_act_constr_violations'] = model.var_inter_sat_act_constr_violations
         constraint_violation_model_objs['intra_sat_act_constr_bounds'] = model.intra_sat_act_constr_bounds
@@ -650,82 +658,19 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         #  intra-satellite activity overlap constraints [10],[11],[12]
 
         #  well, 12 is activity minimum time duration
-        model.c10_11  = pe.ConstraintList() # this now contains all of the activity overlap constraints
+        model.c10_11  = pe.ConstraintList()
         model.c12  = pe.ConstraintList()
 
         # pass the model objects getter function so it can be called in place
         self.gen_intra_sat_act_overlap_constraints(model.c10_11,model.c12,sats_acts,self.get_act_model_objs,constraint_violation_model_objs)
 
 
-        # # inter-satellite downlink overlap constraints [9],[10]
-        # # model.c9  = pe.ConstraintList() # c10 now holds c9 constraints
-        # model.c10  = pe.ConstraintList()
-        # model.inter_sat_act_constr_bounds  = pe.ConstraintList()
-        # self.inter_sat_act_constr_violation_acts_list = []
-        # for sat_indx in range (self.num_sats):
-        #     num_sat_acts = len(sat_dlnks[sat_indx])
-            
-        #     for other_sat_indx in range (self.num_sats):
-        #         if other_sat_indx == sat_indx:
-        #             continue
+        # inter-satellite downlink overlap constraints [9],[10]
+        
+        model.c14_15  = pe.ConstraintList()
 
-        #         num_other_sat_acts = len(sat_dlnks[other_sat_indx])
-
-        #         for  sat_act_indx in  range (num_sat_acts):
-
-        #             act1 = sat_dlnks[sat_indx][sat_act_indx]
-        #             # get the unique index into model.acts
-        #             act1_uindx = all_acts_by_obj[act1]
-                    
-        #             for  other_sat_act_indx in  range (num_other_sat_acts):
-        #                 act2 = sat_dlnks[other_sat_indx][other_sat_act_indx]
-        #                 # get the unique index into model.acts
-        #                 act2_uindx = all_acts_by_obj[act2]
-
-        #                 assert(type(act1) == DlnkWindow and type(act2) == DlnkWindow)
-
-        #                 # this line is pretty important - only consider overlap if they're looking at the same GS. I forgot to add this before and spent days wondering why the optimization process was progressing so slowly (hint: it's really freaking constrained and there's not much guidance for finding a good objective value if no downlink can overlap in time with any other downlink)
-        #                 if act1.gs_indx != act2.gs_indx:
-        #                     continue
-
-        #                 # we're considering windows across satellites, so they could be out of order temporally. These constraints are only valid if act2 is after act1 (center time). Don't worry, as we loop through satellites, we consider both directions (i.e. act1 and act2 will be swapped in another iteration, and we'll get past this check and impose the required constraints)
-        #                 if (act2.center - act1.center).total_seconds() < 0:
-        #                     continue
-
-
-        #                 # get the transition time requirement between these activities
-        #                 try:
-        #                     transition_time_req = self.act_transition_time_map[("inter-sat",DlnkWindow,DlnkWindow)]
-        #                 # if not explicitly specified, go with default transition time requirement
-        #                 except KeyError:
-        #                     used_default_transition_time = True
-        #                     transition_time_req = self.act_transition_time_map["default"]
-
-        #                 # if there is enough transition time between the two activities, no constraint needs to be added
-        #                 #  note that we are okay even if for some reason Act 2 starts before Act 1 ends, because time deltas return negative total seconds as well
-        #                 if (act2.start - act1.end).total_seconds() >= transition_time_req:
-        #                     #  don't need to do anything,  continue on to next activity pair
-        #                     continue
-
-        #                 else:
-        #                     constr, var_constr_violation, min_constr_violation = gen_inter_act_constraint(
-        #                         model.var_inter_sat_act_constr_violations,
-        #                         model.inter_sat_act_constr_bounds,
-        #                         transition_time_req,
-        #                         act1,
-        #                         act2,
-        #                         act1_uindx,
-        #                         act2_uindx
-        #                     )
-
-        #                     #  add the constraint, regardless of whether or not it's a "big M" constraint, or a constraint violation constraint - they're handled the same
-        #                     model.c10.add( constr )
-
-        #                     #  if it's a constraint violation constraint, then we have a variable to deal with
-        #                     if not min_constr_violation is None:
-        #                         # model.var_inter_sat_act_constr_violations.add(var_constr_violation)
-        #                         min_var_inter_sat_act_constr_violation_list.append(min_constr_violation)
-        #                         self.inter_sat_act_constr_violation_acts_list.append((act1,act2))
+        # pass the model objects getter function so it can be called in place
+        self.gen_inter_sat_act_overlap_constraints(model.c14_15,sats_dlnks,self.get_act_model_objs,constraint_violation_model_objs)
 
 
         # if verbose:

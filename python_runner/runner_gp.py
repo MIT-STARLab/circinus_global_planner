@@ -122,7 +122,7 @@ class GlobalPlannerRunner:
         t_a = time.time()
         gp_as.solve ()
         t_b = time.time()
-        gp_as.print_sol ()
+        # gp_as.print_sol ()
 
         print('extract_routes')
         #  make a copy of the windows in the extracted routes so we don't mess with the original objects ( just to be extra careful)

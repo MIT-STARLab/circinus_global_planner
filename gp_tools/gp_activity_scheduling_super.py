@@ -234,6 +234,78 @@ class GPActivityScheduling():
                             intra_sat_act_constr_violation_acts_list.append((act1,act2))
 
 
+    def gen_inter_sat_act_overlap_constraints(self,c_overlap,sats_dlnks,act_model_objs_getter,constraint_violation_model_objs):
+
+        inter_sat_act_constr_violation_acts_list = constraint_violation_model_objs['inter_sat_act_constr_violation_acts_list']
+        var_inter_sat_act_constr_violations = constraint_violation_model_objs['var_inter_sat_act_constr_violations']
+        inter_sat_act_constr_bounds = constraint_violation_model_objs['inter_sat_act_constr_bounds']
+        min_var_inter_sat_act_constr_violation_list = constraint_violation_model_objs['min_var_inter_sat_act_constr_violation_list']
+
+        for sat_indx in range (self.num_sats):
+            num_sat_acts = len(sats_dlnks[sat_indx])
+            
+            for other_sat_indx in range (self.num_sats):
+                if other_sat_indx == sat_indx:
+                    continue
+
+                num_other_sat_acts = len(sats_dlnks[other_sat_indx])
+
+                for  sat_act_indx in  range (num_sat_acts):
+
+                    act1 = sats_dlnks[sat_indx][sat_act_indx]
+                    
+                    for  other_sat_act_indx in  range (num_other_sat_acts):
+                        act2 = sats_dlnks[other_sat_indx][other_sat_act_indx]
+
+                        assert(type(act1) == DlnkWindow and type(act2) == DlnkWindow)
+
+                        # this line is pretty important - only consider overlap if they're looking at the same GS. I forgot to add this before and spent days wondering why the optimization process was progressing so slowly (hint: it's really freaking constrained and there's not much guidance for finding a good objective value if no downlink can overlap in time with any other downlink)
+                        if act1.gs_indx != act2.gs_indx:
+                            continue
+
+                        # we're considering windows across satellites, so they could be out of order temporally. These constraints are only valid if act2 is after act1 (center time). Don't worry, as we loop through satellites, we consider both directions (i.e. act1 and act2 will be swapped in another iteration, and we'll get past this check and impose the required constraints)
+                        if (act2.center - act1.center).total_seconds() < 0:
+                            continue
+
+
+                        # get the transition time requirement between these activities
+                        try:
+                            transition_time_req = self.act_transition_time_map[("inter-sat",DlnkWindow,DlnkWindow)]
+                        # if not explicitly specified, go with default transition time requirement
+                        except KeyError:
+                            used_default_transition_time = True
+                            transition_time_req = self.act_transition_time_map["default"]
+
+                        # if there is enough transition time between the two activities, no constraint needs to be added
+                        #  note that we are okay even if for some reason Act 2 starts before Act 1 ends, because time deltas return negative total seconds as well
+                        if (act2.start - act1.end).total_seconds() >= transition_time_req:
+                            #  don't need to do anything,  continue on to next activity pair
+                            continue
+
+                        else:
+                            # note: generally a function from the AS subclass
+                            model_objs_act1 = act_model_objs_getter(act1)
+                            # note: generally a function from the AS subclass
+                            model_objs_act2 = act_model_objs_getter(act2)
+                        
+                            constr, var_constr_violation, min_constr_violation = self.gen_inter_act_constraint(
+                                var_inter_sat_act_constr_violations,
+                                inter_sat_act_constr_bounds,
+                                transition_time_req,
+                                model_objs_act1,
+                                model_objs_act2
+                            )
+
+                            #  add the constraint, regardless of whether or not it's a "big M" constraint, or a constraint violation constraint - they're handled the same
+                            c_overlap.add( constr )
+
+                            #  if it's a constraint violation constraint, then we have a variable to deal with
+                            if not min_constr_violation is None:
+                                # model.var_inter_sat_act_constr_violations.add(var_constr_violation)
+                                min_var_inter_sat_act_constr_violation_list.append(min_constr_violation)
+                                inter_sat_act_constr_violation_acts_list.append((act1,act2))
+
+
     def solve(self):
 
         solver = po.SolverFactory(self.solver_name)
