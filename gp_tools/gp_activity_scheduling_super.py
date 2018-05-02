@@ -37,16 +37,23 @@ class GPActivityScheduling():
         as_params = gp_params['gp_general_params']['activity_scheduling_params']
         gp_inst_params = gp_params['gp_instance_params']['planning_params']
 
+        # records if the formulation model has been constructed successfully
+        self.model_constructed = False
+
         self.scenario_timestep_s = scenario_params['timestep_s']
         
         self.latency_params = gp_params['gp_general_params']['other_params']['latency_calculation']
         self.solver_name =as_params['solver_name']
         self.solver_params =as_params['solver_params']
-        self.min_obs_dv_dlnk_req =as_params['min_obs_dv_dlnk_req_Mb']
         self.num_sats=sat_params['num_sats']
         self.resource_delta_t_s  =as_params['resource_delta_t_s']
         self.enforce_energy_storage_constr  =as_params['enforce_energy_storage_constr']
         self.enforce_data_storage_constr  =as_params['enforce_data_storage_constr']
+
+        # this is the minimum obs dv that must be downlinked for an obs (data route/obs dlnk) in order for it to count it towards objective terms (other than total dv)
+        self.min_obs_dv_dlnk_req =as_params['min_obs_dv_dlnk_req_Mb']
+        # this is the mimimum latency requirement for the highest latency score factor, 1.0. If multiple routes/dlnks for a single obs have latency less than this, they will both have sf 1.0
+        self.min_latency_for_sf_1_mins =as_params['min_latency_for_sf_1_mins']
 
         self.planning_start_dt  = gp_inst_params['planning_start_dt']
         self.planning_end_obs_xlnk_dt = gp_inst_params['planning_end_obs_xlnk_dt']
@@ -318,6 +325,9 @@ class GPActivityScheduling():
         return used_default_transition_time
 
     def solve(self):
+
+        if not self.model_constructed:
+            return
 
         solver = po.SolverFactory(self.solver_name)
         if self.solver_name == 'gurobi':

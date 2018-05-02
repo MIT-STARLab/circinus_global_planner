@@ -37,16 +37,25 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         # if two times are separated by this amount, we call them effectively the same time
         self.T_s_time_epsilon_td = timedelta(seconds=self.scenario_timestep_s/2)
 
+        # number of observations found after filtering
+        self.num_obs_filt = const.UNASSIGNED
+
     def get_stats(self,verbose=True):
 
+        valid = True
+        if self.num_obs_filt == 0:
+            if verbose:
+                print('No observations found! No stats to extract')
+            valid = False
+
         stats = {}
-        stats['num_acts'] = len ( self.all_acts_windids)
-        stats['num_obs'] = len ( self.all_obs_windids)
-        stats['num_dlnks'] = len ( self.all_dlnk_windids)
-        stats['num_xlnks'] = len ( self.all_xlnk_windids)
-        stats['num_variables'] = self.model.nvariables ()
-        stats['num_nobjectives'] = self.model.nobjectives ()
-        stats['num_nconstraints'] = self.model.nconstraints ()
+        stats['num_acts'] = len ( self.all_acts_windids) if valid else 0
+        stats['num_obs'] = len ( self.all_obs_windids) if valid else 0
+        stats['num_dlnks'] = len ( self.all_dlnk_windids) if valid else 0
+        stats['num_xlnks'] = len ( self.all_xlnk_windids) if valid else 0
+        stats['num_variables'] = self.model.nvariables () if valid else 0
+        stats['num_nobjectives'] = self.model.nobjectives () if valid else 0
+        stats['num_nconstraints'] = self.model.nconstraints () if valid else 0
 
         if verbose:
             print ( "Considering %d activity windows" % (stats['num_acts']))
@@ -122,8 +131,10 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
             #  the shortest latency downlink for this observation has a score factor of 1.0, and the score factors for the other downlinks decrease as the inverse of increasing latency
             min_lat = min(latency_by_dlnk_windid.values())
-            for d,latency in latency_by_dlnk_windid.items():
-                latency_sf_by_dlnk_obs_windids[(d,o)] = min_lat/latency
+            min_lat = max(min_lat, self.min_latency_for_sf_1_mins)
+            for d,lat in latency_by_dlnk_windid.items():
+                lat = max(lat, self.min_latency_for_sf_1_mins)
+                latency_sf_by_dlnk_obs_windids[(d,o)] = min_lat/lat
  
         return latency_sf_by_dlnk_obs_windids
 
@@ -322,6 +333,14 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         obs_winds_filt,dlnk_winds_filt,xlnk_winds_filt = self.filter_windows(obs_winds,dlnk_winds_flat,xlnk_winds_flat,self.num_sats)
 
         self.ecl_winds = ecl_winds
+
+        self.num_obs_filt = sum(len(obs_winds_sat) for obs_winds_sat in obs_winds_filt)
+        if self.num_obs_filt == 0:
+            if verbose:
+                print('No observations found! Quitting coupled AS early')
+            self.model_constructed = False
+            return
+
 
         #  really useful code below!!!
         if verbose:
@@ -798,43 +817,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
             
         model.obj = pe.Objective( rule=obj_rule, sense=pe.maximize )
 
-    # taken in part from Jeff Menezes' code at https://github.mit.edu/jmenezes/Satellite-MILP/blob/master/sat_milp_pyomo.py
-    def solve(self):
-
-        solver = po.SolverFactory(self.solver_name)
-        if self.solver_name == 'gurobi':
-            # note default for this is 1e-4, or 0.01%
-            solver.options['TimeLimit'] = self.solver_params['max_runtime_s']
-            solver.options['MIPGap'] = self.solver_params['optimality_gap']
-            solver.options['IntFeasTol'] = self.solver_params['integer_feasibility_tolerance']
-            # other options...
-            # solver.options['Cuts'] = 0
-            # solver.options['MIPFocus'] = 1 #for finding feasible solutions quickly
-            # solver.options['MIPFocus'] = 3 #for lowering the mip gap
-
-        elif self.solver_name == 'cplex':
-            solver.options['timelimit'] = self.solver_params['max_runtime_s']
-            solver.options['mip_tolerances_mipgap'] = self.solver_params['optimality_gap']
-            solver.options['mip_tolerances_integrality'] = self.solver_params['integer_feasibility_tolerance']
-
-
-        # if we're running things remotely, then we will use the NEOS server (https://neos-server.org/neos/)
-        if self.solver_params['run_remotely']:
-            solver_manager = po.SolverManagerFactory('neos')
-            results = solver_manager.solve(self.model, opt= solver)
-        else:
-            # tee=True displays solver output in the terminal
-            # keepfiles=True  keeps files passed to and from the solver
-            results =  solver.solve(self.model, tee=True, keepfiles= False)
-
-        if (results.solver.status == po.SolverStatus.ok) and (results.solver.termination_condition == po.TerminationCondition.optimal):
-            print('this is feasible and optimal')
-        elif results.solver.termination_condition == po.TerminationCondition.infeasible:
-            print ('infeasible')
-            raise RuntimeError('Model is infeasible with current parameters')
-        else:
-            # something else is wrong
-            print (results.solver)
+        self.model_constructed = True
 
     def print_sol_all(self):
         for v in self.model.component_objects(pe.Var, active=True):
@@ -1022,11 +1005,18 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
     def extract_utilized_routes( self, copy_routes = True, verbose = False):
 
-        # create the basic set of data routes from scheduled windows, dv usage
-        data_routes,dr_uid = self.fabricate_routes()
-
         if verbose:
             print ('utilized routes:')
+
+        scheduled_routes_flat = []
+
+        if self.num_obs_filt == 0:
+            if verbose:
+                print('No observations found! No routes to extract')
+            return scheduled_routes_flat
+
+        # create the basic set of data routes from scheduled windows, dv usage
+        data_routes,dr_uid = self.fabricate_routes()
 
         # commenting out for now because I'm not sure this is actually useful, considering we already have to modify the windows below...
         # def copy_choice(route):
@@ -1038,7 +1028,6 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
 
         # the rest of the code expects DataMultiRoute objects, so we'll create these as shallow wrappers around the data routes we just fabricated
-        scheduled_routes_flat = []
         for dr in data_routes:
             scheduled_route = DataMultiRoute(dr_uid,[dr],dv_epsilon=self.dv_epsilon)
             # the dr within is fully utilized (1.0) 
@@ -1101,6 +1090,11 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         return scheduled_routes_flat
 
     def extract_resource_usage( self, decimation_factor =1, verbose = False):
+
+        if self.num_obs_filt == 0:
+            if verbose:
+                print('No observations found! No resource usage data to extract')
+            return None,None
 
         energy_usage = {}
 
@@ -1167,7 +1161,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                 last_d_val = curr_dv
 
             # also add last time
-            curr_time = (time-self.planning_end_dt).total_seconds()/60
+            curr_time = (self.planning_end_dt-self.planning_start_dt).total_seconds()/60
             t_vals[sat_indx].append(curr_time)
             d_vals[sat_indx].append(last_d_val)
 
@@ -1176,5 +1170,3 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         data_usage['d_sats'] = d_vals
 
         return  energy_usage, data_usage
-
-

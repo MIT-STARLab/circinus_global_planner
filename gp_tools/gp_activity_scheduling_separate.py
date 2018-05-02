@@ -32,6 +32,8 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
         super().__init__(gp_params)
 
+        # number of routes found after filtering
+        self.num_routes_filt = const.UNASSIGNED
 
     def get_stats(self,verbose=True):
 
@@ -221,8 +223,10 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
              #  the shortest latency dmr (DataMultiRoute) for this observation has a score factor of 1.0, and the score factors for the other dmrs decrease as the inverse of increasing latency
             min_lat = min(latencies)
+            min_lat = max(min_lat, self.min_latency_for_sf_1_mins)
             for lat_indx, lat in enumerate(latencies):
                 dmr_indx = dmr_indcs[lat_indx]
+                lat = max(lat, self.min_latency_for_sf_1_mins)
                 latency_sf_by_dmr_indx[dmr_indx] = min_lat/lat
  
         return latency_sf_by_dmr_indx
@@ -238,6 +242,13 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
         self.routes_flat = routes_flat
         self.ecl_winds = ecl_winds
+
+        self.num_routes_filt = len(routes_flat)
+        if self.num_routes_filt == 0:
+            if verbose:
+                print('No routes found! Quitting separate AS early')
+            self.model_constructed = False
+            return
 
         #  should only be using data multi-route objects for activity scheduling, even if they're just a shallow wrapper around a DataRoute
         for dmr in routes_flat:
@@ -656,43 +667,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             
         model.obj = pe.Objective( rule=obj_rule, sense=pe.maximize )
 
-    # taken in part from Jeff Menezes' code at https://github.mit.edu/jmenezes/Satellite-MILP/blob/master/sat_milp_pyomo.py
-    def solve(self):
-
-        solver = po.SolverFactory(self.solver_name)
-        if self.solver_name == 'gurobi':
-            # note default for this is 1e-4, or 0.01%
-            solver.options['TimeLimit'] = self.solver_params['max_runtime_s']
-            solver.options['MIPGap'] = self.solver_params['optimality_gap']
-            solver.options['IntFeasTol'] = self.solver_params['integer_feasibility_tolerance']
-            # other options...
-            # solver.options['Cuts'] = 0
-            # solver.options['MIPFocus'] = 1 #for finding feasible solutions quickly
-            # solver.options['MIPFocus'] = 3 #for lowering the mip gap
-
-        elif self.solver_name == 'cplex':
-            solver.options['timelimit'] = self.solver_params['max_runtime_s']
-            solver.options['mip_tolerances_mipgap'] = self.solver_params['optimality_gap']
-            solver.options['mip_tolerances_integrality'] = self.solver_params['integer_feasibility_tolerance']
-
-
-        # if we're running things remotely, then we will use the NEOS server (https://neos-server.org/neos/)
-        if self.solver_params['run_remotely']:
-            solver_manager = po.SolverManagerFactory('neos')
-            results = solver_manager.solve(self.model, opt= solver)
-        else:
-            # tee=True displays solver output in the terminal
-            # keepfiles=True  keeps files passed to and from the solver
-            results =  solver.solve(self.model, tee=True, keepfiles= False)
-
-        if (results.solver.status == po.SolverStatus.ok) and (results.solver.termination_condition == po.TerminationCondition.optimal):
-            print('this is feasible and optimal')
-        elif results.solver.termination_condition == po.TerminationCondition.infeasible:
-            print ('infeasible')
-            raise RuntimeError('Model is infeasible with current parameters')
-        else:
-            # something else is wrong
-            print (results.solver)
+        self.model_constructed = True
 
     def print_sol_all(self):
         for v in self.model.component_objects(pe.Var, active=True):

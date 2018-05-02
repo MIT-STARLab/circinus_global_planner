@@ -557,7 +557,7 @@ class PipelineRunner:
 
             dlnk_end = gp_instance_params['planning_params']['planning_end_dlnk_dt']
             obs_xlnk_end = gp_instance_params['planning_params']['planning_end_obs_xlnk_dt']
-            if not dlnk_end <= obs_xlnk_end:
+            if not dlnk_end >= obs_xlnk_end:
                 raise RuntimeWarning('Planning window end for dlnk (%s) should be set equal or later than end for observations, crosslinks (%s)'%(dlnk_end,obs_xlnk_end))
 
         else:

@@ -11,6 +11,7 @@ def calc_activity_scheduling_results ( gp_runner_inst,obs_winds,dlnk_winds_flat,
         if type(wind) == DlnkWindow:
             return wind.start >= gp_runner_inst.gp_inst_params['planning_start_dt'] and wind.end <= gp_runner_inst.gp_inst_params['planning_end_dlnk_dt']
 
+    num_collectible_obs_winds = sum(1 for winds in obs_winds for obs in winds if in_planning_window(obs))
     total_collectible_DV_all_obs_winds = sum(obs.data_vol for winds in obs_winds for obs in winds  if in_planning_window(obs))
     total_dlnkable_DV_all_dlnk_winds = sum(dlnk.data_vol for winds in dlnk_winds_flat for dlnk in winds if in_planning_window(dlnk))
     rs_output_routes = [rt for rts in rs_routes_by_obs.values() for rt in rts]
@@ -18,21 +19,26 @@ def calc_activity_scheduling_results ( gp_runner_inst,obs_winds,dlnk_winds_flat,
     total_collectible_DV_rs_routes = sum(min(obs.data_vol,sum(rt.data_vol for rt in rts)) for obs, rts in rs_routes_by_obs.items() if in_planning_window(obs))
 
     print('------------------------------')
+    print('calc_activity_scheduling_results()')
     print('in scheduling window:')
+    print('num_collectible_obs_winds')
+    print(num_collectible_obs_winds)
     if len(rs_routes_by_obs.keys()) == 0:
         print('no RS routes found')
-    print('len(rs_output_routes)')
-    print(len(rs_output_routes))
+    else:
+        print('len(rs_output_routes)')
+        print(len(rs_output_routes))
     print('len(sched_routes)')
     print(len(sched_routes))
     print('total_collectible_DV_all_obs_winds')
     print(total_collectible_DV_all_obs_winds)
     print('total_dlnkable_DV_all_dlnk_winds')
     print(total_dlnkable_DV_all_dlnk_winds)
-    print('total_throughput_DV_rs_routes')
-    print(total_throughput_DV_rs_routes)
-    print('total_collectible_DV_rs_routes')
-    print(total_collectible_DV_rs_routes)
+    if len(rs_routes_by_obs.keys()) > 0:
+        print('total_throughput_DV_rs_routes')
+        print(total_throughput_DV_rs_routes)
+        print('total_collectible_DV_rs_routes')
+        print(total_collectible_DV_rs_routes)
     print('weights')
     print(gp_runner_inst.as_params['obj_weights'])
     # dv_stats = gp_met.assess_dv_all_routes (sched_routes,verbose = True)

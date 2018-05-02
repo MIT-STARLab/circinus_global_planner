@@ -281,6 +281,8 @@ class GPPlotting():
                         xlnk_start = (get_start(xlnk_wind)-base_time).total_seconds()/time_divisor
                         xlnk_end = (get_end(xlnk_wind)-base_time).total_seconds()/time_divisor
 
+                        out_of_filter_bounds = get_start(xlnk_wind) < plot_start or get_end(xlnk_wind) > plot_end
+
                         #  update the rotator value if we've already added this window to the plot in the "choices" code above
                         if xlnk_wind in xlnk_choices_rectangle_rotator_hist.keys ():
                             xlnk_rectangle_rotator = xlnk_choices_rectangle_rotator_hist[xlnk_wind]
@@ -298,9 +300,12 @@ class GPPlotting():
                             xlnk_color_indx = 0
 
                         xlnk_color = self.xlnk_colors[xlnk_color_indx]
+                        hatch = '///////'
+                        if out_of_filter_bounds:
+                            hatch = '.'
                         
                         # plot the task duration
-                        x = Rectangle((xlnk_start, bottom_vert_loc), xlnk_end-xlnk_start, bottom_vert_loc +1,alpha=1,fill=False,color=xlnk_color,hatch='///////')
+                        x = Rectangle((xlnk_start, bottom_vert_loc), xlnk_end-xlnk_start, bottom_vert_loc +1,alpha=1,fill=False,color=xlnk_color,hatch=hatch)
                         current_axis.add_patch(x)
 
                         xlnk_rectangle_rotator =  (xlnk_rectangle_rotator+1)%xlnk_rotation_rollover
@@ -337,13 +342,19 @@ class GPPlotting():
                         obs_start = (get_start(obs_wind)-base_time).total_seconds()/time_divisor
                         obs_end = (get_end(obs_wind)-base_time).total_seconds()/time_divisor
 
+                        out_of_filter_bounds = get_start(obs_wind) < plot_start or get_end(obs_wind) > plot_end
+
                         #  update the rotator value if we've already added this window to the plot in the "choices" code above
                         if obs_wind in obs_choices_rectangle_rotator_hist.keys ():
                             obs_rectangle_rotator = obs_choices_rectangle_rotator_hist[obs_wind]
 
+                        hatch = '///////'
+                        if out_of_filter_bounds:
+                            hatch = '.'
+
                         # plot the task duration
                         bottom_vert_loc = obs_rectangle_rotator
-                        d = Rectangle((obs_start, bottom_vert_loc), obs_end-obs_start, bottom_vert_loc+1,alpha=1,fill=False,color='#00FF00',hatch='///////')
+                        d = Rectangle((obs_start, bottom_vert_loc), obs_end-obs_start, bottom_vert_loc+1,alpha=1,fill=False,color='#00FF00',hatch=hatch)
                         current_axis.add_patch(d)
 
                         plt.text(obs_start+0.15, bottom_vert_loc+0.4, "%s,dv %d/%d"%(obs_wind.target_IDs,obs_wind.scheduled_data_vol,obs_wind.data_vol) , fontsize=10, color = 'k')
@@ -363,15 +374,21 @@ class GPPlotting():
                         dlnk_start = (get_start(dlnk_wind)-base_time).total_seconds()/time_divisor
                         dlnk_end = (get_end(dlnk_wind)-base_time).total_seconds()/time_divisor
 
+                        out_of_filter_bounds = get_start(dlnk_wind) < plot_start or get_end(dlnk_wind) > plot_end
+
                         gs_indx = dlnk_wind.gs_indx
 
                         #  update the rotator value if we've already added this window to the plot in the "choices" code above
                         if dlnk_wind in dlnk_choices_rectangle_rotator_hist.keys ():
                             dlnk_rectangle_rotator = dlnk_choices_rectangle_rotator_hist[dlnk_wind]
 
+                        hatch = '///////'
+                        if out_of_filter_bounds:
+                            hatch = '.'
+
                         # plot the task duration
                         bottom_vert_loc = dlnk_rectangle_rotator
-                        d = Rectangle((dlnk_start, bottom_vert_loc), dlnk_end-dlnk_start, bottom_vert_loc+1,alpha=1,fill=False,color='#0000FF',hatch='///////')
+                        d = Rectangle((dlnk_start, bottom_vert_loc), dlnk_end-dlnk_start, bottom_vert_loc+1,alpha=1,fill=False,color='#0000FF',hatch=hatch)
                         current_axis.add_patch(d)
 
                         plt.text( dlnk_start - 0.30, bottom_vert_loc+0.7, "g%d,dv %d/%d"%(dlnk_wind.gs_indx,dlnk_wind.scheduled_data_vol,dlnk_wind.data_vol) , fontsize=10, color = 'k')
