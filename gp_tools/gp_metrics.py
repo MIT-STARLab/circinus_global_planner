@@ -44,7 +44,7 @@ class GPMetrics():
         self.all_targ_IDs = [targ['id'] for targ in obs_params['targets']]
         self.targ_id_ignore_list = gp_general_other_params['targ_id_ignore_list']
 
-        self.min_as_route_dv = as_params['min_as_route_dv_Mb']
+        self.min_obs_dv_dlnk_req = as_params['min_obs_dv_dlnk_req_Mb']
         self.aoi_units = metrics_params['aoi_units']
         self.overlap_count_option = metrics_params['overlap_count_option']
         self.window_overlap_option = metrics_params['window_overlap_option']
@@ -58,8 +58,8 @@ class GPMetrics():
         self.sats_emin_Wh = [p_params['battery_storage_Wh']['e_min'][p_params['battery_option']] for p_params in self.power_params]
         self.sats_emax_Wh = [p_params['battery_storage_Wh']['e_max'][p_params['battery_option']] for p_params in self.power_params]
 
-        # the amount by which the minimum data volume is allowed to be lower than self.min_as_route_dv
-        self.min_as_obs_dv_slop = self.min_as_route_dv*0.01
+        # the amount by which the minimum data volume is allowed to be lower than self.min_obs_dv_dlnk_req
+        self.min_obs_dv_dlnk_req_slop = self.min_obs_dv_dlnk_req*0.01
 
         # if two downlink times are within this number of seconds, then they are counted as being at the same time for the purposes of AoI calculation
         self.dlnk_same_time_slop_s = scenario_params['timestep_s'] - 1
@@ -290,7 +290,7 @@ class GPMetrics():
                 cum_dv += dr.data_vol
                 
                 #  if we have reached our minimum required data volume amount to deem the observation downlinked for the purposes of latency calculation...
-                if cum_dv >= self.min_as_route_dv - self.min_as_obs_dv_slop :
+                if cum_dv >= self.min_obs_dv_dlnk_req - self.min_obs_dv_dlnk_req_slop :
 
                     initial_lat_by_obs_rs[obs] = dr.get_latency(
                         'minutes',
@@ -313,7 +313,7 @@ class GPMetrics():
 
             #  figure out the latency for the first route that got downlinked.
             # sanity check that its scheduled data volume meets the minimum requirement
-            # assert(rts[0].scheduled_dv >= self.min_as_route_dv - self.min_as_obs_dv_slop)
+            # assert(rts[0].scheduled_dv >= self.min_obs_dv_dlnk_req - self.min_obs_dv_dlnk_req_slop)
 
             #  figure out the latency for the initial minimum DV downlink
             #  have to accumulate data volume because route selection minimum data volume might be less than that for activity scheduling
@@ -322,7 +322,7 @@ class GPMetrics():
                 cum_dv += dr.data_vol
                 
                 #  if we have reached our minimum required data volume amount to deem the observation downlinked for the purposes of latency calculation...
-                if cum_dv >= self.min_as_route_dv - self.min_as_obs_dv_slop :
+                if cum_dv >= self.min_obs_dv_dlnk_req - self.min_obs_dv_dlnk_req_slop :
                     initial_lat_by_obs[obs] = rts[0].get_latency(
                         'minutes',
                         obs_option = self.latency_params['obs'], 
@@ -665,7 +665,7 @@ class GPMetrics():
                             raise NotImplementedError
 
                         #  if we have reached our minimum required data volume amount...
-                        if cum_dv >= self.min_as_route_dv - self.min_as_obs_dv_slop:
+                        if cum_dv >= self.min_obs_dv_dlnk_req - self.min_obs_dv_dlnk_req_slop:
 
                             dlnk_obs_times_mat[targ_indx].append([getattr(dr.get_dlnk(),time_option), obs_wind.start])
                             #  break because we shouldn't count additional down links from the same observation ( they aren't delivering updated information)

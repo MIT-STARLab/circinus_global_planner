@@ -201,13 +201,11 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
         return new_routes
 
-    @staticmethod
-    def get_dmr_latency_score_factors(routes_flat,dmr_indcs_by_obs_act_windid,latency_params):
+    def get_dmr_latency_score_factors(self,routes_flat,dmr_indcs_by_obs_act_windid):
 
-        dmr_latency_sf_by_dmr_indx = {}
+        latency_sf_by_dmr_indx = {}
 
         # loop through all satellites and their downlinks
-        # explicitly indexing by num_sats just to include a bit of error checking
         for obs,dmr_indcs in dmr_indcs_by_obs_act_windid.items():
             latencies = []
             for dmr_indx in dmr_indcs:
@@ -216,8 +214,8 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                 latencies.append(
                     dmr.get_latency(
                         'minutes',
-                        obs_option = latency_params['obs'], 
-                        dlnk_option = latency_params['dlnk']
+                        obs_option = self.latency_params['obs'], 
+                        dlnk_option = self.latency_params['dlnk']
                     )
                 )
 
@@ -225,9 +223,9 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             min_lat = min(latencies)
             for lat_indx, lat in enumerate(latencies):
                 dmr_indx = dmr_indcs[lat_indx]
-                dmr_latency_sf_by_dmr_indx[dmr_indx] = min_lat/lat
+                latency_sf_by_dmr_indx[dmr_indx] = min_lat/lat
  
-        return dmr_latency_sf_by_dmr_indx
+        return latency_sf_by_dmr_indx
 
     def make_model ( self,routes_flat, ecl_winds, verbose = True):
         # important assumption: all activity window IDs are unique!
@@ -268,10 +266,9 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                 dmr_indcs_by_link_act_windid,
                 dv_by_link_act_windid) =  self.get_activity_structs(routes_flat)
 
-            dmr_latency_sf_by_dmr_indx =  self.get_dmr_latency_score_factors(
+            latency_sf_by_dmr_indx =  self.get_dmr_latency_score_factors(
                 routes_flat,
                 dmr_indcs_by_obs_act_windid,
-                self.latency_params
             )
 
             # construct a set of dance cards for every satellite, 
@@ -335,18 +332,18 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         else:
             raise NotImplementedError
 
-        for p,lat_sf in dmr_latency_sf_by_dmr_indx.items():        
+        for p,lat_sf in latency_sf_by_dmr_indx.items():        
             if lat_sf > int_feas_tol*self.big_M_lat:
                 raise RuntimeWarning('big_M_lat (%f) is not large enough for latency score factor %f and integer feasibility tolerance %f (dmr index %d)'%(self.big_M_lat,lat_sf,int_feas_tol,p))
 
-        for act_obj in all_act_windids_by_obj.keys():
-            if 2*(act_obj.end-act_obj.start).total_seconds() > self.big_M_act_t_dur_s:
-                raise RuntimeWarning('big_M_act_t_dur_s (%f) is not large enough for act of duration %s and integer feasibility tolerance %f (act string %s)'%(self.big_M_act_t_dur_s,act_obj.end-act_obj.start,int_feas_tol,act_obj))
-            # if 2*(act_obj.end-act_obj.start).total_seconds() > (1-int_feas_tol) *  self.big_M_act_t_dur_s:
-                # raise RuntimeWarning('big_M_act_t_dur_s (%f) is not large enough for act of duration %s and integer feasibility tolerance %f (act string %s)'%(self.big_M_act_t_dur_s,act_obj.end-act_obj.start,int_feas_tol,act_obj))
+        # for act_obj in all_act_windids_by_obj.keys():
+        #     if 2*(act_obj.end-act_obj.start).total_seconds() > self.big_M_act_t_dur_s:
+        #         raise RuntimeWarning('big_M_act_t_dur_s (%f) is not large enough for act of duration %s and integer feasibility tolerance %f (act string %s)'%(self.big_M_act_t_dur_s,act_obj.end-act_obj.start,int_feas_tol,act_obj))
+        #     # if 2*(act_obj.end-act_obj.start).total_seconds() > (1-int_feas_tol) *  self.big_M_act_t_dur_s:
+        #         # raise RuntimeWarning('big_M_act_t_dur_s (%f) is not large enough for act of duration %s and integer feasibility tolerance %f (act string %s)'%(self.big_M_act_t_dur_s,act_obj.end-act_obj.start,int_feas_tol,act_obj))
 
-            if 2*act_obj.data_vol > (1-int_feas_tol) * self.big_M_act_dv:
-                raise RuntimeWarning('big_M_act_dv (%f) is not large enough for act of dv %f and integer feasibility tolerance %f (act string %s)'%(self.big_M_act_dv,act_obj.data_vol,int_feas_tol,act_obj))
+        #     if 2*act_obj.data_vol > (1-int_feas_tol) * self.big_M_act_dv:
+        #         raise RuntimeWarning('big_M_act_dv (%f) is not large enough for act of dv %f and integer feasibility tolerance %f (act string %s)'%(self.big_M_act_dv,act_obj.data_vol,int_feas_tol,act_obj))
                 
 
 
@@ -354,7 +351,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         #  Make parameters
         ##############################
 
-        model.par_min_as_route_dv = pe.Param (initialize=self.min_as_route_dv)
+        model.par_min_obs_dv_dlnk_req = pe.Param (initialize=self.min_obs_dv_dlnk_req)
         model.par_obs_capacity = pe.Param(model.obs_windids,initialize =dv_by_obs_act_windid)
         model.par_total_obs_dv = sum(dv_by_obs_act_windid.values())
         model.par_link_capacity = pe.Param(model.lnk_windids,initialize =dv_by_link_act_windid)
@@ -413,7 +410,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         # satellite data storage (data buffers)
         model.var_sats_dstore  = pe.Var (model.sat_indcs,  model.ds_timepoint_indcs,  within = pe.NonNegativeReals)
 
-        model.var_dmr_latency_sf_by_obs_indx = pe.Var (model.obs_windids,  within = pe.NonNegativeReals)
+        model.var_latency_sf_obs = pe.Var (model.obs_windids,  bounds = (0,1.0))
         
         allow_act_timing_constr_violations = False
         if allow_act_timing_constr_violations:
@@ -461,7 +458,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                 model.c1b.add(model.var_act_indic[a] >= model.var_dmr_indic[p]) 
 
         def c2_rule( model,p):
-            return model.par_dmr_dv[p]*model.var_dmr_utilization[p] >= model.par_min_as_route_dv*model.var_dmr_indic[p]
+            return model.par_dmr_dv[p]*model.var_dmr_utilization[p] >= model.par_min_obs_dv_dlnk_req*model.var_dmr_indic[p]
         model.c2 =pe.Constraint ( model.dmrs,  rule=c2_rule)
 
         def c3_rule( model,a):
@@ -599,21 +596,21 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
         #  observation latency score factor constraints [8]
         model.c8  = pe.ConstraintList()
-        for obs_indx in model.obs_windids:
-            dmrs_obs = model.par_dmr_subscrs_by_obs_act[obs_indx]
+        for o in model.obs_windids:
+            dmrs_obs = model.par_dmr_subscrs_by_obs_act[o]
 
             #  sort the latency score factors for all the dmrs for this observation in increasing order -  important for constraint construction
-            dmrs_obs.sort(key= lambda p: dmr_latency_sf_by_dmr_indx[p])
+            dmrs_obs.sort(key= lambda p: latency_sf_by_dmr_indx[p])
 
             num_dmrs_obs = len(dmrs_obs)
             #  initial constraint -  score factor for this observation will be equal to zero if no dmrs for this obs were chosen
-            model.c8.add( model.var_dmr_latency_sf_by_obs_indx[obs_indx] <= 0 + self.big_M_lat * sum(model.var_dmr_indic[p] for p in dmrs_obs) )
+            model.c8.add( model.var_latency_sf_obs[o] <= 0 + self.big_M_lat * sum(model.var_dmr_indic[p] for p in dmrs_obs) )
             
             for dmr_obs_indx in range(num_dmrs_obs):
                 #  add constraint that score factor for observation is less than or equal to the score factor for this dmr_obs_indx, plus any big M terms for any dmrs with larger score factors.
                 #  what this does is effectively disable the constraint for the score factor for this dmr_obs_indx if any higher score factor dmrs were chosen 
-                model.c8.add( model.var_dmr_latency_sf_by_obs_indx[obs_indx] <= 
-                    dmr_latency_sf_by_dmr_indx[dmrs_obs[dmr_obs_indx]] + 
+                model.c8.add( model.var_latency_sf_obs[o] <= 
+                    latency_sf_by_dmr_indx[dmrs_obs[dmr_obs_indx]] + 
                     self.big_M_lat * sum(model.var_dmr_indic[p] for p in dmrs_obs[dmr_obs_indx+1:num_dmrs_obs]) )
 
                 #  note: use model.c8[indx].expr.to_string()  to print out the constraint in a human readable form
@@ -638,7 +635,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         def obj_rule(model):
             total_dv_term = self.obj_weights['obs_dv'] * 1/model.par_total_obs_dv * sum(model.par_dmr_dv[p]*model.var_dmr_utilization[p] for p in model.dmrs) 
 
-            latency_term = self.obj_weights['route_latency'] * 1/len(model.obs_windids) * sum(model.var_dmr_latency_sf_by_obs_indx[o] for o in model.obs_windids)
+            latency_term = self.obj_weights['route_latency'] * 1/len(model.obs_windids) * sum(model.var_latency_sf_obs[o] for o in model.obs_windids)
             
             energy_margin_term = self.obj_weights['energy_storage'] * 1/rsrc_norm_f * sum(model.var_sats_estore[sat_indx,tp_indx]/model.par_sats_estore_max[sat_indx] for tp_indx in decimated_tp_indcs for sat_indx in model.sat_indcs)
 

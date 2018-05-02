@@ -346,6 +346,8 @@ class GPPlotting():
                         d = Rectangle((obs_start, bottom_vert_loc), obs_end-obs_start, bottom_vert_loc+1,alpha=1,fill=False,color='#00FF00',hatch='///////')
                         current_axis.add_patch(d)
 
+                        plt.text(obs_start+0.15, bottom_vert_loc+0.4, "%s,dv %d/%d"%(obs_wind.target_IDs,obs_wind.scheduled_data_vol,obs_wind.data_vol) , fontsize=10, color = 'k')
+
                         obs_rectangle_rotator =  (obs_rectangle_rotator+1)%obs_rotation_rollover
 
                         if obs_wind.window_ID in all_wind_ids:

@@ -17,7 +17,7 @@ from .gp_activity_scheduling_super import  GPActivityScheduling
 from .routing_objects import DataRoute, DataMultiRoute
 from circinus_tools  import time_tools as tt
 from .custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
-from .routing_objects import DataMultiRoute
+from .routing_objects import DataRoute,DataMultiRoute
 from .schedule_objects import Dancecard
 from circinus_tools  import  constants as const
 
@@ -100,6 +100,32 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         }
 
         return model_objs_act
+
+    def get_dlnk_latency_score_factors(self,all_act_objs_by_windid,obs_windids,dlnk_windids_by_obs_windid,obs_winds_filt,dlnk_winds_filt):
+
+        latency_sf_by_dlnk_obs_windids = {}
+
+        # loop through all obs - dlnk combinations and determine latency score factors for them
+        for o in obs_windids:
+            latency_by_dlnk_windid = {}
+
+            obs = all_act_objs_by_windid[o]
+            for d in dlnk_windids_by_obs_windid[o]:
+                dlnk = all_act_objs_by_windid[d]
+                latency_by_dlnk_windid[d] = DataRoute.calc_latency(
+                        obs,
+                        dlnk,
+                        units='minutes',
+                        obs_option = self.latency_params['obs'], 
+                        dlnk_option = self.latency_params['dlnk']
+                    )
+
+            #  the shortest latency downlink for this observation has a score factor of 1.0, and the score factors for the other downlinks decrease as the inverse of increasing latency
+            min_lat = min(latency_by_dlnk_windid.values())
+            for d,latency in latency_by_dlnk_windid.items():
+                latency_sf_by_dlnk_obs_windids[(d,o)] = min_lat/latency
+ 
+        return latency_sf_by_dlnk_obs_windids
 
     def get_activity_structs(self,obs_winds_filt,dlnk_winds_filt,xlnk_winds_filt):
         """Get the structures representing activity subscripts for variables, parameters that are used in creating the pyomo model"""
@@ -247,12 +273,6 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
             all_link_times_by_sat_indx.setdefault(sat_indx,[])
             all_link_times_by_sat_indx[sat_indx].append(curr_time)
 
-        # from circinus_tools import debug_tools
-        # debug_tools.debug_breakpt()
-
-        # print("time_epsilon_tiny_diff_count")
-        # print(time_epsilon_tiny_diff_count)
-
         # generate list of subscripts for v_(s,o,t), as well as the correspondence between activity windows and their entries in v_(s,o,t)
         for obs_sat in obs_winds_filt:
             for obs in obs_sat:
@@ -312,20 +332,6 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         ##############################
 
         try:
-            # (sat_acts,
-            #     sat_dlnks,
-            #     all_acts_indcs,
-            #     dmr_indcs_by_act,
-            #     dv_by_act,
-            #     all_act_windids_by_obj,
-            #     all_acts_by_indx,
-            #     obs_act_indcs,
-            #     dmr_indcs_by_obs_act,
-            #     dv_by_obs_act,
-            #     link_act_indcs,
-            #     dmr_indcs_by_link_act,
-            #     dv_by_link_act) =  self.get_activity_structs(routes_flat)
-
             (sats_acts,
                 sats_dlnks,
                 all_acts_windids,
@@ -370,11 +376,13 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                 self.lnk_windids_by_obs_windid[obs_windid] = self.lnk_windids_by_obs_windid[obs_windid].union(dlnk_windids)
 
 
-            # dmr_latency_sf_by_dmr_indx =  self.get_dmr_latency_score_factors(
-            #     routes_flat,
-            #     dmr_indcs_by_obs_act,
-            #     self.latency_params
-            # )
+            latency_sf_by_dlnk_obs_windids =  self.get_dlnk_latency_score_factors(
+                all_act_objs_by_windid,
+                all_obs_windids,
+                dlnk_windids_by_obs_windid,
+                obs_winds_filt,
+                dlnk_winds_filt
+            )
 
             # construct a set of dance cards for every satellite, 
             # each of which keeps track of all of the activities of satellite 
@@ -388,18 +396,6 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                 es_act_dancecards[sat_indx].add_winds_to_dancecard(sats_acts[sat_indx])
                 es_act_dancecards[sat_indx].add_winds_to_dancecard(ecl_winds[sat_indx])
 
-            # this is for data storage
-            # for each sat/timepoint, we store a list of all those data multi routes that are storing data on the sat at that timepoint
-            # ds_route_dancecards = [Dancecard(self.planning_start_dt,self.planning_end_dt,self.resource_delta_t_s,item_init=None,mode='timepoint') for sat_indx in range (self.num_sats)]
-            
-            # # add data routes to the dancecard
-            # for dmr_indx,dmr in enumerate(routes_flat):
-            #     # list of type routing_objects.SatStorageInterval
-            #     dmr_ds_intervs = dmr.get_data_storage_intervals()
-
-            #     for interv in dmr_ds_intervs:
-            #         # store the dmr object at this timepoint
-            #         ds_route_dancecards[interv.sat_indx].add_item_in_interval(dmr_indx,interv.start,interv.end)
 
         except IndexError:
             raise RuntimeWarning('sat_indx out of range. Are you sure all of your input files are consistent? (including pickles)')        
@@ -411,6 +407,8 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         model.lnk_windids = pe.Set(initialize= all_dlnk_windids.union(all_xlnk_windids))
         # every act-obs within that act combination
         model.lnk_obs_subscripts = pe.Set(initialize= dlnk_obs_windids.union(xlnk_obs_windids),dimen=2)
+        # every possible dlnk-obs combination
+        model.dlnk_obs_subscripts = pe.Set(initialize= dlnk_obs_windids,dimen=2)
         #  subscript for each satellite
         model.sat_indcs = pe.Set(initialize= range(self.num_sats))
         #  subscript for each s,o,t in v_(s,o,t)
@@ -424,35 +422,25 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         es_num_timepoints = es_act_dancecards[0].num_timepoints
         model.es_timepoint_indcs = pe.Set(initialize=  self.es_time_getter_dc.get_tp_indcs())
 
-        # self.ds_time_getter_dc = ds_route_dancecards[0]
-        # model.ds_timepoint_indcs = pe.Set(initialize=  self.ds_time_getter_dc.get_tp_indcs())
+        if self.solver_name == 'gurobi' or self.solver_name == 'cplex':
+            int_feas_tol = self.solver_params['integer_feasibility_tolerance']
+        else:
+            raise NotImplementedError
 
-        # if self.solver_name == 'gurobi' or self.solver_name == 'cplex':
-        #     int_feas_tol = self.solver_params['integer_feasibility_tolerance']
-        # else:
-        #     raise NotImplementedError
-
-        # for p,lat_sf in dmr_latency_sf_by_dmr_indx.items():        
-        #     if lat_sf > int_feas_tol*self.big_M_lat:
-        #         raise RuntimeWarning('big_M_lat (%f) is not large enough for latency score factor %f and integer feasibility tolerance %f (dmr index %d)'%(self.big_M_lat,lat_sf,int_feas_tol,p))
-
-        # for act_obj in all_act_windids_by_obj.keys():
-        #     if 2*(act_obj.end-act_obj.start).total_seconds() > self.big_M_act_t_dur_s:
-        #         raise RuntimeWarning('big_M_act_t_dur_s (%f) is not large enough for act of duration %s and integer feasibility tolerance %f (act string %s)'%(self.big_M_act_t_dur_s,act_obj.end-act_obj.start,int_feas_tol,act_obj))
-        #     # if 2*(act_obj.end-act_obj.start).total_seconds() > (1-int_feas_tol) *  self.big_M_act_t_dur_s:
-        #         # raise RuntimeWarning('big_M_act_t_dur_s (%f) is not large enough for act of duration %s and integer feasibility tolerance %f (act string %s)'%(self.big_M_act_t_dur_s,act_obj.end-act_obj.start,int_feas_tol,act_obj))
-
-        #     if 2*act_obj.data_vol > (1-int_feas_tol) * self.big_M_act_dv:
-        #         raise RuntimeWarning('big_M_act_dv (%f) is not large enough for act of dv %f and integer feasibility tolerance %f (act string %s)'%(self.big_M_act_dv,act_obj.data_vol,int_feas_tol,act_obj))
-                
+        for d_o,lat_sf in latency_sf_by_dlnk_obs_windids.items():        
+            if lat_sf > int_feas_tol*self.big_M_lat:
+                raise RuntimeWarning('big_M_lat (%f) is not large enough for latency score factor %f and integer feasibility tolerance %f (dlnk windid %d obs windid %d)'%(self.big_M_lat,lat_sf,int_feas_tol,d_o[0],d_o[1]))
 
 
         ##############################
         #  Make parameters
         ##############################
 
+        model.par_min_obs_dv_dlnk_req = pe.Param (initialize=self.min_obs_dv_dlnk_req)
         model.par_total_obs_dv = sum(capacity_by_act_windid[o] for o in all_obs_windids)
         model.par_act_capacity = pe.Param(model.act_windids,initialize =capacity_by_act_windid)
+
+        model.par_latency_sf_dlnk_obs = pe.Param(model.dlnk_obs_subscripts,initialize=latency_sf_by_dlnk_obs_windids)
 
         if self.energy_unit == "Wh":
             model.par_resource_delta_t = pe.Param (initialize= self.resource_delta_t_s/3600)
@@ -480,11 +468,10 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         model.var_act_indic  = pe.Var (model.act_windids, within = pe.Binary)
         # satellite energy storage, e_(s,t), variables [7]
         model.var_sats_estore  = pe.Var (model.sat_indcs,  model.es_timepoint_indcs,  within = pe.NonNegativeReals)
-
-        # # satellite data storage (data buffers)
-        # model.var_sats_dstore  = pe.Var (model.sat_indcs,  model.ds_timepoint_indcs,  within = pe.NonNegativeReals)
-
-        # model.var_dmr_latency_sf_by_obs_indx = pe.Var (model.obs_acts,  within = pe.NonNegativeReals)
+        # I_(d,o), variables [5]
+        model.var_dlnk_obs_indic  = pe.Var (model.dlnk_obs_subscripts, within = pe.Binary)
+        # f_o, variables [4]
+        model.var_latency_sf_obs = pe.Var (model.obs_windids,  bounds = (0,1.0))
         
         if self.allow_act_timing_constr_violations:
             print('allow_act_timing_constr_violations is True')
@@ -615,6 +602,40 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
             model.c6.add( outgoing_dv_sum <= model.var_sat_obs_time_dv[sat_obs_time_subscript])
 
 
+        def dlnk_lat_time_getter(dlnk):
+            return getattr(dlnk,self.latency_params['dlnk'])
+
+        #  obs downlink indicator constraints [8]
+        model.c8  = pe.ConstraintList()
+        for o in model.obs_windids:
+            dlnk_windids_sorted = sorted(dlnk_windids_by_obs_windid[o],key = lambda d: dlnk_lat_time_getter(all_act_objs_by_windid[d]))
+
+            for dlnk_indx,d in enumerate(dlnk_windids_sorted):
+                dlnks_cum_dv_up_to = sum(model.var_lnk_obs_dv_utilization[dlnk_windid_up_to,o] for dlnk_windid_up_to in dlnk_windids_sorted[:(dlnk_indx+1)])
+
+                model.c8.add( dlnks_cum_dv_up_to >= model.par_min_obs_dv_dlnk_req * model.var_dlnk_obs_indic[d,o])
+
+
+
+
+        #  observation latency score factor constraints [9]
+        model.c9  = pe.ConstraintList()
+        for o in model.obs_windids:
+
+            # sort the latency score factors for all the potential downlinks for this observation in increasing order -  important for constraint construction
+            dlnk_windids_sorted = sorted(dlnk_windids_by_obs_windid[o],key = lambda d: model.par_latency_sf_dlnk_obs[d,o])
+
+            #  initial constraint -  score factor for this observation will be equal to zero if no dmrs for this obs were chosen
+            model.c9.add( model.var_latency_sf_obs[o] <= 0 + self.big_M_lat * sum(model.var_dlnk_obs_indic[d,o] for d in dlnk_windids_sorted))
+            
+            for curr_d_indx,curr_d in enumerate(dlnk_windids_sorted):
+                #  add constraint that score factor for observation is less than or equal to the score factor for this dlnk, plus any big M terms for any dlnks with larger score factors.
+                #  what this does is effectively disable the constraint for the score factor for this dlnk if any higher score factor dlnks was chosen to fulfill minimum dv downlink requirement 
+                model.c9.add( model.var_latency_sf_obs[o] <= 
+                    model.par_latency_sf_dlnk_obs[curr_d,o] + 
+                    self.big_M_lat * sum(model.var_dlnk_obs_indic[d,o] for d in dlnk_windids_sorted[curr_d_indx+1:]) )
+
+
 
         # keep track of this, so we know to warn user about default transition time usage
         #  note: this is not a parameter! it's merely helpful for reporting warnings
@@ -637,7 +658,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
             if used_default_transition_time:
                 print('\nWarning: used default transition time for inter- or intra- satellite activity timing constraints\n')
 
-        #  energy constraints [6]
+        #  energy constraints [13]
         # todo: maybe this ought to be moved to the super class, but i don't anticipate this code changing much any time soon, so i'll punt that.
         model.c13  = pe.ConstraintList()
         for sat_indx in range (self.num_sats): 
@@ -717,8 +738,8 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                     )
 
 
-        #  data storage constraints [7]
-        model.c7  = pe.ConstraintList()
+        #  data storage constraints [16]
+        model.c16  = pe.ConstraintList()
         if self.enforce_data_storage_constr:
             for sat_time_subscr in sat_time_subscripts:
                 dv_sum = 0
@@ -728,50 +749,16 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                     sat_obs_time_subscr = (sat_indx,obs_windid,time_indx)
                     dv_sum += model.var_sat_obs_time_dv[sat_obs_time_subscr]
                 
-                model.c7.add( dv_sum <= model.par_sats_dstore_max[sat_indx])
-
-        # for sat_indx in range (self.num_sats): 
-
-        #     # tp_indx serves as an index into the satellite data storage dance cards
-        #     for tp_indx in model.ds_timepoint_indcs:
-
-        #         # todo: add in an intital data volume value?
-        #         #  maximum storage constraints
-        #         model.c7.add( model.var_sats_dstore[sat_indx,tp_indx] <= model.par_sats_dstore_max[sat_indx])
-
-        #         if self.enforce_data_storage_constr:
-        #             routes_storing = ds_route_dancecards[sat_indx][tp_indx]
-
-        #             # todo: this may be too slow to use == below. Change it back to >= and use a better approach to extract real data storage values in extract_resource_usage below? Leaving == for now because it means I can use these vars to extract output data usage values
-        #             # constrain the minimum data storage at this tp by the amount of data volume being buffered by each route passing through the sat
-        #             if routes_storing:
-        #                 model.c7.add( model.var_sats_dstore[sat_indx,tp_indx] == sum(model.par_dmr_dv[p]*model.var_dmr_utilization[p] for p in routes_storing))
-        #             else:
-        #                 model.c7.add( model.var_sats_dstore[sat_indx,tp_indx] == 0)
+                model.c16.add( dv_sum <= model.par_sats_dstore_max[sat_indx])
 
 
 
-        # #  observation latency score factor constraints [8]
-        # model.c8  = pe.ConstraintList()
-        # for obs_indx in model.obs_acts:
-        #     dmrs_obs = model.par_dmr_subscrs_by_obs_act[obs_indx]
+        # note: c17 is way above 
 
-        #     #  sort the latency score factors for all the dmrs for this observation in increasing order -  important for constraint construction
-        #     dmrs_obs.sort(key= lambda p: dmr_latency_sf_by_dmr_indx[p])
 
-        #     num_dmrs_obs = len(dmrs_obs)
-        #     #  initial constraint -  score factor for this observation will be equal to zero if no dmrs for this obs were chosen
-        #     model.c8.add( model.var_dmr_latency_sf_by_obs_indx[obs_indx] <= 0 + self.big_M_lat * sum(model.var_dmr_indic[p] for p in dmrs_obs) )
-            
-        #     for dmr_obs_indx in range(num_dmrs_obs):
-        #         #  add constraint that score factor for observation is less than or equal to the score factor for this dmr_obs_indx, plus any big M terms for any dmrs with larger score factors.
-        #         #  what this does is effectively disable the constraint for the score factor for this dmr_obs_indx if any higher score factor dmrs were chosen 
-        #         model.c8.add( model.var_dmr_latency_sf_by_obs_indx[obs_indx] <= 
-        #             dmr_latency_sf_by_dmr_indx[dmrs_obs[dmr_obs_indx]] + 
-        #             self.big_M_lat * sum(model.var_dmr_indic[p] for p in dmrs_obs[dmr_obs_indx+1:num_dmrs_obs]) )
 
-        #         #  note: use model.c8[indx].expr.to_string()  to print out the constraint in a human readable form
-        #         #                ^ USES BASE 1 INDEXING!!! WTF??
+        #  note: use model.c8[indx].expr.to_string()  to print out the constraint in a human readable form
+        #                ^ USES BASE 1 INDEXING!!! WTF??
                 
 
         # from circinus_tools import debug_tools
@@ -792,25 +779,22 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         def obj_rule(model):
             total_dv_term = self.obj_weights['obs_dv'] * 1/model.par_total_obs_dv * sum(model.var_act_dv_utilization[o] for o in model.obs_windids) 
 
-            # latency_term = self.obj_weights['route_latency'] * 1/len(model.obs_acts) * sum(model.var_dmr_latency_sf_by_obs_indx[o] for o in model.obs_acts)
+            latency_term = self.obj_weights['route_latency'] * 1/len(model.obs_windids) * sum(model.var_latency_sf_obs[o] for o in model.obs_windids)
             
             energy_margin_term = self.obj_weights['energy_storage'] * 1/rsrc_norm_f * sum(model.var_sats_estore[sat_indx,tp_indx]/model.par_sats_estore_max[sat_indx] for tp_indx in decimated_tp_indcs for sat_indx in model.sat_indcs)
 
-            # if len(min_var_inter_sat_act_constr_violation_list) > 0:
-            #     inter_sat_act_constr_violations_term = self.obj_weights['inter_sat_act_constr_violations'] * 1/sum(min_var_inter_sat_act_constr_violation_list) * sum(model.var_inter_sat_act_constr_violations[indx] for indx in range(1,len(model.var_inter_sat_act_constr_violations)+1))
-            # else:
-            #     inter_sat_act_constr_violations_term = 0
+            if len(min_var_inter_sat_act_constr_violation_list) > 0:
+                inter_sat_act_constr_violations_term = self.obj_weights['inter_sat_act_constr_violations'] * 1/sum(min_var_inter_sat_act_constr_violation_list) * sum(model.var_inter_sat_act_constr_violations[indx] for indx in range(1,len(model.var_inter_sat_act_constr_violations)+1))
+            else:
+                inter_sat_act_constr_violations_term = 0
 
-            # if len(min_var_intra_sat_act_constr_violation_list) > 0:
-            #     intra_sat_act_constr_violations_term = self.obj_weights['intra_sat_act_constr_violations'] * 1/sum(min_var_intra_sat_act_constr_violation_list) * sum(model.var_intra_sat_act_constr_violations[indx] for indx in range(1,len(model.var_inter_sat_act_constr_violations)+1))
-            # else:
-            #     intra_sat_act_constr_violations_term = 0
+            if len(min_var_intra_sat_act_constr_violation_list) > 0:
+                intra_sat_act_constr_violations_term = self.obj_weights['intra_sat_act_constr_violations'] * 1/sum(min_var_intra_sat_act_constr_violation_list) * sum(model.var_intra_sat_act_constr_violations[indx] for indx in range(1,len(model.var_inter_sat_act_constr_violations)+1))
+            else:
+                intra_sat_act_constr_violations_term = 0
 
-            # from circinus_tools import debug_tools
-            # debug_tools.debug_breakpt()
-
-            # return total_dv_term + latency_term + energy_margin_term - inter_sat_act_constr_violations_term - intra_sat_act_constr_violations_term
-            return total_dv_term + energy_margin_term
+            return total_dv_term + latency_term + energy_margin_term - inter_sat_act_constr_violations_term - intra_sat_act_constr_violations_term
+            # return total_dv_term + latency_term + energy_margin_term
             
         model.obj = pe.Objective( rule=obj_rule, sense=pe.maximize )
 
@@ -881,6 +865,13 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                     if val>0.001:
                         print (" %s %0.3f   %s %s"%(index, val, self.all_act_objs_by_windid[index[1]],self.all_act_objs_by_windid[index[0]]))
 
+            if str (v) =='var_dlnk_obs_indic': 
+                print ("Variable",v)
+                varobject = getattr(self.model, str(v))
+                for index in varobject:
+                    val  = varobject[index].value
+                    print (" %s %d   %s %s"%(index, val, self.all_act_objs_by_windid[index[0]],self.all_act_objs_by_windid[index[1]]))
+
 
             print_times = False
             if print_times:
@@ -920,7 +911,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         for o in self.model.obs_windids:
 
             # if not enough dv from this obs, then don't construct routes for it
-            if not (pe.value(self.model.var_act_dv_utilization[o]) > self.min_as_route_dv):
+            if not (pe.value(self.model.var_act_dv_utilization[o]) > self.min_obs_dv_dlnk_req):
                 continue
 
             remaining_obs_dv = pe.value(self.model.var_act_dv_utilization[o])
@@ -1102,8 +1093,10 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                     updated_winds.add(wind)
 
             # validate the data multi route (and in turn, the scheduled data vols of all the data routes under it)
-            # dmr.validate(time_option='center') # this is bad to use in general, allows window overlaps to occur
-            dmr.validate()
+            if self.allow_act_timing_constr_violations:
+                dmr.validate(time_option='center') # this is bad to use in general, allows window overlaps to occur
+            else:
+                dmr.validate()
 
         return scheduled_routes_flat
 

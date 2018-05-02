@@ -247,10 +247,8 @@ class DataRoute():
 
         return False
 
-    def get_latency( self,units='minutes',obs_option = 'end', dlnk_option = 'center'):
-        obs =  self.route[0]
-        dlnk =  self.route[-1]
-
+    @staticmethod
+    def calc_latency(obs,dlnk,units='minutes',obs_option = 'end', dlnk_option = 'center'):
         lat_start = getattr(obs,obs_option)
         lat_end = getattr(dlnk,dlnk_option)
     
@@ -258,6 +256,12 @@ class DataRoute():
             return (lat_end-lat_start).total_seconds()/60
         else:
             raise NotImplementedError
+
+    def get_latency( self,units='minutes',obs_option = 'end', dlnk_option = 'center'):
+        obs =  self.route[0]
+        dlnk =  self.route[-1]
+
+        return self.calc_latency(obs,dlnk,units,obs_option,dlnk_option)
 
     def  sort_windows(self):
         self.route.sort(key=lambda x: x.start)

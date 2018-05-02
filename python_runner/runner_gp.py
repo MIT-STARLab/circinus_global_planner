@@ -129,6 +129,10 @@ class GlobalPlannerRunner:
         routes = gp_as.extract_utilized_routes ( copy_routes = True, verbose  = False)
         energy_usage,data_usage = gp_as.extract_resource_usage(  decimation_factor =1)
 
+        # for dmr in routes:
+        #     for dr in dmr.data_routes:
+        #         print(dr)
+
         # from circinus_tools import debug_tools
         # debug_tools.debug_breakpt()
 

@@ -42,7 +42,7 @@ class GPActivityScheduling():
         self.latency_params = gp_params['gp_general_params']['other_params']['latency_calculation']
         self.solver_name =as_params['solver_name']
         self.solver_params =as_params['solver_params']
-        self.min_as_route_dv =as_params['min_as_route_dv_Mb']
+        self.min_obs_dv_dlnk_req =as_params['min_obs_dv_dlnk_req_Mb']
         self.num_sats=sat_params['num_sats']
         self.resource_delta_t_s  =as_params['resource_delta_t_s']
         self.enforce_energy_storage_constr  =as_params['enforce_energy_storage_constr']

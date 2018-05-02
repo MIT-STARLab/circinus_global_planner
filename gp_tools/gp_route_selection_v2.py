@@ -290,7 +290,7 @@ class GPDataRouteSelection():
         self.min_dmr_candidate_dv = self.min_rs_route_dv / 2  
 
         # minimum data volume that is considered for routes in the activity scheduling stage
-        self.min_as_route_dv =as_params['min_as_route_dv_Mb']
+        self.min_obs_dv_dlnk_req =as_params['min_obs_dv_dlnk_req_Mb']
 
         self.step2_params = rs_v2_params['step2_params']
         
@@ -663,7 +663,7 @@ class GPDataRouteSelection():
             dmr_uid += 1
 
             #  if the data route already has enough data volume to meet the minimum requirement for the activity scheduling stage, add it as a selected route
-            if dmr.data_vol >= self.min_as_route_dv:
+            if dmr.data_vol >= self.min_obs_dv_dlnk_req:
                 sel_rts.append(dmr)
                 for dr in dmr.data_routes: drs_taken.add(dr)
 
@@ -683,7 +683,7 @@ class GPDataRouteSelection():
                     dmr.accumulate_dr( next_dr,min_dmr_candidate_dv)
 
                     #  check if we are meeting the minimum data volume requirement after the accumulation. if yes include the selected route and  and break out of the loop
-                    if dmr.data_vol >= self.min_as_route_dv:
+                    if dmr.data_vol >= self.min_obs_dv_dlnk_req:
                         sel_rts.append(dmr)
                         for dr in dmr.data_routes: drs_taken.add(dr)
                         break
