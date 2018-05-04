@@ -270,6 +270,7 @@ class GPDataRouteSelection():
         link_params = gp_params['gp_orbit_link_params']['general_link_params']
         gp_inst_planning_params = gp_params['gp_instance_params']['planning_params']
 
+        self.gp_agent_ID = gp_params['gp_instance_params']['gp_agent_ID']
 
         # If including cross-links are not when creating routes
         self.include_crosslinks =rs_general_params['include_crosslinks']
@@ -383,7 +384,7 @@ class GPDataRouteSelection():
 
         #  observing sat starts with an initial data route that includes only the observation window
         #  mark this first data route is having the observation data volume with multiplier included. While there is not actually more observation data volume available to route then is present in the observation window, we can still allow the route to be larger. constraints on actual routed data volume will be enforced at activity scheduling
-        first_dr = DataRoute(dr_uid, route =[obs_wind], window_start_sats={obs_wind: obs_wind.sat_indx},dv=allowed_obs_dv,dv_epsilon =self.dv_epsilon,obs_dv_multiplier=self.routable_obs_dv_multiplier)
+        first_dr = DataRoute(agent_ID=self.gp_agent_ID,agent_ID_index=dr_uid, route =[obs_wind], window_start_sats={obs_wind: obs_wind.sat_indx},dv=allowed_obs_dv,dv_epsilon =self.dv_epsilon,obs_dv_multiplier=self.routable_obs_dv_multiplier)
         dr_uid += 1
         #  put this initial data route on the first route record for the observing satellite
         rr_dancecards[obs_wind.sat_indx][0] = RouteRecord(dv=allowed_obs_dv,release_time = start_dt,routes=[first_dr])
@@ -566,7 +567,7 @@ class GPDataRouteSelection():
                         new_dr = copy(deconf_rt.dr)
                         #  the available data volume is simply that of the de-conflicted route, because we already made sure above that the sum of the available data volume from all de-conflicted routes is less than or equal to the throughput of the cross-link, and none of that data volume conflicts  with data volume already present in rr_new
                         new_dr.data_vol = deconf_rt.available_dv
-                        new_dr.ID = dr_uid
+                        new_dr.set_id(self.gp_agent_ID,dr_uid)
                         #  we did not append the cross-link window to the route before ( for sake of efficiency), so now we need to do it. The second argument below records the fact that the cross-link started on the cross-link partner,  not on satellite sat_indx
                         new_dr.append_wind_to_route(xlnk_wind,window_start_sat_indx=xlnk_wind.get_xlnk_partner(sat_indx))
                         
@@ -619,7 +620,7 @@ class GPDataRouteSelection():
 
                                     new_dr = copy(dr)
                                     new_dr.data_vol = dv_slice
-                                    new_dr.ID = dr_uid
+                                    new_dr.set_id(self.gp_agent_ID,dr_uid)
                                     new_dr.append_wind_to_route(act,window_start_sat_indx=sat_indx)
                                     rr_dlnk.routes.append(new_dr)
 
@@ -659,7 +660,7 @@ class GPDataRouteSelection():
                 rt_index += 1
                 continue
 
-            dmr = DataMultiRoute(ID=dmr_uid,data_routes=[curr_dr],dv_epsilon=self.dv_epsilon)
+            dmr = DataMultiRoute(self.gp_agent_ID,dmr_uid,data_routes=[curr_dr],dv_epsilon=self.dv_epsilon)
             dmr_uid += 1
 
             #  if the data route already has enough data volume to meet the minimum requirement for the activity scheduling stage, add it as a selected route

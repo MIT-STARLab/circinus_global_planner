@@ -44,12 +44,12 @@ class GPDataRouteSelection():
         rs_general_params = gp_params['gp_general_params']['route_selection_general_params']
         rs_params = gp_params['gp_general_params']['route_selection_params_v1']
         gp_general_other_params = gp_params['gp_general_params']['other_params']
-        gp_inst_params = gp_params['gp_instance_params']['route_selection_params']
+        gp_inst_planning_params = gp_params['gp_instance_params']['route_selection_params']
 
         self.num_sats=sat_params['num_sats']
         self.num_paths=rs_params['num_paths']
-        self.sel_start_utc_dt  = tt.iso_string_to_dt (gp_inst_params['start_utc'])
-        self.sel_end_utc_dt  = tt.iso_string_to_dt (gp_inst_params['end_utc'])
+        self.sel_start_utc_dt  = tt.iso_string_to_dt (gp_inst_planning_params['start_utc'])
+        self.sel_end_utc_dt  = tt.iso_string_to_dt (gp_inst_planning_params['end_utc'])
 
         # note: M values should be as low as possible to prevent numerical issues (see: https://orinanobworld.blogspot.com/2011/07/perils-of-big-m.html)
         self.M_t_s= 86400 # 1 day

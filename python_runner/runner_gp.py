@@ -40,7 +40,7 @@ import runner_gp_helper_output as output_helper
 
 REPO_BASE = os.path.abspath(os.pardir)  # os.pardir aka '..'
 
-OUTPUT_JSON_VER = '0.1'
+OUTPUT_JSON_VER = '0.2'
 
 def print_verbose(string,verbose=False):
     if verbose:
@@ -71,17 +71,18 @@ class GlobalPlannerRunner:
         self.rs_general_params = gp_params['gp_general_params']['route_selection_general_params']
         self.rs_v2_params = gp_params['gp_general_params']['route_selection_params_v2']
         self.as_params = self.params['gp_general_params']['activity_scheduling_params']
-        self.gp_inst_params = self.params['gp_instance_params']['planning_params']
+        self.gp_agent_ID = gp_params['gp_instance_params']['gp_agent_ID']
+        self.gp_inst_planning_params = self.params['gp_instance_params']['planning_params']
         self.io_proc =GPProcessorIO(self.params)
         self.gp_plot =GPPlotting( self.params)
 
         # it's no good if the planning window (the activities to select) goes outside of the scenario window (the possible activities, eclipse windows)
-        if self.gp_inst_params['planning_start_dt'] < self.scenario_params['start_utc_dt']:
-            raise RuntimeError("GP instance start time (%s) is less than scenario start time (%s)"%(self.gp_inst_params['planning_start_dt'],self.scenario_params['start_utc']))
-        if self.gp_inst_params['planning_end_obs_xlnk_dt'] > self.scenario_params['end_utc_dt']:
-            raise RuntimeError("GP instance obs,xlnk end time (%s) is greater than scenario end time (%s)"%(self.gp_inst_params['planning_end_obs_xlnk_dt'],self.scenario_params['end_utc']))
-        if self.gp_inst_params['planning_end_dlnk_dt'] > self.scenario_params['end_utc_dt']:
-            raise RuntimeError("GP instance dlnk end time (%s) is greater than scenario end time (%s)"%(self.gp_inst_params['planning_end_dlnk_dt'],self.scenario_params['end_utc']))
+        if self.gp_inst_planning_params['planning_start_dt'] < self.scenario_params['start_utc_dt']:
+            raise RuntimeError("GP instance start time (%s) is less than scenario start time (%s)"%(self.gp_inst_planning_params['planning_start_dt'],self.scenario_params['start_utc']))
+        if self.gp_inst_planning_params['planning_end_obs_xlnk_dt'] > self.scenario_params['end_utc_dt']:
+            raise RuntimeError("GP instance obs,xlnk end time (%s) is greater than scenario end time (%s)"%(self.gp_inst_planning_params['planning_end_obs_xlnk_dt'],self.scenario_params['end_utc']))
+        if self.gp_inst_planning_params['planning_end_dlnk_dt'] > self.scenario_params['end_utc_dt']:
+            raise RuntimeError("GP instance dlnk end time (%s) is greater than scenario end time (%s)"%(self.gp_inst_planning_params['planning_end_dlnk_dt'],self.scenario_params['end_utc']))
 
     
 
@@ -161,7 +162,7 @@ class GlobalPlannerRunner:
 
             for sat_indx in range( self.sat_params['num_sats']):
                 for sat_obs_index,obs_wind in enumerate(obs_winds[sat_indx]):
-                    if obs_wind.start >= self.gp_inst_params['planning_start_dt'] and obs_wind.end <= self.gp_inst_params['planning_end_obs_xlnk_dt']:
+                    if obs_wind.start >= self.gp_inst_planning_params['planning_start_dt'] and obs_wind.end <= self.gp_inst_planning_params['planning_end_obs_xlnk_dt']:
                         obs_winds_filt[sat_indx].append(obs_wind)
             return obs_winds_filt
 
@@ -245,7 +246,7 @@ class GlobalPlannerRunner:
         for routes in routes_by_obs.values():
             for dr in routes:
                 #  set the data route ID now, because they were not set uniquely if we were running in parallel
-                dr.ID = dr_uid
+                dr.set_id(self.gp_agent_ID,dr_uid)
                 dr_uid += 1
 
                 # try:
@@ -484,10 +485,10 @@ class GlobalPlannerRunner:
         # outputs= self.io_proc.make_sat_history_outputs (sel_obs_winds_flat, sel_xlnk_winds_flat, sel_dlnk_winds_flat, link_info_by_wind)
 
         (sched_obs_winds_flat, sched_dlnk_winds_flat, sched_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind) = self.io_proc.extract_flat_windows (scheduled_routes)
-        outputs= self.io_proc.make_sat_history_outputs (sched_obs_winds_flat, sched_xlnk_winds_flat, sched_dlnk_winds_flat, link_info_by_wind)
+        viz_outputs= self.io_proc.make_sat_history_outputs (sched_obs_winds_flat, sched_xlnk_winds_flat, sched_dlnk_winds_flat, link_info_by_wind)
 
 
-        return outputs
+        return scheduled_routes,viz_outputs
 
 
 class PipelineRunner:
@@ -553,7 +554,7 @@ class PipelineRunner:
             raise NotImplementedError
 
         #  check that it's the right version
-        if gp_instance_params['version'] == "0.2":
+        if gp_instance_params['version'] == "0.3":
 
             gp_instance_params['planning_params']['planning_start_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_start'])
             gp_instance_params['planning_params']['planning_end_obs_xlnk_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_end_obs_xlnk'])
@@ -563,7 +564,6 @@ class PipelineRunner:
             obs_xlnk_end = gp_instance_params['planning_params']['planning_end_obs_xlnk_dt']
             if not dlnk_end >= obs_xlnk_end:
                 raise RuntimeWarning('Planning window end for dlnk (%s) should be set equal or later than end for observations, crosslinks (%s)'%(dlnk_end,obs_xlnk_end))
-
         else:
             raise NotImplementedError
 
@@ -578,16 +578,16 @@ class PipelineRunner:
         gp_params['gp_data_rates_params'] = gp_data_rates_params
         gp_params['gp_other_params'] = gp_other_params
         gp_runner = GlobalPlannerRunner (gp_params)
-        viz_outputs= gp_runner.run (verbose)
+        scheduled_routes,viz_outputs = gp_runner.run (verbose)
 
-        # define orbit prop outputs json
-        output_json = {}
-        output_json['version'] = OUTPUT_JSON_VER
-        output_json['scenario_params'] = data['orbit_prop_inputs']['scenario_params']
-        output_json['viz_data'] = viz_outputs
-        output_json['update_time'] = datetime.utcnow().isoformat()
+        output = {}
+        output['version'] = OUTPUT_JSON_VER
+        output['scenario_params'] = data['orbit_prop_inputs']['scenario_params']
+        output['viz_data'] = viz_outputs
+        output['scheduled_routes'] = scheduled_routes
+        output['update_time'] = datetime.utcnow().isoformat()
 
-        return output_json
+        return output
 
 
 def remote_multiproc_run(self,mp_queue,verbose=False):

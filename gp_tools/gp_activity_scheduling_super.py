@@ -35,7 +35,7 @@ class GPActivityScheduling():
         scenario_params = gp_params['gp_orbit_prop_params']['scenario_params']
         sat_params = gp_params['gp_orbit_prop_params']['sat_params']
         as_params = gp_params['gp_general_params']['activity_scheduling_params']
-        gp_inst_params = gp_params['gp_instance_params']['planning_params']
+        gp_inst_planning_params = gp_params['gp_instance_params']['planning_params']
 
         # records if the formulation model has been constructed successfully
         self.model_constructed = False
@@ -55,9 +55,9 @@ class GPActivityScheduling():
         # this is the mimimum latency requirement for the highest latency score factor, 1.0. If multiple routes/dlnks for a single obs have latency less than this, they will both have sf 1.0
         self.min_latency_for_sf_1_mins =as_params['min_latency_for_sf_1_mins']
 
-        self.planning_start_dt  = gp_inst_params['planning_start_dt']
-        self.planning_end_obs_xlnk_dt = gp_inst_params['planning_end_obs_xlnk_dt']
-        self.planning_end_dlnk_dt  = gp_inst_params['planning_end_dlnk_dt']
+        self.planning_start_dt  = gp_inst_planning_params['planning_start_dt']
+        self.planning_end_obs_xlnk_dt = gp_inst_planning_params['planning_end_obs_xlnk_dt']
+        self.planning_end_dlnk_dt  = gp_inst_planning_params['planning_end_dlnk_dt']
         self.planning_end_dt  = self.planning_end_dlnk_dt
 
         #  the "effectively zero" number.
