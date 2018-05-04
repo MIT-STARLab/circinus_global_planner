@@ -18,7 +18,8 @@ import multiprocessing as mp
 
 
 #  local repo includes. todo:  make this less hackey
-sys.path.append ('..')
+if __name__ == "__main__":
+    sys.path.append ('..')
 from circinus_tools  import time_tools as tt
 from circinus_tools  import io_tools
 from gp_tools.io_processing import GPProcessorIO
@@ -41,6 +42,10 @@ import runner_gp_helper_output as output_helper
 REPO_BASE = os.path.abspath(os.pardir)  # os.pardir aka '..'
 
 OUTPUT_JSON_VER = '0.1'
+
+def print_verbose(string,verbose=False):
+    if verbose:
+        print(string)
 
 
 class GlobalPlannerRunner:
@@ -83,7 +88,7 @@ class GlobalPlannerRunner:
 
 
 
-    def run_activity_scheduling( self, routes_by_obs,ecl_winds):
+    def run_activity_scheduling( self, routes_by_obs,ecl_winds,verbose=False):
         gp_as = GPActivitySchedulingSeparate ( self.params)
 
         # flatten the list of all routes, which currently has nested lists for each observation
@@ -92,15 +97,15 @@ class GlobalPlannerRunner:
         # from circinus_tools import debug_tools
         # debug_tools.debug_breakpt()
 
-        print('make activity scheduling model')
-        gp_as.make_model (routes_flat, ecl_winds,verbose = True)
-        stats =gp_as.get_stats (verbose = True)
-        print('solve activity scheduling')
+        print_verbose('make activity scheduling model',verbose)
+        gp_as.make_model (routes_flat, ecl_winds,verbose = verbose)
+        stats =gp_as.get_stats (verbose = verbose)
+        print_verbose('solve activity scheduling',verbose)
         t_a = time.time()
         gp_as.solve ()
         t_b = time.time()
         # gp_as.print_sol ()
-        print('extract_routes')
+        print_verbose('extract_routes',verbose)
         #  make a copy of the windows in the extracted routes so we don't mess with the original objects ( just to be extra careful)
         routes = gp_as.extract_utilized_routes ( copy_routes = True, verbose  = False)
         energy_usage,data_usage = gp_as.extract_resource_usage(  decimation_factor =1)
@@ -109,29 +114,29 @@ class GlobalPlannerRunner:
 
         return  routes, energy_usage, data_usage
 
-    def run_activity_scheduling_coupled( self, obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds):
+    def run_activity_scheduling_coupled( self, obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,verbose=False):
         gp_as = GPActivitySchedulingCoupled( self.params)
 
         # from circinus_tools import debug_tools
         # debug_tools.debug_breakpt()
 
-        print('make activity scheduling (coupled) model')
-        gp_as.make_model ( obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,verbose = True)
-        stats =gp_as.get_stats (verbose = True)
-        print('solve activity scheduling (coupled)')
+        print_verbose('make activity scheduling (coupled) model',verbose)
+        gp_as.make_model ( obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,verbose = verbose)
+        stats =gp_as.get_stats (verbose = verbose)
+        print_verbose('solve activity scheduling (coupled)',verbose)
         t_a = time.time()
         gp_as.solve ()
         t_b = time.time()
         # gp_as.print_sol ()
 
-        print('extract_routes')
+        print_verbose('extract_routes',verbose)
         #  make a copy of the windows in the extracted routes so we don't mess with the original objects ( just to be extra careful)
         routes = gp_as.extract_utilized_routes ( copy_routes = True, verbose  = False)
         energy_usage,data_usage = gp_as.extract_resource_usage(  decimation_factor =1)
 
         # for dmr in routes:
         #     for dr in dmr.data_routes:
-        #         print(dr)
+        #         print_verbose(dr,verbose)
 
         # from circinus_tools import debug_tools
         # debug_tools.debug_breakpt()
@@ -143,8 +148,7 @@ class GlobalPlannerRunner:
 
     def run_route_selection_v2_step1( self,obs_winds,dlnk_winds_flat,xlnk_winds,verbose=False):
 
-        if verbose:
-            print ('nominal route selection v2 step 1')
+        print_verbose ('nominal route selection v2 step 1',verbose)
 
         obs_indx =0
         # dict of all routes, with obs as key
@@ -221,16 +225,16 @@ class GlobalPlannerRunner:
 
                     obs_indx +=1
 
-                    # print ('len(routes)')
-                    # print (len(routes))
-                    # print ('obs.data_vol, total dlnk dv, ratio')
-                    # print (obs.data_vol,sum(dr.data_vol for dr in routes),sum(dr.data_vol for dr in routes)/obs.data_vol)
-                    # print ('min latency, ave latency, max latency')
+                    # print_verbose ('len(routes)',verbose)
+                    # print_verbose (len(routes),verbose)
+                    # print_verbose ('obs.data_vol, total dlnk dv, ratio',verbose)
+                    # print_verbose (obs.data_vol,sum(dr.data_vol for dr in routes),sum(dr.data_vol for dr in routes)/obs.data_vol,verbose)
+                    # print_verbose ('min latency, ave latency, max latency',verbose)
                     # latencies = [(rt.route[-1].end - rt.route[0].end).total_seconds()/60 for rt in  routes]
                     # if len(latencies) > 0:
-                    #     print (np.min( latencies),np.mean( latencies),np.max( latencies))
+                    #     print_verbose (np.min( latencies),np.mean( latencies),np.max( latencies),verbose)
                     # else:
-                    #     print('no routes found')
+                    #     print_verbose('no routes found',verbose)
 
         t_b = time.time()
         time_elapsed = t_b-t_a
@@ -251,11 +255,11 @@ class GlobalPlannerRunner:
                 #     raise Exception("Couldn't handle dr %s for obs %s (indices %s)"%(dr,dr.get_obs(),indices_by_obs[dr.get_obs()]))
 
         if verbose:
-            print('total_rs_step1_runtime')
-            print(time_elapsed)
-            print('runtime per rs iteration')
-            print('ave: %fs'%(np.mean(route_times_s)))
-            print('std: %fs'%(np.std(route_times_s)))
+            print_verbose('total_rs_step1_runtime',verbose)
+            print_verbose(time_elapsed,verbose)
+            print_verbose('runtime per rs iteration',verbose)
+            print_verbose('ave: %fs'%(np.mean(route_times_s)),verbose)
+            print_verbose('std: %fs'%(np.std(route_times_s)),verbose)
 
         return routes_by_obs,all_stats,route_times_s,obs_indx, dr_uid
 
@@ -264,27 +268,27 @@ class GlobalPlannerRunner:
     
 
 
-    def run_route_selection_v2_step2(self,routes_by_obs):
-        print('num routes')
-        print(sum(len(rts) for rts in routes_by_obs.values()))
+    def run_route_selection_v2_step2(self,routes_by_obs,verbose=False):
+        print_verbose('num routes',verbose)
+        print_verbose(sum(len(rts) for rts in routes_by_obs.values()),verbose)
 
 
         gp_met = GPMetrics(self.params)
         # t_a = time.time()
         # need to figure out how to window this or something so that we don't have to compare to every other data route - that's horribly expensive
-        print('Assess route overlap pre RS step 2')
-        overlap_cnt_by_route,stats_rs2_pre = gp_met.assess_route_overlap( routes_by_obs,verbose=True)
+        print_verbose('Assess route overlap pre RS step 2',verbose)
+        overlap_cnt_by_route,stats_rs2_pre = gp_met.assess_route_overlap( routes_by_obs,verbose=verbose)
         # t_b = time.time()
         # time_elapsed = t_b-t_a
-        # print('time_elapsed')
-        # print(time_elapsed)
+        # print_verbose('time_elapsed',verbose)
+        # print_verbose(time_elapsed,verbose)
 
         gp_rs = gprsv2.GPDataRouteSelection ( self.params)
 
         selected_rts_by_obs = gp_rs.run_step2(routes_by_obs,overlap_cnt_by_route)
 
-        print('Assess route overlap post RS step 2')
-        overlap_cnt_by_route,stats_rs2_post = gp_met.assess_route_overlap( selected_rts_by_obs,verbose=True)
+        print_verbose('Assess route overlap post RS step 2',verbose)
+        overlap_cnt_by_route,stats_rs2_post = gp_met.assess_route_overlap( selected_rts_by_obs,verbose=verbose)
 
 
         for rts in selected_rts_by_obs.values():
@@ -293,7 +297,7 @@ class GlobalPlannerRunner:
 
         return selected_rts_by_obs,stats_rs2_pre,stats_rs2_post
 
-    def run_route_selection(self,obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,window_uid):
+    def run_route_selection(self,obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,window_uid,verbose=False):
 
         #################################
         #  route selection step 1
@@ -307,13 +311,13 @@ class GlobalPlannerRunner:
 
             #  if  we are loading from file, do that
             if self.other_params['rs_s1_pickle_input']:
-                print('Unpickling route selection step one stuff')
+                print_verbose('Unpickling route selection step one stuff',verbose)
                 routes_by_obs,all_stats,route_times_s,obs_indx,obs_winds,dlnk_winds_flat,ecl_winds,window_uid = pickle_helper.unpickle_rtsel_s1_stuff(self)
                 pas_a = time.time()
 
             #  otherwise run route selection step 1
             else:
-                print('Run route selection step 1')
+                print_verbose('Run route selection step 1',verbose)
                 routes_by_obs,all_stats,route_times_s, obs_indx, dr_uid  =  self.run_route_selection_v2_step1(obs_winds,dlnk_winds_flat,xlnk_winds,verbose=self.rs_v2_params['verbose_step1'])
                 # routes_by_obs,all_stats,route_times_s, obs_indx, weights_tups  =  self.run_test_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
 
@@ -321,7 +325,7 @@ class GlobalPlannerRunner:
             if self.pickle_params['pickle_route_selection_step1_results']:
                 pickle_helper.pickle_rtsel_s1_stuff(self,routes_by_obs,all_stats,route_times_s,obs_indx,obs_winds,dlnk_winds_flat,ecl_winds,window_uid)
         else:
-            print('Skipping route selection step one stuff')
+            print_verbose('Skipping route selection step one stuff',verbose)
 
 
         # from circinus_tools import debug_tools
@@ -335,18 +339,18 @@ class GlobalPlannerRunner:
         run_step_2 = not self.other_params['as_pickle_input']
         if run_step_2:
             if self.other_params['rs_s2_pickle_input']:
-                print('Unpickling route selection step two stuff')
+                print_verbose('Unpickling route selection step two stuff',verbose)
                 xlnk_winds_flat,sel_routes_by_obs,ecl_winds,obs_winds,dlnk_winds_flat,window_uid,stats_rs2_pre,stats_rs2_post = pickle_helper.unpickle_rtsel_s2_stuff(self)
                 pas_a = time.time()
             else:
-                print('num_routes_calced')
-                print(len(route_times_s))
-                print('np.mean(route_times_s)')
-                print(np.mean(route_times_s))
-                print('np.max(route_times_s)')
-                print(np.max(route_times_s))
-                print('np.std(route_times_s)')
-                print(np.std(route_times_s))
+                print_verbose('num_routes_calced',verbose)
+                print_verbose(len(route_times_s),verbose)
+                print_verbose('np.mean(route_times_s)',verbose)
+                print_verbose(np.mean(route_times_s),verbose)
+                print_verbose('np.max(route_times_s)',verbose)
+                print_verbose(np.max(route_times_s),verbose)
+                print_verbose('np.std(route_times_s)',verbose)
+                print_verbose(np.std(route_times_s),verbose)
                 passthru = False
                 if passthru:
                     sel_routes_by_obs = {obs:[DataMultiRoute(ID=0,data_routes=[dr]) for dr in rts] for obs,rts in routes_by_obs.items()}
@@ -357,20 +361,20 @@ class GlobalPlannerRunner:
             if self.pickle_params['pickle_route_selection_step2_results']:
                 pickle_helper.pickle_rtsel_s2_stuff(self,xlnk_winds_flat,sel_routes_by_obs,ecl_winds,obs_winds,dlnk_winds_flat,window_uid,stats_rs2_pre,stats_rs2_post)
         else:
-            print('Skipping route selection step two stuff')
+            print_verbose('Skipping route selection step two stuff',verbose)
 
         #################################
         # route selection output stage
         #################################
 
-        print('route selection output stage')
+        print_verbose('route selection output stage',verbose)
 
         if self.rs_general_params['plot_route_selection_results']:
             output_helper.plot_route_selection_results (self,sel_routes_by_obs,dlnk_winds_flat,xlnk_winds_flat,num_obs_to_plot = 5)
 
         return sel_routes_by_obs,ecl_winds,window_uid,pas_a
 
-    def run( self):
+    def run( self, verbose=False):
 
         #################################
         #  parse inputs, if desired
@@ -379,35 +383,35 @@ class GlobalPlannerRunner:
         load_windows = not self.other_params['rs_s1_pickle_input'] and not self.other_params['rs_s2_pickle_input']
 
         if load_windows:
-            print('Load files')
+            print_verbose('Load files',verbose)
 
             # parse the inputs into activity windows
             window_uid = 0
-            print('Load obs')
+            print_verbose('Load obs',verbose)
             obs_winds, window_uid =self.io_proc.import_obs_winds(window_uid)
-            print('Load dlnks')
+            print_verbose('Load dlnks',verbose)
             dlnk_winds, dlnk_winds_flat, window_uid =self.io_proc.import_dlnk_winds(window_uid)
-            print('Load xlnks')
+            print_verbose('Load xlnks',verbose)
             xlnk_winds, xlnk_winds_flat, window_uid =self.io_proc.import_xlnk_winds(window_uid)
-            print('Load ecl')
+            print_verbose('Load ecl',verbose)
             ecl_winds, window_uid =self.io_proc.import_eclipse_winds(window_uid)
 
             # with open('temp.pkl','wb') as f:
             #     pickle.dump( {'params': self.params},f)
 
             # important to check this because window unique IDs are used as hashes in dictionaries in the scheduling code
-            print('Validate windows')
+            print_verbose('Validate windows',verbose)
             other_helper.validate_unique_windows(self,obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds)
 
             # todo:  probably ought to delete the input times and rates matrices to free up space
 
-            print('In windows loaded from file:')
-            print('obs_winds')
-            print(sum([len(p) for p in obs_winds]))
-            print('dlnk_win')
-            print(sum([len(p) for p in dlnk_winds]))
-            print('xlnk_win')
-            print(sum([len(xlnk_winds[i][j]) for i in  range( self.sat_params['num_sats']) for j in  range( self.sat_params['num_sats']) ]))
+            print_verbose('In windows loaded from file:',verbose)
+            print_verbose('obs_winds',verbose)
+            print_verbose(sum([len(p) for p in obs_winds]),verbose)
+            print_verbose('dlnk_win',verbose)
+            print_verbose(sum([len(p) for p in dlnk_winds]),verbose)
+            print_verbose('xlnk_win',verbose)
+            print_verbose(sum([len(xlnk_winds[i][j]) for i in  range( self.sat_params['num_sats']) for j in  range( self.sat_params['num_sats']) ]),verbose)
 
         #################################
         #  route selection stage
@@ -420,7 +424,7 @@ class GlobalPlannerRunner:
 
         pas_a_new = None
         if run_rs:
-            sel_routes_by_obs,ecl_winds,window_uid,pas_a_new = self.run_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,window_uid)
+            sel_routes_by_obs,ecl_winds,window_uid,pas_a_new = self.run_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,window_uid,verbose)
 
         if pas_a_new:
             pas_a = pas_a_new
@@ -441,16 +445,16 @@ class GlobalPlannerRunner:
                 found_routes = any([len(rts) >0 for rts in sel_routes_by_obs.values()])
                 #  to protect against the weird case where we didn't find any routes ( shouldn't happen, unless we're at the very end of the simulation, or you're trying to break things)
                 if found_routes:
-                    scheduled_routes,energy_usage,data_usage = self.run_activity_scheduling(sel_routes_by_obs,ecl_winds)
+                    scheduled_routes,energy_usage,data_usage = self.run_activity_scheduling(sel_routes_by_obs,ecl_winds,verbose)
 
             # run coupled route selection/act sched solver (slow, optimal)
             elif run_coupled_rs_as:
-                scheduled_routes,energy_usage,data_usage = self.run_activity_scheduling_coupled(obs_winds,dlnk_winds_flat,xlnk_winds_flat,ecl_winds)
+                scheduled_routes,energy_usage,data_usage = self.run_activity_scheduling_coupled(obs_winds,dlnk_winds_flat,xlnk_winds_flat,ecl_winds,verbose)
                 # we didn't run RS, so there are no "selected routes", just scheduled
                 sel_routes_by_obs = {}
             else:
                 scheduled_routes,energy_usage,data_usage = ([],None,None)
-                print('No routes were found in route selection; not running activity selection')
+                print_verbose('No routes were found in route selection; not running activity selection',verbose)
 
         # if we are saving to file, do that
         if self.pickle_params['pickle_act_scheduling_results']:
@@ -462,14 +466,14 @@ class GlobalPlannerRunner:
 
         metrics_plot_inputs = output_helper.calc_activity_scheduling_results (self,obs_winds,dlnk_winds_flat,sel_routes_by_obs,scheduled_routes, energy_usage)
 
-        print('total_plan_and_sched_runtime (warning: may include (un)pickling time and RS plot output)')
-        print("%.2f seconds"%(total_plan_and_sched_runtime))
+        print_verbose('total_plan_and_sched_runtime (warning: may include (un)pickling time and RS plot output)',verbose)
+        print_verbose("%.2f seconds"%(total_plan_and_sched_runtime),verbose)
 
         #################################
         #  Activity scheduling output stage
         #################################
 
-        print('activity scheduling output stage')
+        print_verbose('activity scheduling output stage',verbose)
 
         if self.as_params['plot_activity_scheduling_results']:
             output_helper.plot_activity_scheduling_results(self,(obs_winds,dlnk_winds_flat,xlnk_winds_flat),sel_routes_by_obs,scheduled_routes,energy_usage,data_usage,ecl_winds,metrics_plot_inputs)
@@ -489,11 +493,12 @@ class GlobalPlannerRunner:
 
 class PipelineRunner:
 
-    def run(self, data):
+    def run(self, data,verbose=False):
         """
 
         """
 
+        # deepcopy here because we're making changes for components that this function calls, and don't want to accidentally somehow step on toes somewhere down the call stack (before this function was called)
         orbit_prop_inputs = deepcopy( data['orbit_prop_inputs'])
         orbit_link_inputs = data['orbit_link_inputs']
         gp_general_params_inputs = data['gp_general_params_inputs']
@@ -508,7 +513,7 @@ class PipelineRunner:
         gp_instance_params = gp_instance_params_inputs
         gp_data_rates_params = data_rates_inputs
         gp_other_params = {}
-        gp_other_params['new_pickle_file_name_pre']  = file_params.get ('orbit_prop_inputs_file' ,'default.json').split ('.')[0]
+        gp_other_params['new_pickle_file_name_pre']  = file_params.get ('new_pickle_file_name_pre' ,'default_pickle')
         gp_other_params['rs_s1_pickle_input']  = data['rs_s1_pickle']
         gp_other_params['rs_s2_pickle_input']  = data['rs_s2_pickle']
         gp_other_params['as_pickle_input']  = data['as_pickle']
@@ -574,7 +579,7 @@ class PipelineRunner:
         gp_params['gp_data_rates_params'] = gp_data_rates_params
         gp_params['gp_other_params'] = gp_other_params
         gp_runner = GlobalPlannerRunner (gp_params)
-        viz_outputs= gp_runner.run ()
+        viz_outputs= gp_runner.run (verbose)
 
         # define orbit prop outputs json
         output_json = {}
@@ -584,6 +589,19 @@ class PipelineRunner:
         output_json['update_time'] = datetime.utcnow().isoformat()
 
         return output_json
+
+
+def remote_multiproc_run(self,mp_queue,verbose=False):
+    """ Runs the PipelineRunner as a remote multiprocessing call"""
+
+    pr = PipelineRunner()
+    print_verbose('runner_gp: remote_multiproc_run()',verbose)
+    # sys.stdout = open(str(os.getpid()) + ".out", "w")
+    # sys.stderr = open(str(os.getpid()) + "_error.out", "w")
+    # print('stdout initialized')
+    inputs = mp_queue.get()
+    output = pr.run(inputs,verbose)
+    mp_queue.put(output)
 
 
 if __name__ == "__main__":
@@ -659,13 +677,13 @@ if __name__ == "__main__":
         "rs_s1_pickle": args.rs_s1_pickle,
         "rs_s2_pickle": args.rs_s2_pickle,
         "as_pickle": args.as_pickle,
-        "file_params":  {'orbit_prop_inputs_file': args.prop_inputs_file.split('/')[-1]}
+        "file_params":  {'new_pickle_file_name_pre': args.prop_inputs_file.split('/')[-1].split ('.')[0]}
     }
 
     a = time.time()
-    output = pr.run(data)
+    output = pr.run(data,verbose=True)
     b = time.time()
     with open('gp_outputs.json','w') as f:
         json.dump(output ,f)
 
-    print('run time: %f'%(b-a))
+    print_verbose('run time: %f'%(b-a),verbose)
