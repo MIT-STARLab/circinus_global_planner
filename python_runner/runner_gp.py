@@ -73,6 +73,7 @@ class GlobalPlannerRunner:
         self.as_params = self.params['gp_general_params']['activity_scheduling_params']
         self.gp_agent_ID = gp_params['gp_instance_params']['gp_agent_ID']
         self.gp_inst_planning_params = self.params['gp_instance_params']['planning_params']
+        self.gp_inst_as_params = self.params['gp_instance_params']['activity_scheduling_params']
         self.io_proc =GPProcessorIO(self.params)
         self.gp_plot =GPPlotting( self.params)
 
@@ -475,7 +476,7 @@ class GlobalPlannerRunner:
 
         print_verbose('activity scheduling output stage',verbose)
 
-        if self.as_params['plot_activity_scheduling_results']:
+        if self.gp_inst_as_params['plot_activity_scheduling_results']:
             output_helper.plot_activity_scheduling_results(self,(obs_winds,dlnk_winds_flat,xlnk_winds_flat),sel_routes_by_obs,scheduled_routes,energy_usage,data_usage,ecl_winds,metrics_plot_inputs)
 
 
@@ -550,11 +551,11 @@ class PipelineRunner:
             raise NotImplementedError
 
         #  check that it's the right version
-        if not gp_general_params['version'] == "0.1":
+        if not gp_general_params['version'] == "0.2":
             raise NotImplementedError
 
         #  check that it's the right version
-        if gp_instance_params['version'] == "0.3":
+        if gp_instance_params['version'] == "0.4":
 
             gp_instance_params['planning_params']['planning_start_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_start'])
             gp_instance_params['planning_params']['planning_end_obs_xlnk_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_end_obs_xlnk'])
@@ -584,7 +585,7 @@ class PipelineRunner:
         output['version'] = OUTPUT_JSON_VER
         output['scenario_params'] = data['orbit_prop_inputs']['scenario_params']
         output['viz_data'] = viz_outputs
-        # output['scheduled_routes'] = scheduled_routes
+        output['scheduled_routes'] = scheduled_routes
         output['update_time'] = datetime.utcnow().isoformat()
 
         return output
@@ -682,7 +683,10 @@ if __name__ == "__main__":
     a = time.time()
     output = pr.run(data,verbose=True)
     b = time.time()
+
     with open('gp_outputs.json','w') as f:
+        # todo: can't currently jsonify routing objects
+        del output['scheduled_routes']
         json.dump(output ,f)
 
     print('run time: %f'%(b-a))
