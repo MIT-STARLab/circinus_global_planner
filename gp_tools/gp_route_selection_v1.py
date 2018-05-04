@@ -22,8 +22,8 @@ from pyomo import opt  as po
 # def yo_mama():
 # ...
 
-from .routing_objects import DataRoute
 from circinus_tools  import time_tools as tt
+from circinus_tools.scheduling.routing_objects import DataRoute
 
 class GPDataRouteSelection():
     """docstring for GP route selection"""

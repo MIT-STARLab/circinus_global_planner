@@ -18,10 +18,13 @@ import multiprocessing as mp
 
 
 #  local repo includes. todo:  make this less hackey
+
+# add this main tester so that if we're running the gp remotely (e.g. in circinus sim), we don't try to reinclude a bunch of modules that are already present at the remote
 if __name__ == "__main__":
     sys.path.append ('..')
 from circinus_tools  import time_tools as tt
 from circinus_tools  import io_tools
+from circinus_tools.scheduling.routing_objects import DataMultiRoute
 from gp_tools.io_processing import GPProcessorIO
 from gp_tools.gp_plotting import GPPlotting
 import gp_tools.gp_route_selection_v1 as gprsv1
@@ -29,15 +32,11 @@ import gp_tools.gp_route_selection_v2 as gprsv2
 from gp_tools.gp_activity_scheduling_separate import GPActivitySchedulingSeparate
 from gp_tools.gp_activity_scheduling_coupled import GPActivitySchedulingCoupled
 from gp_tools.gp_metrics import GPMetrics
-from gp_tools.routing_objects import DataMultiRoute
 import gp_tools.gp_rs_execution as gp_rs_exec
 
 import runner_gp_helper_pickle as pickle_helper 
 import runner_gp_helper_other as other_helper
 import runner_gp_helper_output as output_helper
-
-# TODO: remove this line if not needed
-# from gp_tools.custom_activity_window import ObsWindow
 
 REPO_BASE = os.path.abspath(os.pardir)  # os.pardir aka '..'
 

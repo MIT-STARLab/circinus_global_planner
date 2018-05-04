@@ -8,8 +8,8 @@ import numpy as np
 # import ipdb
 
 from .sim_entities import NetSimEntity,NetSimSat, NetSimGS, UpdateHistory
-from gp_tools.custom_activity_window import DlnkWindow, XlnkWindow
-from gp_tools.schedule_objects import Dancecard
+from circinus_tools.scheduling.custom_activity_window import DlnkWindow, XlnkWindow
+from circinus_tools.scheduling.schedule_objects import Dancecard
 
 class GPNetSim():
     """docstring for GPMetrics"""

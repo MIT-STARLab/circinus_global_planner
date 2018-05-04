@@ -9,8 +9,8 @@ from datetime import datetime, timedelta
 import numpy as np
 
 from circinus_tools  import time_tools as tt
-from .custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow
-from .routing_objects import DataRoute, DataMultiRoute
+from circinus_tools.scheduling.custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow
+from circinus_tools.scheduling.routing_objects import DataRoute, DataMultiRoute
 
 class GPMetrics():
     """docstring for GPMetrics"""

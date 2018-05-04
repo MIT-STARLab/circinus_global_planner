@@ -7,7 +7,7 @@ from matplotlib.pyplot import savefig
 from matplotlib.patches import Rectangle, Circle
 import numpy as np
 
-from .routing_objects import DataRoute
+from circinus_tools.scheduling.routing_objects import DataRoute
 
 class GPPlotting():
 
