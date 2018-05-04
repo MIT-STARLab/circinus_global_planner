@@ -481,10 +481,10 @@ class GlobalPlannerRunner:
 
         # if you want to see windows from RS output...
         # sel_routes_flat = [dr for rts in sel_routes_by_obs.values() for dr in rts]
-        # (sel_obs_winds_flat, sel_dlnk_winds_flat, sel_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind) = self.io_proc.extract_flat_windows (sel_routes_flat)
+        # (sel_obs_winds_flat, sel_dlnk_winds_flat, sel_xlnk_winds_flat, link_info_by_wind, route_ids_by_wind) = self.io_proc.extract_flat_windows (sel_routes_flat)
         # outputs= self.io_proc.make_sat_history_outputs (sel_obs_winds_flat, sel_xlnk_winds_flat, sel_dlnk_winds_flat, link_info_by_wind)
 
-        (sched_obs_winds_flat, sched_dlnk_winds_flat, sched_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind) = self.io_proc.extract_flat_windows (scheduled_routes)
+        (sched_obs_winds_flat, sched_dlnk_winds_flat, sched_xlnk_winds_flat, link_info_by_wind, route_ids_by_wind) = self.io_proc.extract_flat_windows (scheduled_routes)
         viz_outputs= self.io_proc.make_sat_history_outputs (sched_obs_winds_flat, sched_xlnk_winds_flat, sched_dlnk_winds_flat, link_info_by_wind)
 
 
@@ -584,7 +584,7 @@ class PipelineRunner:
         output['version'] = OUTPUT_JSON_VER
         output['scenario_params'] = data['orbit_prop_inputs']['scenario_params']
         output['viz_data'] = viz_outputs
-        output['scheduled_routes'] = scheduled_routes
+        # output['scheduled_routes'] = scheduled_routes
         output['update_time'] = datetime.utcnow().isoformat()
 
         return output
@@ -685,4 +685,4 @@ if __name__ == "__main__":
     with open('gp_outputs.json','w') as f:
         json.dump(output ,f)
 
-    print_verbose('run time: %f'%(b-a),verbose)
+    print('run time: %f'%(b-a))

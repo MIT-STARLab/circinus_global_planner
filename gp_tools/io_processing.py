@@ -326,7 +326,7 @@ class GPProcessorIO():
         link_info_by_wind = {}
 
         #  dictionary of route indices, using windows as keys
-        route_indcs_by_wind  = {}
+        route_ids_by_wind  = {}
 
         def copy_choice(wind):
             if copy_windows:
@@ -370,9 +370,9 @@ class GPProcessorIO():
                         link_info_by_wind[wind].used_data_vol  +=  dr.scheduled_dv 
                     
                     #  add the route index  for this window,  initializing a list for the window if needed
-                    if not wind in route_indcs_by_wind.keys (): 
-                        route_indcs_by_wind[wind] = []
-                    route_indcs_by_wind[wind].append (dr.ID)
+                    if not wind in route_ids_by_wind.keys (): 
+                        route_ids_by_wind[wind] = []
+                    route_ids_by_wind[wind].append (dr.ID)
 
 
         obs_flat = [[] for k in range( self.num_sats)]
@@ -393,7 +393,7 @@ class GPProcessorIO():
             xlnk_flat[sat_indx].sort(key=lambda x: x.start)
             dlnk_flat[sat_indx].sort(key=lambda x: x.start)
 
-        return obs_flat, dlnk_flat, xlnk_flat, link_info_by_wind, route_indcs_by_wind
+        return obs_flat, dlnk_flat, xlnk_flat, link_info_by_wind, route_ids_by_wind
 
     def make_sat_history_outputs (self, obs_winds_flat, xlnk_winds_flat, dlnk_winds_flat, link_info_by_wind):
         obs_times_flat = [[] for sat_indx in range ( self.num_sats)]

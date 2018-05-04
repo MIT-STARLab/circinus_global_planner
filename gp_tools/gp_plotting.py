@@ -69,7 +69,7 @@ class GPPlotting():
         dlnk_winds_flat, 
         all_xlnk_winds_flat,
         xlnk_winds_flat,
-        route_indcs_by_wind,
+        route_ids_by_wind,
         plot_start,
         plot_end,
         base_time,
@@ -290,11 +290,11 @@ class GPPlotting():
                         bottom_vert_loc = xlnk_rectangle_rotator
 
                         # if we have been given route indices, then then use one of them to configure the crosslink box color
-                        dr_indx = None
-                        if (len(route_indcs_by_wind.keys())) > 0:
-                            dr_indx = route_indcs_by_wind[xlnk_wind][self.route_index_to_use]
-                            dr_indcs = route_indcs_by_wind[xlnk_wind]
-                            xlnk_color_indx = dr_indx %  self.xlnk_color_rollover
+                        dr_id = None
+                        if (len(route_ids_by_wind.keys())) > 0:
+                            dr_id = route_ids_by_wind[xlnk_wind][self.route_index_to_use]
+                            dr_indcs = route_ids_by_wind[xlnk_wind]
+                            xlnk_color_indx = dr_id.get_indx() %  self.xlnk_color_rollover
                         #  otherwise just go with the first color
                         else:
                             xlnk_color_indx = 0
@@ -317,8 +317,8 @@ class GPPlotting():
                             left_horizontal_loc = xlnk_start #+ 0.15
 
                             #  again, if we know route indices include them in label
-                            if not dr_indx is None:
-                                label_text = "%d,%d" %(dr_indx,other_sat_indx)
+                            if not dr_id is None:
+                                label_text = "%d,%d" %(dr_id.get_indx(),other_sat_indx)
                                 label_text = "%s" %(dr_indcs)
                             else:         
                                 label_text = "%d" %(other_sat_indx)
@@ -403,10 +403,10 @@ class GPPlotting():
                             label_text = ""
 
                             # if we have been given route indices, then include them in the label
-                            if (len(route_indcs_by_wind.keys())) > 0:
-                                dr_indcs = route_indcs_by_wind[dlnk_wind]
-                                for dr_indx in dr_indcs:
-                                    label_text += "%d,"%(dr_indx)
+                            if (len(route_ids_by_wind.keys())) > 0:
+                                dr_indcs = route_ids_by_wind[dlnk_wind]
+                                for dr_id in dr_indcs:
+                                    label_text += "%d,"%(dr_id.get_indx())
                                 label_text += ";"
                             
                             #  add the ground station index to the label
@@ -469,7 +469,7 @@ class GPPlotting():
         dlnk_winds_flat,
         all_xlnk_winds_flat,
         xlnk_winds_flat,
-        route_indcs_by_wind,
+        route_ids_by_wind,
         plot_start,
         plot_end,
         base_time,
@@ -688,10 +688,10 @@ class GPPlotting():
                             label_text = ""
 
                             # if we have been given route indices, then include them in the label
-                            if (len(route_indcs_by_wind.keys())) > 0:
-                                dr_indcs = route_indcs_by_wind[dlnk_wind]
-                                for dr_indx in dr_indcs:
-                                    label_text += "%d,"%(dr_indx)
+                            if (len(route_ids_by_wind.keys())) > 0:
+                                dr_indcs = route_ids_by_wind[dlnk_wind]
+                                for dr_id in dr_indcs:
+                                    label_text += "%d,"%(dr_id.get_indx())
                                 label_text += ";"
                             
                             #  add the ground station index to the label
@@ -756,10 +756,10 @@ class GPPlotting():
                         bottom_vert_loc = xlnk_rectangle_rotator
 
                         # if we have been given route indices, then then use one of them to configure the crosslink box color
-                        dr_indx = None
-                        if (len(route_indcs_by_wind.keys())) > 0:
-                            dr_indx = route_indcs_by_wind[xlnk_wind][self.route_index_to_use]
-                            xlnk_color_indx = dr_indx %  self.xlnk_color_rollover
+                        dr_id = None
+                        if (len(route_ids_by_wind.keys())) > 0:
+                            dr_id = route_ids_by_wind[xlnk_wind][self.route_index_to_use]
+                            xlnk_color_indx = dr_id.get_indx() %  self.xlnk_color_rollover
                         #  otherwise just go with the first color
                         else:
                             xlnk_color_indx = 0
@@ -780,8 +780,8 @@ class GPPlotting():
                             left_horizontal_loc = xlnk_start + 0.15
 
                             #  again, if we know route indices include them in label
-                            if dr_indx:
-                                label_text = "%d,%d" %(dr_indx,other_sat_indx)
+                            if dr_id:
+                                label_text = "%d,%d" %(dr_id.get_indx(),other_sat_indx)
                             else:                                
                                 label_text = "%d" %(other_sat_indx)
 
