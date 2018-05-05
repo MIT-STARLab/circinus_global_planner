@@ -13,8 +13,9 @@ from pyomo import opt  as po
 import numpy as np
 
 from circinus_tools  import time_tools as tt
-from circinus_tools.scheduling.custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
 from circinus_tools  import  constants as const
+from circinus_tools  import io_tools
+from circinus_tools.scheduling.custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
 from circinus_tools.scheduling.schedule_objects import Dancecard
 from circinus_tools.scheduling.routing_objects import DataMultiRoute
 
@@ -36,6 +37,8 @@ class GPActivityScheduling():
         sat_params = gp_params['gp_orbit_prop_params']['sat_params']
         as_params = gp_params['gp_general_params']['activity_scheduling_params']
         gp_inst_planning_params = gp_params['gp_instance_params']['planning_params']
+
+        self.gp_agent_ID = gp_params['gp_instance_params']['gp_agent_ID']
 
         # records if the formulation model has been constructed successfully
         self.model_constructed = False
@@ -73,34 +76,23 @@ class GPActivityScheduling():
         self.initial_state = sat_params['initial_state_sorted']
         sat_activity_params = sat_params['activity_params']
 
-        # these lists are in order of satellite index because we've sorted 
-        self.sats_init_estate_Wh = [sat_state['batt_e_Wh'] for sat_state in self.initial_state]
-        self.sats_emin_Wh = [p_params['battery_storage_Wh']['e_min'][p_params['battery_option']] for p_params in self.power_params]
-        self.sats_emax_Wh = [p_params['battery_storage_Wh']['e_max'][p_params['battery_option']] for p_params in self.power_params]
 
         self.sats_dmin_Mb = [1000*ds_params['data_storage_Gbit']['d_min'][ds_params['storage_option']] for ds_params in self.data_storage_params]
         self.sats_dmax_Mb = [1000*ds_params['data_storage_Gbit']['d_max'][ds_params['storage_option']] for ds_params in self.data_storage_params]
 
         self.energy_unit = "Wh"
 
+        # these lists are in order of satellite index because we've sorted 
+        self.sats_init_estate_Wh = [sat_state['batt_e_Wh'] for sat_state in self.initial_state]
         self.sats_edot_by_act_W = []
+        self.sats_emin_Wh = []
+        self.sats_emax_Wh = []
         for p_params in self.power_params:
-            sat_edot_by_act = {}
-            sat_edot_by_act['base'] = p_params['power_consumption_W']['base'][p_params['base_option']]
-            sat_edot_by_act['obs'] = p_params['power_consumption_W']['obs'][p_params['obs_option']]
-            sat_edot_by_act['dlnk'] = p_params['power_consumption_W']['dlnk'][p_params['dlnk_option']]
-            sat_edot_by_act['xlnk-tx'] = p_params['power_consumption_W']['xlnk-tx'][p_params['xlnk_tx_option']]
-            sat_edot_by_act['xlnk-rx'] = p_params['power_consumption_W']['xlnk-rx'][p_params['xlnk_rx_option']]
-            sat_edot_by_act['charging'] = p_params['power_consumption_W']['orbit_insunlight_average_charging'][p_params['charging_option']]
-            self.sats_edot_by_act_W.append (sat_edot_by_act)
+            sat_edot_by_act,sat_batt_storage = io_tools.parse_power_consumption_params(p_params)
 
-        self.act_type_map = {
-            ObsWindow: 'obs',
-            DlnkWindow: 'dlnk',
-            'xlnk-tx': 'xlnk-tx',
-            'xlnk-rx': 'xlnk-rx',
-            EclipseWindow: 'charging'
-        }
+            self.sats_edot_by_act_W.append (sat_edot_by_act)
+            self.sats_emin_Wh.append (sat_batt_storage['e_min'])
+            self.sats_emax_Wh.append (sat_batt_storage['e_max'])
 
         self.act_transition_time_map = {
             ('inter-sat',DlnkWindow,DlnkWindow): sat_activity_params['transition_time_s']['inter-sat']['dlnk-dlnk'],
@@ -114,7 +106,7 @@ class GPActivityScheduling():
         }
 
         # this is now less useful than I thought
-        self.standard_activities = [ObsWindow,DlnkWindow]
+        self.standard_activities = [ObsWindow,DlnkWindow,XlnkWindow]
 
         #  this should be as small as possible to prevent ill conditioning, but big enough that score factor constraints are still valid. 
         #  note: the size of this value is checked in make_model() below

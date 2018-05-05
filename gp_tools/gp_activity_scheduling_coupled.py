@@ -705,27 +705,9 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                             #  if this is a "standard activity" that we can choose to perform or not
                             if type(act) in self.standard_activities:
                                 act_windid = all_act_windids_by_obj[act]
+                                act_code = act.get_code(sat_indx) if type(act) == XlnkWindow else act.get_code()
                                 activity_delta_e += (
-                                    model.par_sats_edot_by_act[sat_indx][self.act_type_map[type(act)]] 
-                                    * model.var_act_dv_utilization[act_windid]/model.par_act_capacity[act_windid]
-                                    * model.par_resource_delta_t
-                                )
-
-                            if type(act) == XlnkWindow:
-                                act_windid = all_act_windids_by_obj[act]
-
-                                if self.use_symmetric_xlnk_windows:
-                                    xlnk_edot = model.par_sats_edot_by_act[sat_indx]['xlnk-tx']
-                                # note that in the case where we're not using symmetric xlnk windows, both satellites have a copy of each unidirectional window in their list of activity windows, so it'll be added appropriately at each unique sat_indx
-                                else:
-                                    is_rx = act.is_rx(sat_indx)
-                                    if is_rx: 
-                                        xlnk_edot = model.par_sats_edot_by_act[sat_indx]['xlnk-rx']
-                                    else: 
-                                        xlnk_edot = model.par_sats_edot_by_act[sat_indx]['xlnk-tx']
-
-                                activity_delta_e += (
-                                    xlnk_edot 
+                                    model.par_sats_edot_by_act[sat_indx][act_code] 
                                     * model.var_act_dv_utilization[act_windid]/model.par_act_capacity[act_windid]
                                     * model.par_resource_delta_t
                                 )
@@ -735,7 +717,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                                 charging = False
 
                     # add in charging energy contribution ( if possible)
-                    charging_delta_e = model.par_sats_edot_by_act[sat_indx]['charging']*model.par_resource_delta_t if charging else 0
+                    charging_delta_e = model.par_sats_edot_by_act[sat_indx]['orbit_insunlight_average_charging']*model.par_resource_delta_t if charging else 0
 
                     #  base-level satellite energy usage (not including additional activities)
                     base_delta_e = model.par_sats_edot_by_act[sat_indx]['base']*model.par_resource_delta_t
@@ -967,6 +949,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                         remaining_obs_dv -= delta_obs_dv
                         found_routes.append ( 
                             DataRoute(
+                                self.gp_agent_ID,
                                 dr_uid, 
                                 route =route_winds, 
                                 window_start_sats=route_window_start_sats,
@@ -1028,7 +1011,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
         # the rest of the code expects DataMultiRoute objects, so we'll create these as shallow wrappers around the data routes we just fabricated
         for dr in data_routes:
-            scheduled_route = DataMultiRoute(dr_uid,[dr],dv_epsilon=self.dv_epsilon)
+            scheduled_route = DataMultiRoute(self.gp_agent_ID,dr_uid,[dr],dv_epsilon=self.dv_epsilon)
             # the dr within is fully utilized (1.0) 
             scheduled_route.set_scheduled_dv_frac(1.0)
             scheduled_routes_flat.append(scheduled_route)
