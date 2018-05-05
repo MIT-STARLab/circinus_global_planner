@@ -25,7 +25,7 @@ if __name__ == "__main__":
 from circinus_tools  import time_tools as tt
 from circinus_tools  import io_tools
 from circinus_tools.scheduling.routing_objects import DataMultiRoute
-from gp_tools.io_processing import GPProcessorIO
+from circinus_tools.scheduling.io_processing import SchedIOProcessor
 from gp_tools.gp_plotting import GPPlotting
 import gp_tools.gp_route_selection_v1 as gprsv1
 import gp_tools.gp_route_selection_v2 as gprsv2
@@ -74,7 +74,7 @@ class GlobalPlannerRunner:
         self.gp_agent_ID = gp_params['gp_instance_params']['gp_agent_ID']
         self.gp_inst_planning_params = self.params['gp_instance_params']['planning_params']
         self.gp_inst_as_params = self.params['gp_instance_params']['activity_scheduling_params']
-        self.io_proc =GPProcessorIO(self.params)
+        self.io_proc =SchedIOProcessor(self.params)
         self.gp_plot =GPPlotting( self.params)
 
         # it's no good if the planning window (the activities to select) goes outside of the scenario window (the possible activities, eclipse windows)
