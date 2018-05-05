@@ -8,7 +8,7 @@ import numpy as np
 # import ipdb
 
 from .sim_entities import NetSimEntity,NetSimSat, NetSimGS, UpdateHistory
-from circinus_tools.scheduling.custom_activity_window import DlnkWindow, XlnkWindow
+from circinus_tools.scheduling.custom_window import DlnkWindow, XlnkWindow
 from circinus_tools.scheduling.schedule_objects import Dancecard
 
 class GPNetSim():

@@ -1,4 +1,4 @@
-from circinus_tools.scheduling.custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
+from circinus_tools.scheduling.custom_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
 from gp_tools.gp_metrics import GPMetrics
 from gp_tools.network_sim.gp_network_sim import GPNetSim
 

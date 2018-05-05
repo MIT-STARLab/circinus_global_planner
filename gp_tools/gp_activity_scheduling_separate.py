@@ -15,7 +15,7 @@ import numpy as np
 from circinus_tools  import time_tools as tt
 from .gp_activity_scheduling_super import  GPActivityScheduling
 from circinus_tools  import  constants as const
-from circinus_tools.scheduling.custom_activity_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
+from circinus_tools.scheduling.custom_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
 from circinus_tools.scheduling.schedule_objects import Dancecard
 from circinus_tools.scheduling.routing_objects import DataMultiRoute
 
