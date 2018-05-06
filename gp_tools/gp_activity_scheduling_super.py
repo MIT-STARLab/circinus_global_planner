@@ -80,7 +80,7 @@ class GPActivityScheduling():
         self.sats_dmin_Mb = [1000*ds_params['data_storage_Gbit']['d_min'][ds_params['storage_option']] for ds_params in self.data_storage_params]
         self.sats_dmax_Mb = [1000*ds_params['data_storage_Gbit']['d_max'][ds_params['storage_option']] for ds_params in self.data_storage_params]
 
-        self.energy_unit = "Wh"
+        self.energy_unit = "Wh"  # watt hours
 
         # these lists are in order of satellite index because we've sorted 
         self.sats_init_estate_Wh = [sat_state['batt_e_Wh'] for sat_state in self.initial_state]
@@ -88,7 +88,12 @@ class GPActivityScheduling():
         self.sats_emin_Wh = []
         self.sats_emax_Wh = []
         for p_params in self.power_params:
-            sat_edot_by_mode,sat_batt_storage = io_tools.parse_power_consumption_params(p_params)
+            sat_edot_by_mode,sat_batt_storage,power_units = io_tools.parse_power_consumption_params(p_params)
+
+            if not power_units['power_consumption'] == 'W':
+                raise NotImplementedError
+            if not power_units['battery_storage'] == 'Wh':
+                raise NotImplementedError
 
             self.sats_edot_by_mode_W.append (sat_edot_by_mode)
             self.sats_emin_Wh.append (sat_batt_storage['e_min'])
