@@ -32,8 +32,8 @@ class GPPlotting():
         :type params: dict
         """
         plot_params = gp_params['gp_general_params']['plot_params']
-        sat_params = gp_params['gp_orbit_prop_params']['sat_params']
-        self.obs_params = gp_params['gp_orbit_prop_params']['obs_params']
+        sat_params = gp_params['orbit_prop_params']['sat_params']
+        self.obs_params = gp_params['orbit_prop_params']['obs_params']
 
         self.plot_fig_extension=plot_params['plot_fig_extension']
         self.time_units=plot_params['time_units']

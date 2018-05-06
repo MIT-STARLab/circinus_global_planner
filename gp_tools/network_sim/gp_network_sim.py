@@ -22,8 +22,8 @@ class GPNetSim():
         :type params: dict
         """
 
-        sat_params = gp_params['gp_orbit_prop_params']['sat_params']
-        gs_params = gp_params['gp_orbit_prop_params']['gs_params']
+        sat_params = gp_params['orbit_prop_params']['sat_params']
+        gs_params = gp_params['orbit_prop_params']['gs_params']
         as_params = gp_params['gp_general_params']['activity_scheduling_params']
         gp_inst_planning_params = gp_params['gp_instance_params']['planning_params']
         gp_general_other_params = gp_params['gp_general_params']['other_params']

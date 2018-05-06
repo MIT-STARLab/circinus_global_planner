@@ -396,7 +396,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         model.par_sats_estore_initial = pe.Param ( model.sat_indcs,initialize= { i: item for i,item in enumerate (self.sats_init_estate_Wh)})
         model.par_sats_estore_min = pe.Param ( model.sat_indcs,initialize= { i: item for i,item in enumerate (self.sats_emin_Wh)})
         model.par_sats_estore_max = pe.Param ( model.sat_indcs,initialize= { i: item for i,item in enumerate (self.sats_emax_Wh)})
-        model.par_sats_edot_by_act = pe.Param ( model.sat_indcs,initialize= { i: item for i,item in enumerate (self.sats_edot_by_act_W)})
+        model.par_sats_edot_by_mode = pe.Param ( model.sat_indcs,initialize= { i: item for i,item in enumerate (self.sats_edot_by_mode_W)})
 
         model.par_sats_dstore_min = pe.Param ( model.sat_indcs,initialize= { i: item for i,item in enumerate (self.sats_dmin_Mb)})
         model.par_sats_dstore_max = pe.Param ( model.sat_indcs,initialize= { i: item for i,item in enumerate (self.sats_dmax_Mb)})
@@ -535,7 +535,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                                 act_windid = all_act_windids_by_obj[act]
                                 act_code = act.get_code(sat_indx) if type(act) == XlnkWindow else act.get_code()
                                 activity_delta_e += (
-                                    model.par_sats_edot_by_act[sat_indx][act_code] 
+                                    model.par_sats_edot_by_mode[sat_indx][act_code] 
                                     * model.var_activity_utilization[act_windid]
                                     * model.par_resource_delta_t
                                 )
@@ -546,10 +546,10 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
                     # add in charging energy contribution ( if possible)
                     # assume charging is constant in sunlight
-                    charging_delta_e = model.par_sats_edot_by_act[sat_indx]['orbit_insunlight_average_charging']*model.par_resource_delta_t if charging else 0
+                    charging_delta_e = model.par_sats_edot_by_mode[sat_indx]['orbit_insunlight_average_charging']*model.par_resource_delta_t if charging else 0
 
                     #  base-level satellite energy usage (not including additional activities)
-                    base_delta_e = model.par_sats_edot_by_act[sat_indx]['base']*model.par_resource_delta_t
+                    base_delta_e = model.par_sats_edot_by_mode[sat_indx]['base']*model.par_resource_delta_t
 
                     # maximum bound of energy at current time step based on last time step
                     model.c6.add( model.var_sats_estore[sat_indx,tp_indx] <= 

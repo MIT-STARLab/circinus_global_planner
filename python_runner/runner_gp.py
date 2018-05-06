@@ -59,11 +59,11 @@ class GlobalPlannerRunner:
         """
 
         self.params = gp_params
-        self.scenario_params = self.params['gp_orbit_prop_params']['scenario_params']
-        self.sat_params = self.params['gp_orbit_prop_params']['sat_params']
-        self.obs_params = self.params['gp_orbit_prop_params']['obs_params']
-        self.sat_orbit_params = self.params['gp_orbit_prop_params']['sat_orbit_params']
-        self.obs_params = self.params['gp_orbit_prop_params']['obs_params']
+        self.scenario_params = self.params['orbit_prop_params']['scenario_params']
+        self.sat_params = self.params['orbit_prop_params']['sat_params']
+        self.obs_params = self.params['orbit_prop_params']['obs_params']
+        self.sat_orbit_params = self.params['orbit_prop_params']['sat_orbit_params']
+        self.obs_params = self.params['orbit_prop_params']['obs_params']
         self.pickle_params = self.params['gp_general_params']['pickle_params']
         self.other_params = self.params['gp_other_params']
         self.plot_params = self.params['gp_general_params']['plot_params']
@@ -394,6 +394,7 @@ class GlobalPlannerRunner:
             dlnk_winds, dlnk_winds_flat, window_uid =self.io_proc.import_dlnk_winds(window_uid)
             print_verbose('Load xlnks',verbose)
             xlnk_winds, xlnk_winds_flat, window_uid =self.io_proc.import_xlnk_winds(window_uid)
+            # note: this import is currently done independently from circinus constellation sim. If we ever need to share knowledge about ecl winds between the two, will need to make ecl winds an input from const sim
             print_verbose('Load ecl',verbose)
             ecl_winds, window_uid =self.io_proc.import_eclipse_winds(window_uid)
 
@@ -508,11 +509,11 @@ class PipelineRunner:
         file_params = data.get ('file_params',{})
 
         gp_params = {}
-        gp_orbit_prop_params = orbit_prop_inputs
-        gp_orbit_link_params = orbit_link_inputs
+        orbit_prop_params = orbit_prop_inputs
+        orbit_link_params = orbit_link_inputs
         gp_general_params = gp_general_params_inputs
         gp_instance_params = gp_instance_params_inputs
-        gp_data_rates_params = data_rates_inputs
+        data_rates_params = data_rates_inputs
         gp_other_params = {}
         gp_other_params['new_pickle_file_name_pre']  = file_params.get ('new_pickle_file_name_pre' ,'default_pickle')
         gp_other_params['rs_s1_pickle_input']  = data['rs_s1_pickle']
@@ -572,11 +573,11 @@ class PipelineRunner:
         if not data_rates_inputs['version'] == "0.3":
             raise NotImplementedError
 
-        gp_params['gp_orbit_prop_params'] = gp_orbit_prop_params
-        gp_params['gp_orbit_link_params'] = gp_orbit_link_params
+        gp_params['orbit_prop_params'] = orbit_prop_params
+        gp_params['orbit_link_params'] = orbit_link_params
         gp_params['gp_general_params'] = gp_general_params
         gp_params['gp_instance_params'] = gp_instance_params
-        gp_params['gp_data_rates_params'] = gp_data_rates_params
+        gp_params['data_rates_params'] = data_rates_params
         gp_params['gp_other_params'] = gp_other_params
         gp_runner = GlobalPlannerRunner (gp_params)
         scheduled_routes,viz_outputs = gp_runner.run (verbose)

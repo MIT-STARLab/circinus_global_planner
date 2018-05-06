@@ -261,13 +261,13 @@ class GPDataRouteSelection():
         :type params: dict
         """
 
-        scenario_params = gp_params['gp_orbit_prop_params']['scenario_params']
-        sat_params = gp_params['gp_orbit_prop_params']['sat_params']
+        scenario_params = gp_params['orbit_prop_params']['scenario_params']
+        sat_params = gp_params['orbit_prop_params']['sat_params']
         rs_general_params = gp_params['gp_general_params']['route_selection_general_params']
         rs_v2_params = gp_params['gp_general_params']['route_selection_params_v2']
         as_params = gp_params['gp_general_params']['activity_scheduling_params']
         gp_general_other_params = gp_params['gp_general_params']['other_params']
-        link_params = gp_params['gp_orbit_link_params']['general_link_params']
+        link_params = gp_params['orbit_link_params']['general_link_params']
         gp_inst_planning_params = gp_params['gp_instance_params']['planning_params']
 
         self.gp_agent_ID = gp_params['gp_instance_params']['gp_agent_ID']

@@ -33,8 +33,8 @@ class GPActivityScheduling():
         :type params: dict
         """
 
-        scenario_params = gp_params['gp_orbit_prop_params']['scenario_params']
-        sat_params = gp_params['gp_orbit_prop_params']['sat_params']
+        scenario_params = gp_params['orbit_prop_params']['scenario_params']
+        sat_params = gp_params['orbit_prop_params']['sat_params']
         as_params = gp_params['gp_general_params']['activity_scheduling_params']
         gp_inst_planning_params = gp_params['gp_instance_params']['planning_params']
 
@@ -84,13 +84,13 @@ class GPActivityScheduling():
 
         # these lists are in order of satellite index because we've sorted 
         self.sats_init_estate_Wh = [sat_state['batt_e_Wh'] for sat_state in self.initial_state]
-        self.sats_edot_by_act_W = []
+        self.sats_edot_by_mode_W = []
         self.sats_emin_Wh = []
         self.sats_emax_Wh = []
         for p_params in self.power_params:
-            sat_edot_by_act,sat_batt_storage = io_tools.parse_power_consumption_params(p_params)
+            sat_edot_by_mode,sat_batt_storage = io_tools.parse_power_consumption_params(p_params)
 
-            self.sats_edot_by_act_W.append (sat_edot_by_act)
+            self.sats_edot_by_mode_W.append (sat_edot_by_mode)
             self.sats_emin_Wh.append (sat_batt_storage['e_min'])
             self.sats_emax_Wh.append (sat_batt_storage['e_max'])
 

@@ -24,10 +24,10 @@ class GPMetrics():
         :param gp_params: global namespace parameters created from input files (possibly with some small non-structural modifications to params). The name spaces here should trace up all the way to the input files.
         :type params: dict
         """
-        scenario_params = gp_params['gp_orbit_prop_params']['scenario_params']
-        sat_params = gp_params['gp_orbit_prop_params']['sat_params']
+        scenario_params = gp_params['orbit_prop_params']['scenario_params']
+        sat_params = gp_params['orbit_prop_params']['sat_params']
         gp_inst_planning_params = gp_params['gp_instance_params']['planning_params']
-        obs_params = gp_params['gp_orbit_prop_params']['obs_params']
+        obs_params = gp_params['orbit_prop_params']['obs_params']
         gp_general_other_params = gp_params['gp_general_params']['other_params']
         metrics_params = gp_params['gp_general_params']['metrics_params']
         plot_params = gp_params['gp_general_params']['plot_params']

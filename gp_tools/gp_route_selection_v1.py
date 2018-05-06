@@ -39,8 +39,8 @@ class GPDataRouteSelection():
         :type params: dict
         """
 
-        scenario_params = gp_params['gp_orbit_prop_params']['scenario_params']
-        sat_params = gp_params['gp_orbit_prop_params']['sat_params']
+        scenario_params = gp_params['orbit_prop_params']['scenario_params']
+        sat_params = gp_params['orbit_prop_params']['sat_params']
         rs_general_params = gp_params['gp_general_params']['route_selection_general_params']
         rs_params = gp_params['gp_general_params']['route_selection_params_v1']
         gp_general_other_params = gp_params['gp_general_params']['other_params']
