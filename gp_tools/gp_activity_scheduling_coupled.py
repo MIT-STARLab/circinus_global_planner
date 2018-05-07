@@ -379,6 +379,12 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                         xlnk_winds_filt
                     )
 
+            # verify that all acts found are within the planning window, otherwise we may end up with strange results
+            for sat_acts in sats_acts:
+                for act in sat_acts:
+                    if act.start < self.planning_start_dt or act.end > self.planning_end_dt:
+                        raise RuntimeWarning('Activity is out of planning window range (start %s, end %s): %s'%(self.planning_start_dt,self.planning_end_dt,act))
+
             self.all_acts_windids = all_acts_windids
             self.all_obs_windids = all_obs_windids
             self.all_dlnk_windids = all_acts_windids

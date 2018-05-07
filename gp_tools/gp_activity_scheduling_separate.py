@@ -127,6 +127,10 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         for dmr in routes_filt:
             for act in dmr.get_winds():
 
+                # We have already filtered routes, but we also need to filter activities because there may be activities from existing routes that are outside of the planning window. we cannot fully enforce constraints on such windows, so we need to drop them
+                if act.start < self.planning_start_dt or act.end > self.planning_end_dt:
+                    continue
+
                 # if we haven't yet seen this activity, then add it to bookkeeping
                 if not act in all_act_windids_by_obj.keys():
                     # use activity window ID as a unique id for window in the model
@@ -189,13 +193,16 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
     def filter_routes( self,new_routes,existing_routes):
 
         routes_filt = []
-        fixed_routes_ids = set()
 
-        def process_dmr(dmr,start_filt_dt):
+        def process_dmr(dmr,start_filt_dt,filter_opt):
             dmr_start = dmr.get_obs().start
             dmr_end = dmr.get_dlnk().end
 
-            if dmr_start < start_filt_dt or dmr_end > self.planning_end_dt:
+            # check if all act windows in route are completely within the planning window. Pass if not.
+            if filter_opt=='totally_within' and (dmr_start < start_filt_dt or dmr_end > self.planning_end_dt):
+                pass
+            # check if at least one act window in route is partially within the planning window. Pass if not.
+            elif filter_opt=='partially_within' and (dmr_end < start_filt_dt or dmr_start > self.planning_end_dt):
                 pass
             elif dmr.get_dlnk().duration.total_seconds() < self.min_act_duration_s[DlnkWindow]:
                 print('discarding too short dlnk window')
@@ -206,17 +213,15 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
             return False
             
+        # want new routes to be entirely within non-fixed planning window (otherwise we could miss enforcing all of the constraints imposed by the route)
         for dmr in new_routes:
-            process_dmr(dmr,self.planning_fixed_end_dt)
+            process_dmr(dmr,self.planning_fixed_end_dt,"totally_within")
 
+        # want existing routes to be at least partially within whole planning window, so that we will be able to later filter for all act windows on which they impose constraints (but note that we don't have to worry anymore about the constraints on the route, because the input utilization number for the route accounts for it) 
         for dmr in existing_routes:
-            added = process_dmr(dmr,self.planning_start_dt)
+            added = process_dmr(dmr,self.planning_start_dt,"partially_within")
 
-            # if it's an existing route and it started within the fixed planning lookahead time, then mark it as fixed
-            if added and (dmr.get_obs().start <= self.planning_fixed_end_dt):
-                fixed_routes_ids.add(dmr)
-
-        return routes_filt, fixed_routes_ids
+        return routes_filt
 
     def get_dmr_latency_score_factors(self,routes_by_dmr_id,dmr_ids_by_obs_act_windid):
 
@@ -253,11 +258,11 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         self.model = model
 
         # filter the routes to make sure that  none of their activities fall outside the scheduling window
-        routes_filt, fixed_routes_ids = self.filter_routes(new_routes,existing_routes)
+        routes_filt = self.filter_routes(new_routes,existing_routes)
         routes_by_dmr_id = {dmr.ID:dmr for dmr in routes_filt}
 
         self.routes_filt = routes_filt
-        self.fixed_routes_ids = fixed_routes_ids
+        fixed_routes_ids = {dmr.ID for dmr in existing_routes}
         self.utilization_by_existing_route_id = utilization_by_existing_route_id
         self.routes_by_dmr_id = routes_by_dmr_id
         self.ecl_winds = ecl_winds
@@ -294,8 +299,14 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
             latency_sf_by_dmr_id =  self.get_dmr_latency_score_factors(
                 routes_by_dmr_id,
-                dmr_ids_by_obs_act_windid,
+                dmr_ids_by_obs_act_windid
             )
+
+            # verify that all acts found are within the planning window, otherwise we may end up with strange results
+            for sat_acts in sats_acts:
+                for act in sat_acts:
+                    if act.start < self.planning_start_dt or act.end > self.planning_end_dt:
+                        raise RuntimeWarning('Activity is out of planning window range (start %s, end %s): %s'%(self.planning_start_dt,self.planning_end_dt,act))
 
             # construct a set of dance cards for every satellite, 
             # each of which keeps track of all of the activities of satellite 
@@ -630,7 +641,8 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         model.c11  = pe.ConstraintList()
         for p in model.dmr_ids:
             if p in fixed_routes_ids:
-                model.c11.add( model.var_dmr_utilization[p] == utilization_by_existing_route_id[p]) 
+                # less than constraint because equality should be achivable (if we're only using existing routes that have all previously been scheduled and deconflicted together - which is the case for current version of GP), but want to allow route to lessen its utilization if a more valuable route is available. 
+                model.c11.add( model.var_dmr_utilization[p] <= utilization_by_existing_route_id[p]) 
             
 
 
@@ -745,9 +757,6 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
                 if verbose:
                     print(scheduled_route)
-
-            elif p in self.fixed_routes_ids:
-                raise RuntimeWarning("Found that a route which was supposed to be fixed for execution didn't show up selected")
 
 
         # examine the schedulable data volume for every activity window, checking as we go that the data volume is sufficient for at least the route in which the window is found
