@@ -925,7 +925,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                     found_lnk = False
                     for lnk in lnks_o_by_sat_indx[curr_sat_indx]:
                         # find a link that is after current time and has remaining dv routable
-                        if lnk.center > curr_time and remaining_dv_o_by_lnk[lnk] > 0:
+                        if lnk.center > curr_time and remaining_dv_o_by_lnk[lnk] > self.dv_epsilon:
                             found_lnk = True
                             break
 
