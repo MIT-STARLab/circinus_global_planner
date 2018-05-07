@@ -89,7 +89,7 @@ class GlobalPlannerRunner:
 
 
 
-    def run_activity_scheduling( self, routes_by_obs,ecl_winds,verbose=False):
+    def run_activity_scheduling( self, routes_by_obs,existing_route_data,ecl_winds,verbose=False):
         gp_as = GPActivitySchedulingSeparate ( self.params)
 
         # flatten the list of all routes, which currently has nested lists for each observation
@@ -98,8 +98,12 @@ class GlobalPlannerRunner:
         # from circinus_tools import debug_tools
         # debug_tools.debug_breakpt()
 
+        # TODO: deal with existing_routes, utilization_by_existing_route_id
+        existing_routes = existing_route_data.get('existing_routes',[])
+        utilization_by_existing_route_id = existing_route_data.get('utilization_by_existing_route_id',{})
+
         print_verbose('make activity scheduling model',verbose)
-        gp_as.make_model (routes_flat, ecl_winds,verbose = verbose)
+        gp_as.make_model (routes_flat, existing_routes, utilization_by_existing_route_id, ecl_winds,verbose = verbose)
         stats =gp_as.get_stats (verbose = verbose)
         print_verbose('solve activity scheduling',verbose)
         t_a = time.time()
@@ -163,7 +167,7 @@ class GlobalPlannerRunner:
 
             for sat_indx in range( self.sat_params['num_sats']):
                 for sat_obs_index,obs_wind in enumerate(obs_winds[sat_indx]):
-                    if obs_wind.start >= self.gp_inst_planning_params['planning_start_dt'] and obs_wind.end <= self.gp_inst_planning_params['planning_end_obs_xlnk_dt']:
+                    if obs_wind.start >= self.gp_inst_planning_params['planning_fixed_end_dt'] and obs_wind.end <= self.gp_inst_planning_params['planning_end_obs_xlnk_dt']:
                         obs_winds_filt[sat_indx].append(obs_wind)
             return obs_winds_filt
 
@@ -375,7 +379,7 @@ class GlobalPlannerRunner:
 
         return sel_routes_by_obs,ecl_winds,window_uid,pas_a
 
-    def run( self, verbose=False):
+    def run( self, existing_route_data, verbose=False):
 
         #################################
         #  parse inputs, if desired
@@ -447,7 +451,7 @@ class GlobalPlannerRunner:
                 found_routes = any([len(rts) >0 for rts in sel_routes_by_obs.values()])
                 #  to protect against the weird case where we didn't find any routes ( shouldn't happen, unless we're at the very end of the simulation, or you're trying to break things)
                 if found_routes:
-                    scheduled_routes,energy_usage,data_usage = self.run_activity_scheduling(sel_routes_by_obs,ecl_winds,verbose)
+                    scheduled_routes,energy_usage,data_usage = self.run_activity_scheduling(sel_routes_by_obs,existing_route_data,ecl_winds,verbose)
 
             # run coupled route selection/act sched solver (slow, optimal)
             elif run_coupled_rs_as:
@@ -559,6 +563,7 @@ class PipelineRunner:
         if gp_instance_params['version'] == "0.4":
 
             gp_instance_params['planning_params']['planning_start_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_start'])
+            gp_instance_params['planning_params']['planning_fixed_end_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_fixed_end'])
             gp_instance_params['planning_params']['planning_end_obs_xlnk_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_end_obs_xlnk'])
             gp_instance_params['planning_params']['planning_end_dlnk_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_end_dlnk'])
 
@@ -580,7 +585,10 @@ class PipelineRunner:
         gp_params['data_rates_params'] = data_rates_params
         gp_params['gp_other_params'] = gp_other_params
         gp_runner = GlobalPlannerRunner (gp_params)
-        scheduled_routes,viz_outputs = gp_runner.run (verbose)
+
+        # get data related to existing routes, if they were provided
+        existing_route_data = data.get('existing_route_data',{})
+        scheduled_routes,viz_outputs = gp_runner.run (existing_route_data,verbose)
 
         output = {}
         output['version'] = OUTPUT_JSON_VER

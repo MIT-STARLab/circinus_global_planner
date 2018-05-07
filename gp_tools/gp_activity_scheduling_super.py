@@ -59,6 +59,8 @@ class GPActivityScheduling():
         self.min_latency_for_sf_1_mins =as_params['min_latency_for_sf_1_mins']
 
         self.planning_start_dt  = gp_inst_planning_params['planning_start_dt']
+        # planning_fixed_end is the time before which any pre-existing data routes will be considered "already scheduled for good", and their utilization will be fixed, unchangeable. This reckoning is based on the beginning of the route (start of the obs window) - if the start of the obs window falls before planning_fixed_end, then the route will be considered fixed
+        self.planning_fixed_end_dt  = gp_inst_planning_params['planning_fixed_end_dt']
         self.planning_end_obs_xlnk_dt = gp_inst_planning_params['planning_end_obs_xlnk_dt']
         self.planning_end_dlnk_dt  = gp_inst_planning_params['planning_end_dlnk_dt']
         self.planning_end_dt  = self.planning_end_dlnk_dt
