@@ -58,8 +58,12 @@ class GPActivityScheduling():
         # this is the mimimum latency requirement for the highest latency score factor, 1.0. If multiple routes/dlnks for a single obs have latency less than this, they will both have sf 1.0
         self.min_latency_for_sf_1_mins =as_params['min_latency_for_sf_1_mins']
 
+        # notes on the planning window:
+        # -  new data routes are filtered such that all of their activity windows must fall completely within planning_fixed_end_dt and planning_end_dt. 
+        # - existing data routes are filtered such that any of their activity windows must fall partially within planning_start_dt and planning_end_dt. 
+        # - the wider filter for existing data routes means that we capture all activity windows that are already scheduled and exert the constraints that are present for them. existing data routes may only be "scheduled downwards"; that is, their utilization decreases. this means that we only have to care about the activity windows that are within the planning window for these routes, because the the system is as or less constrained when utilization is lowered ( i.e., we don't pretend that data volume came out of thin air in the past in order to increase the utilization above what was already scheduled for an existing data route)
         self.planning_start_dt  = gp_inst_planning_params['planning_start_dt']
-        # planning_fixed_end is the time before which any pre-existing data routes will be considered "already scheduled for good", and their utilization will be fixed, unchangeable. This reckoning is based on the beginning of the route (start of the obs window) - if the start of the obs window falls before planning_fixed_end, then the route will be considered fixed
+        # planning_fixed_end is the time before which any pre-existing data routes will be considered "already scheduled for good", and their utilization will be fixed, unchangeable. This reckoning is based on the beginning of the route (start of the obs window) - if the start of the obs window falls before planning_fixed_end, then the route will be considered fixed. Also, no activity windows from new routes may be scheduled before this time.
         self.planning_fixed_end_dt  = gp_inst_planning_params['planning_fixed_end_dt']
         self.planning_end_obs_xlnk_dt = gp_inst_planning_params['planning_end_obs_xlnk_dt']
         self.planning_end_dlnk_dt  = gp_inst_planning_params['planning_end_dlnk_dt']
