@@ -75,8 +75,7 @@ class GPPlotting():
         base_time,
         plot_title = 'Route Plot', 
         plot_size_inches = (12,12),
-        plot_include_dlnk_labels = True,
-        plot_include_xlnk_labels = True,
+        plot_include_labels = False,
         plot_original_times = False,
         show=False,
         fig_name='plots/xlnk_dlnk_plot.pdf'):
@@ -211,7 +210,9 @@ class GPPlotting():
 
                         current_axis.add_patch(x_w)
 
-                        # plt.text(xlnk_wind_start+0.15, bottom_vert_loc+0.1, xlnk_wind.window_ID , fontsize=10, color = 'k')
+                        if plot_include_labels:
+                            pass
+                            # plt.text(xlnk_wind_start+0.15, bottom_vert_loc+0.1, xlnk_wind.window_ID , fontsize=10, color = 'k')
 
                         # save off the rotator choice so that we can look it up again
                         xlnk_choices_rectangle_rotator_hist[xlnk_wind] = xlnk_choices_rectangle_rotator
@@ -234,10 +235,12 @@ class GPPlotting():
                         d_w = Rectangle((dlnk_wind_start, bottom_vert_loc), dlnk_wind_end-dlnk_wind_start, bottom_vert_loc+1,alpha=1,fill=True,color='#BFBFFF')
 
                         current_axis.add_patch(d_w)
-                        # plt.text( (dlnk_wind_end+dlnk_wind_start)/2 - 0.30, bottom_vert_loc+0.6, "g%d,dv %d/%d"%(dlnk_wind.gs_indx,dlnk_wind.scheduled_data_vol,dlnk_wind.data_vol) , fontsize=10, color = 'k')
-                        plt.text( dlnk_wind_start - 0.30, bottom_vert_loc+0.7, "g%d,dv %d/%d"%(dlnk_wind.gs_indx,dlnk_wind.scheduled_data_vol,dlnk_wind.data_vol) , fontsize=10, color = 'k')
 
-                        plt.text(dlnk_wind_start+0.15, bottom_vert_loc+0.1, dlnk_wind.window_ID , fontsize=10, color = 'k')
+                        if plot_include_labels:
+                            # plt.text( (dlnk_wind_end+dlnk_wind_start)/2 - 0.30, bottom_vert_loc+0.6, "g%d,dv %d/%d"%(dlnk_wind.gs_indx,dlnk_wind.scheduled_data_vol,dlnk_wind.data_vol) , fontsize=10, color = 'k')
+                            plt.text( dlnk_wind_start - 0.30, bottom_vert_loc+0.7, "g%d,dv %d/%d"%(dlnk_wind.gs_indx,dlnk_wind.scheduled_data_vol,dlnk_wind.data_vol) , fontsize=10, color = 'k')
+
+                            plt.text(dlnk_wind_start+0.15, bottom_vert_loc+0.1, dlnk_wind.window_ID , fontsize=10, color = 'k')
 
                         # save off the rotator choice so that we can look it up again
                         dlnk_choices_rectangle_rotator_hist[dlnk_wind] = dlnk_choices_rectangle_rotator
@@ -259,7 +262,8 @@ class GPPlotting():
                         d = Rectangle((obs_start, bottom_vert_loc), obs_end-obs_start, bottom_vert_loc+1,alpha=1,fill=True,color='#BFFFBF')
                         current_axis.add_patch(d)
 
-                        plt.text(obs_start+0.15, bottom_vert_loc+0.4, "%s,dv %d/%d"%(obs_wind.target_IDs,obs_wind.scheduled_data_vol,obs_wind.data_vol) , fontsize=10, color = 'k')
+                        if plot_include_labels:
+                            plt.text(obs_start+0.15, bottom_vert_loc+0.4, "%s,dv %d/%d"%(obs_wind.target_IDs,obs_wind.scheduled_data_vol,obs_wind.data_vol) , fontsize=10, color = 'k')
 
                         # save off the rotator choice so that we can look it up again
                         obs_choices_rectangle_rotator_hist[obs_wind] = obs_choices_rectangle_rotator
@@ -310,7 +314,7 @@ class GPPlotting():
 
                         xlnk_rectangle_rotator =  (xlnk_rectangle_rotator+1)%xlnk_rotation_rollover
 
-                        if plot_include_xlnk_labels:
+                        if plot_include_labels:
                             other_sat_indx = xlnk_wind.xsat_indx if xlnk_wind.xsat_indx != sat_indx else xlnk_wind.sat_indx
 
                             #   put label in desired vertical spot
@@ -357,7 +361,8 @@ class GPPlotting():
                         d = Rectangle((obs_start, bottom_vert_loc), obs_end-obs_start, bottom_vert_loc+1,alpha=1,fill=False,color='#00FF00',hatch=hatch)
                         current_axis.add_patch(d)
 
-                        plt.text(obs_start+0.15, bottom_vert_loc+0.4, "%s,dv %d/%d"%(obs_wind.target_IDs,obs_wind.scheduled_data_vol,obs_wind.data_vol) , fontsize=10, color = 'k')
+                        if plot_include_labels:
+                            plt.text(obs_start+0.15, bottom_vert_loc+0.4, "%s,dv %d/%d"%(obs_wind.target_IDs,obs_wind.scheduled_data_vol,obs_wind.data_vol) , fontsize=10, color = 'k')
 
                         obs_rectangle_rotator =  (obs_rectangle_rotator+1)%obs_rotation_rollover
 
@@ -391,7 +396,8 @@ class GPPlotting():
                         d = Rectangle((dlnk_start, bottom_vert_loc), dlnk_end-dlnk_start, bottom_vert_loc+1,alpha=1,fill=False,color='#0000FF',hatch=hatch)
                         current_axis.add_patch(d)
 
-                        plt.text( dlnk_start - 0.30, bottom_vert_loc+0.7, "g%d,dv %d/%d"%(dlnk_wind.gs_indx,dlnk_wind.scheduled_data_vol,dlnk_wind.data_vol) , fontsize=10, color = 'k')
+                        if plot_include_labels:
+                            plt.text( dlnk_start - 0.30, bottom_vert_loc+0.7, "g%d,dv %d/%d"%(dlnk_wind.gs_indx,dlnk_wind.scheduled_data_vol,dlnk_wind.data_vol) , fontsize=10, color = 'k')
 
                         dlnk_rectangle_rotator =  (dlnk_rectangle_rotator+1)%dlnk_rotation_rollover
 
@@ -399,7 +405,7 @@ class GPPlotting():
                             raise Exception('Found a duplicate unique window ID where it should not have been possible')
                         all_wind_ids.append(dlnk_wind.window_ID)
 
-                        if plot_include_dlnk_labels:
+                        if plot_include_labels:
                             label_text = ""
 
                             # if we have been given route indices, then include them in the label
@@ -645,9 +651,12 @@ class GPPlotting():
                         d_w = Circle((middle, bottom_vert_loc), radius,alpha=1,fill=True,color='#BFBFFF')
 
                         current_axis.add_patch(d_w)
-                        # plt.text( (dlnk_wind_end+dlnk_wind_start)/2 - 0.15, 0.1, dlnk_wind.gs_indx , fontsize=10, color = 'k')
 
-                        # plt.text(dlnk_wind_start+0.15, bottom_vert_loc+0.1, dlnk_wind.window_ID , fontsize=10, color = 'k')
+                        if plot_include_labels:
+                            pass
+                            # plt.text( (dlnk_wind_end+dlnk_wind_start)/2 - 0.15, 0.1, dlnk_wind.gs_indx , fontsize=10, color = 'k')
+
+                            # plt.text(dlnk_wind_start+0.15, bottom_vert_loc+0.1, dlnk_wind.window_ID , fontsize=10, color = 'k')
 
                         # save off the rotator choice so that we can look it up again
                         dlnk_choices_rectangle_rotator_hist[dlnk_wind] = dlnk_choices_rectangle_rotator
@@ -731,7 +740,9 @@ class GPPlotting():
 
                         current_axis.add_patch(x_w)
 
-                        # plt.text(xlnk_wind_start+0.15, bottom_vert_loc+0.1, xlnk_wind.window_ID , fontsize=10, color = 'k')
+                        if plot_include_labels:
+                            pass
+                            # plt.text(xlnk_wind_start+0.15, bottom_vert_loc+0.1, xlnk_wind.window_ID , fontsize=10, color = 'k')
 
                         # save off the rotator choice so that we can look it up again
                         xlnk_choices_rectangle_rotator_hist[xlnk_wind] = xlnk_choices_rectangle_rotator

@@ -135,8 +135,7 @@ def plot_route_selection_results ( gp_runner_inst,routes_by_obs,dlnk_winds_flat,
                 # gp_runner_inst.scenario_params['planning_end_dlnk_dt']-timedelta(minutes=200),
                 plot_title = 'Route Plot',
                 plot_size_inches = (18,12),
-                plot_include_dlnk_labels = gp_runner_inst.rs_general_params['plot_include_dlnk_labels'],
-                plot_include_xlnk_labels = gp_runner_inst.rs_general_params['plot_include_xlnk_labels'],
+                plot_include_labels = gp_runner_inst.plot_params['plot_RS_include_labels'],
                 show= False,
                 fig_name='plots/test_rs_o{0}_d{1}_6sat.pdf'.format (obs_indx,dlnk_indx)
             )
@@ -195,8 +194,7 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
         base_time = gp_runner_inst.scenario_params['start_utc_dt'],
         plot_title = 'All Possible Activities',
         plot_size_inches = (18,12),
-        plot_include_dlnk_labels = gp_runner_inst.as_params['plot_include_dlnk_labels'],
-        plot_include_xlnk_labels = gp_runner_inst.as_params['plot_include_xlnk_labels'],
+        plot_include_labels = gp_runner_inst.plot_params['plot_AS_include_labels'],
         plot_original_times = True,
         show=  False,
         fig_name='plots/test_all_windows.pdf'
@@ -219,8 +217,7 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
         base_time = gp_runner_inst.scenario_params['start_utc_dt'],
         plot_title = 'Scheduled Activities',
         plot_size_inches = (18,12),
-        plot_include_dlnk_labels = gp_runner_inst.as_params['plot_include_dlnk_labels'],
-        plot_include_xlnk_labels = gp_runner_inst.as_params['plot_include_xlnk_labels'],
+        plot_include_labels = gp_runner_inst.plot_params['plot_AS_include_labels'],
         plot_original_times = False,
         show=  False,
         fig_name='plots/test_activity_times.pdf'

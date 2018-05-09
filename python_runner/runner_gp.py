@@ -309,6 +309,7 @@ class GlobalPlannerRunner:
         #  route selection step 1
         #################################
 
+        sel_routes_by_obs = None
         pas_a = None
 
         # If we need output from step 1
@@ -565,7 +566,7 @@ class PipelineRunner:
             raise NotImplementedError
 
         #  check that it's the right version
-        if not gp_general_params['version'] == "0.2":
+        if not gp_general_params['version'] == "0.3":
             raise NotImplementedError
 
         #  check that it's the right version
