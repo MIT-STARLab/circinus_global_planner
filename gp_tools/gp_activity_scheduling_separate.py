@@ -6,6 +6,7 @@
 from  datetime import timedelta
 from copy import  deepcopy
 from math import ceil
+from collections import OrderedDict
 
 from pyomo import environ  as pe
 from pyomo import opt  as po
@@ -583,7 +584,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                         + base_delta_e
                     )
 
-                    # maximum bound of energy at current time step based on last time step
+                    # minimum bound of energy at current time step based on last time step
                     model.c6.add( model.var_sats_estore[sat_indx,tp_indx] >= 
                         model.var_sats_estore[sat_indx,tp_indx-1]
                         + activity_delta_e
@@ -732,7 +733,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                     val  = varobject[index].value
                     print (" %d %0.3f   %s"%(index, val, self.intra_sat_act_constr_violation_acts_list[index-1]))
 
-    def extract_utilized_routes( self, copy_routes = True, verbose = False):
+    def extract_utilized_routes( self, verbose = False):
         # scheduled_dv
         scheduled_routes_flat = []
 
@@ -853,5 +854,130 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         data_usage['d_sats'] = d_vals
 
         return  energy_usage, data_usage
+
+
+    def extract_schedule_reasoning( self, all_routes, verbose = False):
+
+        if verbose:
+            print ('------------------------------')
+            print ('extract_schedule_reasoning()')
+
+        reasons = OrderedDict([
+            ("a", "scheduled successfully"),
+            ("b", "Observation window capacity fully utilized"),
+            ("c", "cross-link window capacity fully utilized"),
+            ("d", "downlink window capacity fully utilized"),
+            ("e", "data route utilization below minimum"),
+            ("f", "(non-conclusive) intra-satellite or inter-satellite activity overlap, or minimum activity time constraint violated"),
+            ("g", "energy storage too low"),
+            ("h", "data storage too high"),
+            ("z", "no reason found")
+        ])
+
+        reasons_by_route = {}
+
+        for dmr in all_routes:
+
+            dmr_id = dmr.ID
+            reasons_by_route[dmr] = set()
+
+            #  check if successfully scheduled
+            if pe.value(self.model.var_dmr_indic[dmr_id]) >= 1.0 - self.binary_epsilon:
+                reasons_by_route[dmr].add('a')
+
+            else:
+
+                #  check if data route data volume requirement is too low
+                if pe.value(self.model.var_dmr_utilization[dmr_id]) * dmr.data_vol < self.min_obs_dv_dlnk_req: 
+                    reasons_by_route[dmr].add('e')
+
+                for act in dmr.get_winds():
+                    #  check if window capacity is fully or very near fully utilized
+                    if act.scheduled_data_vol >= act.data_vol - self.dv_epsilon:
+                        if type(act) == ObsWindow:
+                            reasons_by_route[dmr].add('b')
+                        if type(act) == DlnkWindow:
+                            reasons_by_route[dmr].add('c')
+                        if type(act) == XlnkWindow:
+                            reasons_by_route[dmr].add('d')
+
+                    #  if activity indicator is not set high, this means the activity was not used at all.  in this case it's possible that a constraint which relies on the activity indicator was violated
+                    if pe.value(self.model.var_act_indic[act.window_ID]) <= 1.0 - self.binary_epsilon:
+                        reasons_by_route[dmr].add('f')
+
+                    def get_act_resource_usage(act,model_resource,sat_indx):
+                        tp_indx_center = self.ds_time_getter_dc.get_tp_indx_pre_t(act.center)
+                        return pe.value(model_resource[sat_indx,tp_indx_center])
+
+
+                    # check if energy storage is too low at an activity
+                    estore_too_low_factor = 1.05 # assume if we're within certain % of energy lower bound then the activity is too constrained
+                    if type(act) == ObsWindow or type(act) == DlnkWindow:
+                        sat_estore = get_act_resource_usage(act,self.model.var_sats_estore,act.sat_indx)
+                        if sat_estore < estore_too_low_factor * self.model.par_sats_estore_min[act.sat_indx]:
+                            reasons_by_route[dmr].add('g')
+                    if type(act) == XlnkWindow:
+                        sat_estore = get_act_resource_usage(act,self.model.var_sats_estore,act.sat_indx)
+                        if sat_estore < estore_too_low_factor * self.model.par_sats_estore_min[act.sat_indx]:
+                            reasons_by_route[dmr].add('g')
+                        xsat_estore = get_act_resource_usage(act,self.model.var_sats_estore,act.xsat_indx)
+                        if xsat_estore < estore_too_low_factor * self.model.par_sats_estore_min[act.xsat_indx]:
+                            reasons_by_route[dmr].add('g')
+
+
+                    # check if data storage is too high at an activity
+                    # if data storage is within the minimum data route data volume requirement of the maximum, then it's too high
+                    if type(act) == ObsWindow or type(act) == DlnkWindow:
+                        sat_dstore = get_act_resource_usage(act,self.model.var_sats_dstore,act.sat_indx)
+                        if sat_dstore > self.model.par_sats_dstore_max[act.sat_indx] - self.min_obs_dv_dlnk_req:
+                            reasons_by_route[dmr].add('h')
+                    if type(act) == XlnkWindow:
+                        sat_dstore = get_act_resource_usage(act,self.model.var_sats_dstore,act.sat_indx)
+                        if sat_dstore > self.model.par_sats_dstore_max[act.sat_indx] - self.min_obs_dv_dlnk_req:
+                            reasons_by_route[dmr].add('h')
+                        xsat_dstore = get_act_resource_usage(act,self.model.var_sats_dstore,act.xsat_indx)
+                        if xsat_dstore > self.model.par_sats_dstore_max[act.xsat_indx] - self.min_obs_dv_dlnk_req:
+                            reasons_by_route[dmr].add('h')
+
+ 
+            #  if we didn't find a reason, mark it. ( this is not great)
+            if len(reasons_by_route[dmr]) == 0:
+                reasons_by_route[dmr].add('z')
+
+
+        # from circinus_tools import debug_tools
+        # debug_tools.debug_breakpt()
+
+
+        all_reasons = []
+        for dr_reasons in reasons_by_route.values():
+            all_reasons+= list(dr_reasons)
+
+        count_by_reason = OrderedDict()
+        for reason in reasons.keys():
+            count_by_reason[reason] = all_reasons.count(reason)
+
+        num_successful = count_by_reason['a']
+        num_unsuccessful = len(all_routes) - num_successful
+        if verbose:
+            print('num_successful: %d'%(num_successful))
+            print('num_unsuccessful: %d'%(num_unsuccessful))
+            for reason_code,count in count_by_reason.items():
+                print('%d\t: %s'%(count,reasons[reason_code]))
+
+
+        from circinus_tools import debug_tools
+        debug_tools.debug_breakpt()
+
+        return reasons_by_route
+
+
+
+
+
+
+
+
+
 
 

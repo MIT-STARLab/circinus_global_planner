@@ -112,8 +112,11 @@ class GlobalPlannerRunner:
         # gp_as.print_sol ()
         print_verbose('extract_routes',verbose)
         #  make a copy of the windows in the extracted routes so we don't mess with the original objects ( just to be extra careful)
-        routes = gp_as.extract_utilized_routes ( copy_routes = True, verbose  = False)
+        routes = gp_as.extract_utilized_routes ( verbose  = False)
         energy_usage,data_usage = gp_as.extract_resource_usage(  decimation_factor =1)
+        # look at reasons routes weren't scheduled
+        if verbose:
+            gp_as.extract_schedule_reasoning( routes_flat, verbose = True)
 
         time_elapsed = t_b-t_a
 
