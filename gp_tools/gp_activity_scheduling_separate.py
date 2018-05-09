@@ -517,11 +517,26 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         model.c4_5  = pe.ConstraintList() # this now contains all of the activity overlap constraints
         model.c5b  = pe.ConstraintList()
         # pass the model objects getter function so it can be called in place
-        used_default_transition_time &=  self.gen_intra_sat_act_overlap_constraints(model.c4_5,model.c5b,sats_acts,self.get_act_model_objs,constraint_violation_model_objs)
+        (used_default_transition_time_temp,
+            self.c5b_binding_exprs_by_act,
+            self.c4_5_binding_exprs_by_act) =  self.gen_intra_sat_act_overlap_constraints(
+                model.c4_5,
+                model.c5b,
+                sats_acts,
+                self.get_act_model_objs,
+                constraint_violation_model_objs
+            )
+        used_default_transition_time &= used_default_transition_time_temp
 
         # inter-satellite downlink overlap constraints [9],[10]
         model.c9_10  = pe.ConstraintList()
-        used_default_transition_time &= self.gen_inter_sat_act_overlap_constraints(model.c9_10,sats_dlnks,self.get_act_model_objs,constraint_violation_model_objs)
+        (used_default_transition_time_temp,
+            self.c9_10_binding_exprs_by_act) = self.gen_inter_sat_act_overlap_constraints(
+                model.c9_10,sats_dlnks,
+                self.get_act_model_objs,
+                constraint_violation_model_objs
+            )
+        used_default_transition_time &= used_default_transition_time_temp
 
         if verbose:
             if used_default_transition_time:
@@ -868,13 +883,21 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             ("c", "cross-link window capacity fully utilized"),
             ("d", "downlink window capacity fully utilized"),
             ("e", "data route utilization below minimum"),
-            ("f", "(non-conclusive) intra-satellite or inter-satellite activity overlap, or minimum activity time constraint violated"),
+            # ("f", "(non-conclusive) intra-satellite or inter-satellite activity overlap, or minimum activity time constraint violated"),
             ("g", "energy storage too low"),
             ("h", "data storage too high"),
+            ("i", "intra-satellite activity overlap constraint would be violated"),
+            ("j", "inter-satellite downlink overlap constraint would be violated"),
             ("z", "no reason found")
         ])
 
         reasons_by_route = {}
+
+        # see https://en.wikipedia.org/wiki/Slack_variable - a constraint is binding if it's slack variable is zero
+        #  this essentially tells us, in the case where an activity is involved in a constraint, that constraint is  binding, and the activity indicator for this activity is zero,  that the activity has been "forced out" of being allowed to execute because the execution of another activity constrained it
+        #  the binding expression is essentially the constraint with any big M terms removed. 
+        def expression_is_binding(be):
+            return pe.value(be) < 0.001  # i.e., basically zero
 
         for dmr in all_routes:
 
@@ -903,7 +926,23 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
                     #  if activity indicator is not set high, this means the activity was not used at all.  in this case it's possible that a constraint which relies on the activity indicator was violated
                     if pe.value(self.model.var_act_indic[act.window_ID]) <= 1.0 - self.binary_epsilon:
-                        reasons_by_route[dmr].add('f')
+                        # reasons_by_route[dmr].add('f')
+                        if act in self.c4_5_binding_exprs_by_act.keys():
+                            binds = self.c4_5_binding_exprs_by_act[act]
+                            for bind_expr in binds:
+                                if expression_is_binding(bind_expr):
+                                    #  constraint is binding and this activity is not being executed, so it should be the case
+                                    reasons_by_route[dmr].add('i')
+
+                        if act in self.c9_10_binding_exprs_by_act.keys():
+                            binds = self.c9_10_binding_exprs_by_act[act]
+                            for bind_expr in binds:
+                                if expression_is_binding(bind_expr):
+                                    #  constraint is binding and this activity is not being executed, so it should be the case
+                                    reasons_by_route[dmr].add('j')
+
+
+                        # note: can't really gain any information from c5b_binding_exprs_by_act
 
                     def get_act_resource_usage(act,model_resource,sat_indx):
                         tp_indx_center = self.ds_time_getter_dc.get_tp_indx_pre_t(act.center)
@@ -966,8 +1005,8 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                 print('%d\t: %s'%(count,reasons[reason_code]))
 
 
-        from circinus_tools import debug_tools
-        debug_tools.debug_breakpt()
+        # from circinus_tools import debug_tools
+        # debug_tools.debug_breakpt()
 
         return reasons_by_route
 

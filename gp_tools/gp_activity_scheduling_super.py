@@ -135,6 +135,8 @@ class GPActivityScheduling():
         self.allow_act_timing_constr_violations = False
 
     def gen_inter_act_constraint(self,var_list,constr_list,transition_time_req,model_objs_act1,model_objs_act2):
+            #  the regular constraint is the constraint that is enforced in the mixed integer linear program
+            #  the "binding expression"  is the expression that, when evaluated after MILP solution, will be zero if the constraint is binding and greater than zero if the constraint is not binding ( i.e., if the constraint is not binding, there is room for one of the variables to grow). The constraint should have any big M factors removed in the binding expression, because those obfuscate information about whether the constraint is binding or not. The binding expression shall not be negative (that would indicate an infeasible solution)
 
             var_constr_violation = None
             min_constr_violation = None
@@ -154,6 +156,7 @@ class GPActivityScheduling():
                 #  if the activities overlap in center time (including  transition time), then it's not possible to have sufficient transition time between them.  only allow one
                 if (act2.center - act1.center).total_seconds() <= transition_time_req:
                     constr = model_objs_act1['var_act_indic']+ model_objs_act2['var_act_indic'] <= 1
+                    binding_expr = 1 - model_objs_act1['var_act_indic'] - model_objs_act2['var_act_indic']
 
                 # If they don't overlap in center time, but they do overlap to some amount, then we need to constrain their end and start times to be consistent with one another
                 else:
@@ -162,6 +165,7 @@ class GPActivityScheduling():
                     constr_disable_2 = M*(1-model_objs_act2['var_act_indic'])
         
                     constr = center_time_diff - time_adjust_1 - time_adjust_2 + constr_disable_1 + constr_disable_2 >= transition_time_req
+                    binding_expr = center_time_diff - time_adjust_1 - time_adjust_2 - transition_time_req 
 
             else:
                 # time_adjust_N can go as low as zero, so the constraint violation can be this at its lowest
@@ -182,8 +186,9 @@ class GPActivityScheduling():
 
                 #  the actual time constraint that bounds the constraint violation
                 constr = center_time_diff - time_adjust_1 - time_adjust_2 - transition_time_req >= var_constr_violation
+                binding_expr = center_time_diff - time_adjust_1 - time_adjust_2 - transition_time_req - var_constr_violation
 
-            return constr, var_constr_violation, min_constr_violation
+            return constr, binding_expr,var_constr_violation, min_constr_violation
 
 
     def gen_intra_sat_act_overlap_constraints(self,c_overlap,c_duration,sats_acts,act_model_objs_getter,constraint_violation_model_objs):
@@ -197,6 +202,9 @@ class GPActivityScheduling():
         intra_sat_act_constr_bounds = constraint_violation_model_objs['intra_sat_act_constr_bounds']
         min_var_intra_sat_act_constr_violation_list = constraint_violation_model_objs['min_var_intra_sat_act_constr_violation_list']
 
+        binding_expr_overlap_by_act = {}
+        binding_expr_duration_by_act = {}
+
         for sat_indx in range (self.num_sats):
             num_sat_acts = len(sats_acts[sat_indx])
             for  first_act_indx in  range (num_sat_acts):
@@ -206,6 +214,7 @@ class GPActivityScheduling():
 
                 length_1 = model_objs_act1['var_dv_utilization']/act1.ave_data_rate
                 c_duration.add( length_1 >= model_objs_act1['var_act_indic'] * self.min_act_duration_s[type(act1)])
+                binding_expr_duration_by_act[act1] = length_1 - model_objs_act1['var_act_indic'] * self.min_act_duration_s[type(act1)]
                 
                 for  second_act_indx in  range (first_act_indx+1,num_sat_acts):
                     act2 = sats_acts[sat_indx][second_act_indx]
@@ -231,7 +240,7 @@ class GPActivityScheduling():
                         # note: generally a function from the AS subclass
                         model_objs_act2 = act_model_objs_getter(act2)
 
-                        constr, var_constr_violation, min_constr_violation = self.gen_inter_act_constraint(
+                        constr, binding_expr, var_constr_violation, min_constr_violation = self.gen_inter_act_constraint(
                             var_intra_sat_act_constr_violations,
                             intra_sat_act_constr_bounds,
                             transition_time_req,
@@ -241,13 +250,15 @@ class GPActivityScheduling():
 
                         #  add the constraint, regardless of whether or not it's a "big M" constraint, or a constraint violation constraint - they're handled the same
                         c_overlap.add( constr )
+                        binding_expr_overlap_by_act.setdefault(act1,[]).append(binding_expr)
+                        binding_expr_overlap_by_act.setdefault(act2,[]).append(binding_expr)
 
                         #  if it's a constraint violation constraint, then we have a variable to deal with
                         if not min_constr_violation is None:
                             min_var_intra_sat_act_constr_violation_list.append(min_constr_violation)
                             intra_sat_act_constr_violation_acts_list.append((act1,act2))
 
-        return used_default_transition_time
+        return used_default_transition_time,binding_expr_duration_by_act,binding_expr_overlap_by_act
 
 
     def gen_inter_sat_act_overlap_constraints(self,c_overlap,sats_dlnks,act_model_objs_getter,constraint_violation_model_objs):
@@ -260,6 +271,8 @@ class GPActivityScheduling():
         var_inter_sat_act_constr_violations = constraint_violation_model_objs['var_inter_sat_act_constr_violations']
         inter_sat_act_constr_bounds = constraint_violation_model_objs['inter_sat_act_constr_bounds']
         min_var_inter_sat_act_constr_violation_list = constraint_violation_model_objs['min_var_inter_sat_act_constr_violation_list']
+
+        binding_expr_overlap_by_act = {}
 
         for sat_indx in range (self.num_sats):
             num_sat_acts = len(sats_dlnks[sat_indx])
@@ -308,7 +321,7 @@ class GPActivityScheduling():
                             # note: generally a function from the AS subclass
                             model_objs_act2 = act_model_objs_getter(act2)
                         
-                            constr, var_constr_violation, min_constr_violation = self.gen_inter_act_constraint(
+                            constr, binding_expr, var_constr_violation, min_constr_violation = self.gen_inter_act_constraint(
                                 var_inter_sat_act_constr_violations,
                                 inter_sat_act_constr_bounds,
                                 transition_time_req,
@@ -318,6 +331,8 @@ class GPActivityScheduling():
 
                             #  add the constraint, regardless of whether or not it's a "big M" constraint, or a constraint violation constraint - they're handled the same
                             c_overlap.add( constr )
+                            binding_expr_overlap_by_act.setdefault(act1,[]).append(binding_expr)
+                            binding_expr_overlap_by_act.setdefault(act2,[]).append(binding_expr)
 
                             #  if it's a constraint violation constraint, then we have a variable to deal with
                             if not min_constr_violation is None:
@@ -325,7 +340,7 @@ class GPActivityScheduling():
                                 min_var_inter_sat_act_constr_violation_list.append(min_constr_violation)
                                 inter_sat_act_constr_violation_acts_list.append((act1,act2))
 
-        return used_default_transition_time
+        return used_default_transition_time,binding_expr_overlap_by_act
 
     def solve(self):
 
@@ -374,50 +389,50 @@ class GPActivityScheduling():
             for index in varobject:
                 print (" ",index, varobject[index].value)
 
-    def extract_resource_usage( self, decimation_factor =1, verbose = False):
+    # def extract_resource_usage( self, decimation_factor =1, verbose = False):
 
-        energy_usage = {}
+    #     energy_usage = {}
 
-        t_vals = []
-        e_vals = [[] for sat_indx in range ( self.num_sats)]
+    #     t_vals = []
+    #     e_vals = [[] for sat_indx in range ( self.num_sats)]
 
-        # note that this extraction uses the energy variables from the optimization, which are currently not constrained to be exactly equal to the energy delta from t-1 to t; they are merely bounded by it. Todo: extract concrete values based on activity execution times
-        # TODO: this code feels super inefficient somehow.  make it better?
-        for sat_indx, sat in enumerate (self.model.sats):
-            last_tp_indx = 0
-            for tp_indx in self.model.es_timepoint_indcs:
+    #     # note that this extraction uses the energy variables from the optimization, which are currently not constrained to be exactly equal to the energy delta from t-1 to t; they are merely bounded by it. Todo: extract concrete values based on activity execution times
+    #     # TODO: this code feels super inefficient somehow.  make it better?
+    #     for sat_indx, sat in enumerate (self.model.sats):
+    #         last_tp_indx = 0
+    #         for tp_indx in self.model.es_timepoint_indcs:
 
-                if (tp_indx - last_tp_indx) < decimation_factor:
-                    continue
-                else:
-                    e_vals[sat_indx].append(pe.value(self.model.var_sats_estore[sat,tp_indx]))
+    #             if (tp_indx - last_tp_indx) < decimation_factor:
+    #                 continue
+    #             else:
+    #                 e_vals[sat_indx].append(pe.value(self.model.var_sats_estore[sat,tp_indx]))
 
-                    if sat_indx == 0:
-                        t_vals.append(self.es_time_getter_dc.get_tp_from_tp_indx(tp_indx,out_units='minutes'))
+    #                 if sat_indx == 0:
+    #                     t_vals.append(self.es_time_getter_dc.get_tp_from_tp_indx(tp_indx,out_units='minutes'))
 
-        energy_usage['time_mins'] = t_vals
-        energy_usage['e_sats'] = e_vals
+    #     energy_usage['time_mins'] = t_vals
+    #     energy_usage['e_sats'] = e_vals
 
 
-        data_usage = {}
+    #     data_usage = {}
 
-        t_vals = []
-        d_vals = [[] for sat_indx in range ( self.num_sats)]
+    #     t_vals = []
+    #     d_vals = [[] for sat_indx in range ( self.num_sats)]
 
-        # TODO: this code feels super inefficient somehow.  make it better?
-        for sat_indx, sat in enumerate (self.model.sats):
-            last_tp_indx = 0
-            for tp_indx in self.model.ds_timepoint_indcs:
+    #     # TODO: this code feels super inefficient somehow.  make it better?
+    #     for sat_indx, sat in enumerate (self.model.sats):
+    #         last_tp_indx = 0
+    #         for tp_indx in self.model.ds_timepoint_indcs:
 
-                if (tp_indx - last_tp_indx) < decimation_factor:
-                    continue
-                else:
-                    d_vals[sat_indx].append(pe.value(self.model.var_sats_dstore[sat,tp_indx]))
+    #             if (tp_indx - last_tp_indx) < decimation_factor:
+    #                 continue
+    #             else:
+    #                 d_vals[sat_indx].append(pe.value(self.model.var_sats_dstore[sat,tp_indx]))
 
-                    if sat_indx == 0:
-                        t_vals.append(self.ds_time_getter_dc.get_tp_from_tp_indx(tp_indx,out_units='minutes'))
+    #                 if sat_indx == 0:
+    #                     t_vals.append(self.ds_time_getter_dc.get_tp_from_tp_indx(tp_indx,out_units='minutes'))
 
-        data_usage['time_mins'] = t_vals
-        data_usage['d_sats'] = d_vals
+    #     data_usage['time_mins'] = t_vals
+    #     data_usage['d_sats'] = d_vals
 
-        return  energy_usage, data_usage
+    #     return  energy_usage, data_usage
