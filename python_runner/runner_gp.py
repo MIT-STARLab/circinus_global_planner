@@ -281,7 +281,7 @@ class GlobalPlannerRunner:
 
         gp_met = GPMetrics(self.params)
         # t_a = time.time()
-        # need to figure out how to window this or something so that we don't have to compare to every other data route - that's horribly expensive
+        # note: the method used below has proved to be quite slow, and there's probably a more efficient way to go about downselecting routes. todo: that
         print_verbose('Assess route overlap pre RS step 2',verbose)
         overlap_cnt_by_route,stats_rs2_pre = gp_met.assess_route_overlap( routes_by_obs,verbose=verbose)
         # t_b = time.time()
@@ -318,7 +318,7 @@ class GlobalPlannerRunner:
             #  if  we are loading from file, do that
             if self.other_params['rs_s1_pickle_input']:
                 print_verbose('Unpickling route selection step one stuff',verbose)
-                routes_by_obs,all_stats,route_times_s,obs_indx,obs_winds,dlnk_winds_flat,ecl_winds,window_uid = pickle_helper.unpickle_rtsel_s1_stuff(self)
+                routes_by_obs,all_stats,route_times_s,obs_indx,ecl_winds,window_uid = pickle_helper.unpickle_rtsel_s1_stuff(self)
                 pas_a = time.time()
 
             #  otherwise run route selection step 1
@@ -329,7 +329,7 @@ class GlobalPlannerRunner:
 
             #  pickle before step 2 because step 2 doesn't take that long
             if self.pickle_params['pickle_route_selection_step1_results']:
-                pickle_helper.pickle_rtsel_s1_stuff(self,routes_by_obs,all_stats,route_times_s,obs_indx,obs_winds,dlnk_winds_flat,ecl_winds,window_uid)
+                pickle_helper.pickle_rtsel_s1_stuff(self,routes_by_obs,all_stats,route_times_s,obs_indx,ecl_winds,window_uid)
         else:
             print_verbose('Skipping route selection step one stuff',verbose)
 
@@ -341,12 +341,13 @@ class GlobalPlannerRunner:
         #  route selection step 2
         #################################
 
+
         # If we need output from step 2
         run_step_2 = not self.other_params['as_pickle_input']
         if run_step_2:
             if self.other_params['rs_s2_pickle_input']:
                 print_verbose('Unpickling route selection step two stuff',verbose)
-                xlnk_winds_flat,sel_routes_by_obs,ecl_winds,obs_winds,dlnk_winds_flat,window_uid,stats_rs2_pre,stats_rs2_post = pickle_helper.unpickle_rtsel_s2_stuff(self)
+                sel_routes_by_obs,ecl_winds,window_uid,stats_rs2_pre,stats_rs2_post = pickle_helper.unpickle_rtsel_s2_stuff(self)
                 pas_a = time.time()
             else:
                 print_verbose('num_routes_calced',verbose)
@@ -362,10 +363,10 @@ class GlobalPlannerRunner:
                     sel_routes_by_obs = {obs:[DataMultiRoute(ID=0,data_routes=[dr]) for dr in rts] for obs,rts in routes_by_obs.items()}
                 else:
                     # run step 2. todo:  move this elsewhere
-                    sel_routes_by_obs,stats_rs2_pre,stats_rs2_post = self.run_route_selection_v2_step2(routes_by_obs)
+                    sel_routes_by_obs,stats_rs2_pre,stats_rs2_post = self.run_route_selection_v2_step2(routes_by_obs,verbose)
 
             if self.pickle_params['pickle_route_selection_step2_results']:
-                pickle_helper.pickle_rtsel_s2_stuff(self,xlnk_winds_flat,sel_routes_by_obs,ecl_winds,obs_winds,dlnk_winds_flat,window_uid,stats_rs2_pre,stats_rs2_post)
+                pickle_helper.pickle_rtsel_s2_stuff(self,sel_routes_by_obs,ecl_winds,window_uid,stats_rs2_pre,stats_rs2_post)
         else:
             print_verbose('Skipping route selection step two stuff',verbose)
 
@@ -376,6 +377,7 @@ class GlobalPlannerRunner:
         print_verbose('route selection output stage',verbose)
 
         if self.rs_general_params['plot_route_selection_results']:
+            # todo: currently broken - update
             output_helper.plot_route_selection_results (self,sel_routes_by_obs,dlnk_winds_flat,xlnk_winds_flat,num_obs_to_plot = 5)
 
         return sel_routes_by_obs,ecl_winds,window_uid,pas_a
@@ -386,7 +388,7 @@ class GlobalPlannerRunner:
         #  parse inputs, if desired
         #################################
 
-        load_windows = not self.other_params['rs_s1_pickle_input'] and not self.other_params['rs_s2_pickle_input']
+        load_windows = (not self.other_params['rs_s1_pickle_input'] and not self.other_params['rs_s2_pickle_input']) or self.gp_inst_as_params['plot_activity_scheduling_results'] or self.rs_general_params['plot_route_selection_results']
 
         if load_windows:
             print_verbose('Load files',verbose)
@@ -419,6 +421,12 @@ class GlobalPlannerRunner:
             print_verbose(sum([len(p) for p in dlnk_winds]),verbose)
             print_verbose('xlnk_win',verbose)
             print_verbose(sum([len(xlnk_winds[i][j]) for i in  range( self.sat_params['num_sats']) for j in  range( self.sat_params['num_sats']) ]),verbose)
+        else:
+            obs_winds = []
+            dlnk_winds_flat = []
+            xlnk_winds = []
+            ecl_winds = []
+            window_uid = 0
 
         #################################
         #  route selection stage
@@ -441,7 +449,7 @@ class GlobalPlannerRunner:
         #################################
 
         if not self.as_params['run_activity_scheduling']:
-            return None
+            return [],[]
 
         if self.other_params['as_pickle_input']:
             sel_routes_by_obs,ecl_winds,scheduled_routes,energy_usage,data_usage, window_uid = pickle_helper.unpickle_actsc_stuff(self)

@@ -1,7 +1,7 @@
 import pickle
 from datetime import datetime, timedelta
 
-def pickle_rtsel_s1_stuff(gp_runner_inst,routes_by_obs,all_stats,route_times_s,obs_indx,obs_winds,dlnk_winds_flat,ecl_winds,window_uid):
+def pickle_rtsel_s1_stuff(gp_runner_inst,routes_by_obs,all_stats,route_times_s,obs_indx,ecl_winds,window_uid):
 
     pickle_stuff =  {}
     pickle_stuff['routes_by_obs'] = routes_by_obs
@@ -9,8 +9,6 @@ def pickle_rtsel_s1_stuff(gp_runner_inst,routes_by_obs,all_stats,route_times_s,o
     pickle_stuff['route_times_s'] = route_times_s
     pickle_stuff['params'] =  gp_runner_inst.params
     pickle_stuff['obs_indx'] = obs_indx
-    pickle_stuff['obs_winds'] = obs_winds
-    pickle_stuff['dlnk_winds_flat'] = dlnk_winds_flat
     pickle_stuff['ecl_winds'] = ecl_winds
     pickle_stuff['window_uid'] = window_uid
     pickle_name ='pickles/rs_s1_%s_oi%d_%s' %( gp_runner_inst.other_params['new_pickle_file_name_pre'],obs_indx,datetime.utcnow().isoformat().replace (':','_'))
@@ -25,16 +23,13 @@ def unpickle_rtsel_s1_stuff( gp_runner_inst):
     #  TODO:  uncommon this  if want to reload parameters from file
     # gp_runner_inst.params = p['params']
 
-    return p['routes_by_obs'],p['all_stats'],p['route_times_s'],p['obs_indx'],p['obs_winds'],p['dlnk_winds_flat'],p['ecl_winds'],p['window_uid']
+    return p['routes_by_obs'],p['all_stats'],p['route_times_s'],p['obs_indx'],p['ecl_winds'],p['window_uid']
 
-def pickle_rtsel_s2_stuff(gp_runner_inst,xlnk_winds_flat,sel_routes_by_obs,ecl_winds,obs_winds,dlnk_winds_flat,window_uid,stats_rs2_pre,stats_rs2_post):
+def pickle_rtsel_s2_stuff(gp_runner_inst,sel_routes_by_obs,ecl_winds,window_uid,stats_rs2_pre,stats_rs2_post):
 
     pickle_stuff =  {}
-    pickle_stuff['xlnk_winds_flat'] = xlnk_winds_flat
     pickle_stuff['sel_routes_by_obs'] = sel_routes_by_obs
     pickle_stuff['ecl_winds'] = ecl_winds
-    pickle_stuff['obs_winds'] = obs_winds
-    pickle_stuff['dlnk_winds_flat'] = dlnk_winds_flat
     pickle_stuff['window_uid'] = window_uid
     pickle_stuff['stats_rs2_pre'] = stats_rs2_pre
     pickle_stuff['stats_rs2_post'] = stats_rs2_post
@@ -51,7 +46,7 @@ def unpickle_rtsel_s2_stuff( gp_runner_inst):
     #  TODO:  uncommon this  if want to reload parameters from file
     # gp_runner_inst.params = p['params']
 
-    return p['xlnk_winds_flat'],p['sel_routes_by_obs'],p['ecl_winds'],p['obs_winds'],p['dlnk_winds_flat'],p['window_uid'],p['stats_rs2_pre'],p['stats_rs2_post']
+    return p['sel_routes_by_obs'],p['ecl_winds'],p['window_uid'],p['stats_rs2_pre'],p['stats_rs2_post']
 
 
 def pickle_actsc_stuff(gp_runner_inst,routes_by_obs,ecl_winds,scheduled_routes,energy_usage,data_usage,window_uid):
