@@ -118,7 +118,6 @@ class GPMetrics():
         dlnk_dv_check = {}
 
         rs_collectible_dvs_by_obs =  {}
-        rs_collectible_dlnkable_dvs_by_obs =  {}
         sched_dvs_by_obs =  {}
         num_sched_obs = 0
         num_rs_obs_dv_not_zero = 0
@@ -131,24 +130,12 @@ class GPMetrics():
                 if rs_collectible_dvs_by_obs[obs] > 0:
                     num_rs_obs_dv_not_zero += 1
 
-                cum_dv_dlnkable = 0
-                for rt in rs_routes_by_obs[obs]:
-                    dlnk =rt.get_dlnk()
-                    dlnk_dv_check.setdefault(dlnk,dlnk.data_vol)
-                    dv_dlnkable = min(dlnk_dv_check[dlnk],rt.data_vol)
-
-                    cum_dv_dlnkable += dv_dlnkable
-                    dlnk_dv_check[dlnk] -= dv_dlnkable
-
-                rs_collectible_dlnkable_dvs_by_obs[obs] = min(obs.data_vol,cum_dv_dlnkable)
-
             if obs in sched_rts_by_obs.keys():
                 sched_dvs_by_obs[obs] = sum (rt.scheduled_dv for rt in sched_rts_by_obs[obs])
                 num_sched_obs +=1
 
 
         rs_dvs = [dv for dv in rs_collectible_dvs_by_obs. values ()]
-        rs_real_dvs = [dv for dv in rs_collectible_dlnkable_dvs_by_obs. values ()]
         sched_dvs = [dv for dv in sched_dvs_by_obs. values ()]
         
         valid_rs = len(rs_dvs) > 0
@@ -158,7 +145,6 @@ class GPMetrics():
         stats['num_obs_rs_pos_dv'] = num_rs_obs_dv_not_zero
         stats['num_obs_sched'] = num_sched_obs
         stats['total_collectible_dv'] = sum(rs_dvs) if valid_rs else 0
-        stats['total_collect&dlnkable_dv'] = sum(rs_real_dvs) if valid_sched else 0
         stats['total_sched_dv'] = sum(sched_dvs) if valid_sched else 0
         stats['ave_obs_dv_rs'] = np.mean(rs_dvs) if valid_rs else 0
         stats['ave_obs_dv_sched'] = np.mean(sched_dvs) if valid_sched else 0
@@ -190,8 +176,7 @@ class GPMetrics():
             if valid_sched:
                 print("%s: \t\t\t\t %f"%('num_obs_sched',stats['num_obs_sched']))
             if valid_rs:
-                print("%s: \t\t\t %f"%('total_collectible_dv',stats['total_collectible_dv']))
-                print("%s: \t %f"%('total_collect&dlnk_dv (dlnk conf)',stats['total_collect&dlnkable_dv']))
+                print("%s: \t\t\t %f"%('total_collectible_dv_rs',stats['total_collectible_dv']))
             if valid_sched:
                 print("%s: \t\t\t %f"%('total_sched_dv',stats['total_sched_dv']))
             if valid_rs:

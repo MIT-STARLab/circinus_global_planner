@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 from circinus_tools.scheduling.custom_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
 from gp_tools.gp_metrics import GPMetrics
 from gp_tools.network_sim.gp_network_sim import GPNetSim
@@ -143,31 +145,39 @@ def plot_route_selection_results ( gp_runner_inst,routes_by_obs,dlnk_winds_flat,
 
 def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_routes_by_obs,sched_routes,energy_usage,data_usage,ecl_winds,metrics_plot_inputs):
 
-    # do a bunch of stuff to extract the windows from all of the sched_routes as indexed by observation
-    # note that this stuff is not thewindows from the scheduled sched_routes, but rather the windows from all the route selected in route selection
-    #  start
-    sel_obs_winds_flat = [set() for  sat_indx  in range  (gp_runner_inst.sat_params['num_sats'])]
-    sel_dlnk_winds_flat = [set() for sat_indx  in range (gp_runner_inst.sat_params['num_sats'])]
-    sel_xlnk_winds_flat = [set() for sat_indx  in range (gp_runner_inst.sat_params['num_sats'])]
+    # do a bunch of stuff to extract the windows from selected (RS) routes, and update their data volumes for convenient display
 
-    for rts_indx, (obs,rts) in enumerate (sel_routes_by_obs.items()):
-        obs_winds_rt, dlnk_winds_rt, \
-        xlnk_winds_rt, _, _ = gp_runner_inst.io_proc.extract_flat_windows (rts)
+    #  make copies of all the objects so we don't screw anything up with our fiddling with the data volumes below
+    sel_routes_by_obs_copy = deepcopy(sel_routes_by_obs)
+    sel_routes = [dmr for rts in sel_routes_by_obs_copy.values() for dmr in rts]
+    sel_obs_winds_flat, sel_dlnk_winds_flat, \
+    sel_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind = gp_runner_inst.io_proc.extract_flat_windows (sel_routes,copy_windows= False)
+    cum_dv_by_wind = {}
+    #  routes and calculate naïve scheduled data volumes for every window
+    for obs,rts in sel_routes_by_obs_copy.items():
+        obs.scheduled_data_vol = min(sum(dmr.data_vol for dmr in rts),obs.data_vol)
 
-        for sat_indx in range  (gp_runner_inst.sat_params['num_sats']):
-            [sel_obs_winds_flat[sat_indx] .add( wind)  for wind in obs_winds_rt[sat_indx]]
-            [sel_dlnk_winds_flat[sat_indx] .add(wind ) for wind in dlnk_winds_rt[sat_indx]]
-            [sel_xlnk_winds_flat[sat_indx] .add(wind ) for wind in xlnk_winds_rt[sat_indx]]
+        for dmr in rts:
+            for dr in dmr.scheduled_dv_by_dr.keys():
+                dmr.scheduled_dv_by_dr[dr] = dr.data_vol
 
-    for sat_indx in range  (gp_runner_inst.sat_params['num_sats']):
-        sel_obs_winds_flat[sat_indx] = list(sel_obs_winds_flat[sat_indx])
-        sel_dlnk_winds_flat[sat_indx] = list(sel_dlnk_winds_flat[sat_indx])
-        sel_xlnk_winds_flat[sat_indx] = list(sel_xlnk_winds_flat[sat_indx])
-        sel_obs_winds_flat[sat_indx].sort(key=lambda x: x.start)
-        sel_dlnk_winds_flat[sat_indx].sort(key=lambda x: x.start)
-        sel_xlnk_winds_flat[sat_indx].sort(key=lambda x: x.start)
-    # end
+            for wind in dmr.get_winds():
+                cum_dv_by_wind.setdefault(wind,0)
+                cum_dv_by_wind[wind] += dmr.data_vol
+                wind.scheduled_data_vol = min(cum_dv_by_wind[wind],wind.data_vol)
+                
+    #  go back through and update durations from scheduled data volumes
+    for obs,rts in sel_routes_by_obs_copy.items():
+        # if obs.scheduled_data_vol == 6500:
+        #     from circinus_tools import debug_tools
+        #     debug_tools.debug_breakpt()
 
+        for dmr in rts:
+            for wind in dmr.get_winds():
+                wind.update_duration_from_scheduled_dv()
+
+
+    # now scheduled obs
     sched_obs_winds_flat, sched_dlnk_winds_flat, \
     sched_xlnk_winds_flat, link_info_by_wind, route_indcs_by_wind = gp_runner_inst.io_proc.extract_flat_windows (sched_routes,copy_windows= False)
 
@@ -200,6 +210,29 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
         fig_name='plots/test_all_windows.pdf'
     )
 
+    if len(sel_routes_by_obs.keys()) > 0:
+        # plot RS winds
+        gp_runner_inst.gp_plot.plot_winds(
+            sats_to_include,
+            all_obs_winds,
+            sel_obs_winds_flat,
+            all_dlnk_winds_flat,
+            sel_dlnk_winds_flat,
+            all_xlnk_winds_flat,
+            sel_xlnk_winds_flat,
+            None,
+            gp_runner_inst.gp_inst_planning_params['planning_start_dt'],
+            # gp_runner_inst.gp_inst_planning_params['planning_start_dt'] + timedelta( seconds= gp_runner_inst.rs_general_params['wind_filter_duration_s']),
+            gp_runner_inst.gp_inst_planning_params['planning_end_dlnk_dt'],
+            base_time = gp_runner_inst.scenario_params['start_utc_dt'],
+            plot_title = 'All RS routes (only obs dv is correct)',
+            plot_size_inches = (18,12),
+            plot_include_labels = gp_runner_inst.plot_params['plot_RS_include_labels'],
+            plot_original_times = False,
+            show=  False,
+            fig_name='plots/test_rs_windows.pdf'
+        )
+
 
     # plot the selected down links and cross-links this
     gp_runner_inst.gp_plot.plot_winds(
@@ -220,7 +253,7 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
         plot_include_labels = gp_runner_inst.plot_params['plot_AS_include_labels'],
         plot_original_times = False,
         show=  False,
-        fig_name='plots/test_activity_times.pdf'
+        fig_name='plots/test_sched_windows.pdf'
     )
 
     # # gp_runner_inst.gp_plot.plot_data_circles(

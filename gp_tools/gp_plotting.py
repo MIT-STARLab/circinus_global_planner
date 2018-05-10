@@ -177,6 +177,7 @@ class GPPlotting():
             dlnk_rectangle_rotator = 0
             dlnk_choices_rectangle_rotator = 0
             dlnk_rotation_rollover = 2
+            dlnk_label_rotation_rollover = 3
             dlnk_label_rotator = 0
 
             #  these hold the very last plot object of a given type added. Used for legend below
@@ -192,6 +193,7 @@ class GPPlotting():
             obs_choices_rectangle_rotator_hist = {}
             dlnk_choices_rectangle_rotator_hist = {}
             xlnk_choices_rectangle_rotator_hist = {}
+            dlnk_label_rotator_hist = {}
 
             # plot the crosslink "choices" -  meant to represent the windows that could have been chosen
             #  plot cross-links first, so that they are the furthest back (lowest z value) on the plot, and observations and downlinks will appear on top ( because there are generally a lot more cross-links than observations and down links)
@@ -237,10 +239,11 @@ class GPPlotting():
                         current_axis.add_patch(d_w)
 
                         if plot_include_labels:
+                            pass
                             # plt.text( (dlnk_wind_end+dlnk_wind_start)/2 - 0.30, bottom_vert_loc+0.6, "g%d,dv %d/%d"%(dlnk_wind.gs_indx,dlnk_wind.scheduled_data_vol,dlnk_wind.data_vol) , fontsize=10, color = 'k')
-                            plt.text( dlnk_wind_start - 0.30, bottom_vert_loc+0.7, "g%d,dv %d/%d"%(dlnk_wind.gs_indx,dlnk_wind.scheduled_data_vol,dlnk_wind.data_vol) , fontsize=10, color = 'k')
+                            # plt.text( dlnk_wind_start - 0.30, bottom_vert_loc+0.7, "g%d,dv %d/%d"%(dlnk_wind.gs_indx,dlnk_wind.scheduled_data_vol,dlnk_wind.data_vol) , fontsize=10, color = 'k')
 
-                            plt.text(dlnk_wind_start+0.15, bottom_vert_loc+0.1, dlnk_wind.window_ID , fontsize=10, color = 'k')
+                            # plt.text(dlnk_wind_start+0.15, bottom_vert_loc+0.1, dlnk_wind.window_ID , fontsize=10, color = 'k')
 
                         # save off the rotator choice so that we can look it up again
                         dlnk_choices_rectangle_rotator_hist[dlnk_wind] = dlnk_choices_rectangle_rotator
@@ -262,8 +265,8 @@ class GPPlotting():
                         d = Rectangle((obs_start, bottom_vert_loc), obs_end-obs_start, bottom_vert_loc+1,alpha=1,fill=True,color='#BFFFBF')
                         current_axis.add_patch(d)
 
-                        if plot_include_labels:
-                            plt.text(obs_start+0.15, bottom_vert_loc+0.4, "%s,dv %d/%d"%(obs_wind.target_IDs,obs_wind.scheduled_data_vol,obs_wind.data_vol) , fontsize=10, color = 'k')
+                        # if plot_include_labels:
+                        #     plt.text(obs_start+0.15, bottom_vert_loc+0.4, "%s,dv %d/%d"%(obs_wind.target_IDs,obs_wind.scheduled_data_vol,obs_wind.data_vol) , fontsize=10, color = 'k')
 
                         # save off the rotator choice so that we can look it up again
                         obs_choices_rectangle_rotator_hist[obs_wind] = obs_choices_rectangle_rotator
@@ -295,7 +298,7 @@ class GPPlotting():
 
                         # if we have been given route indices, then then use one of them to configure the crosslink box color
                         dr_id = None
-                        if (len(route_ids_by_wind.keys())) > 0:
+                        if route_ids_by_wind and (len(route_ids_by_wind.keys())) > 0:
                             dr_id = route_ids_by_wind[xlnk_wind][self.route_index_to_use]
                             dr_indcs = route_ids_by_wind[xlnk_wind]
                             xlnk_color_indx = dr_id.get_indx() %  self.xlnk_color_rollover
@@ -331,12 +334,82 @@ class GPPlotting():
                             if xlnk_wind in xlnk_choices_rectangle_rotator_hist.keys ():
                                 xlnk_label_rotator = xlnk_choices_rectangle_rotator_hist[xlnk_wind]
 
-                            if xlnk_label_rotator == 0:
-                                plt.text(left_horizontal_loc, 0.1, label_text , fontsize=10, color = 'k')
-                            elif xlnk_label_rotator == 1:
-                                plt.text( left_horizontal_loc, 1.1, label_text , fontsize=10, color = 'k')
+                            include_xlnk_labels = False
+                            if include_xlnk_labels:
+                                if xlnk_label_rotator == 0:
+                                    plt.text(left_horizontal_loc, 0.1, label_text , fontsize=10, color = 'k')
+                                elif xlnk_label_rotator == 1:
+                                    plt.text( left_horizontal_loc, 1.1, label_text , fontsize=10, color = 'k')
 
                             xlnk_label_rotator = (xlnk_label_rotator+1)%xlnk_rotation_rollover
+
+            # plot the executed down links
+            if self.winds_plot_dlnks:
+                num_dlnk_exe = 0
+                if dlnk_winds_flat and len(dlnk_winds_flat) > 0:
+                    for dlnk_wind in dlnk_winds_flat[sat_indx]:
+
+                        dlnk_start = (get_start(dlnk_wind)-base_time).total_seconds()/time_divisor
+                        dlnk_end = (get_end(dlnk_wind)-base_time).total_seconds()/time_divisor
+
+                        out_of_filter_bounds = get_start(dlnk_wind) < plot_start or get_end(dlnk_wind) > plot_end
+
+                        gs_indx = dlnk_wind.gs_indx
+
+                        #  update the rotator value if we've already added this window to the plot in the "choices" code above
+                        if dlnk_wind in dlnk_choices_rectangle_rotator_hist.keys ():
+                            bottom_vert_loc = dlnk_choices_rectangle_rotator_hist[dlnk_wind]
+
+                        hatch = '///////'
+                        if out_of_filter_bounds:
+                            hatch = '.'
+
+                        # plot the task duration
+                        d = Rectangle((dlnk_start, bottom_vert_loc), dlnk_end-dlnk_start, bottom_vert_loc+1,alpha=1,fill=False,color='#0000FF',hatch=hatch)
+                        current_axis.add_patch(d)
+
+                        # if plot_include_labels:
+                        #     plt.text( dlnk_start - 0.30, bottom_vert_loc+0.7, "g%d,dv %d/%d"%(dlnk_wind.gs_indx,dlnk_wind.scheduled_data_vol,dlnk_wind.data_vol) , fontsize=10, color = 'k')
+
+                        # dlnk_rectangle_rotator =  (dlnk_rectangle_rotator+1)%dlnk_rotation_rollover
+
+                        if dlnk_wind.window_ID in all_wind_ids:
+                            raise Exception('Found a duplicate unique window ID where it should not have been possible')
+                        all_wind_ids.append(dlnk_wind.window_ID)
+
+                        if plot_include_labels:
+                            label_text = ""
+
+                            # if we have been given route indices, then include them in the label
+                            # if route_ids_by_wind and (len(route_ids_by_wind.keys())) > 0:
+                            #     dr_indcs = route_ids_by_wind[dlnk_wind]
+                            #     for dr_id in dr_indcs:
+                            #         label_text += "%d,"%(dr_id.get_indx())
+                            #     label_text += ";"
+                            
+                            #  add the ground station index to the label
+                            # label_text += "%d"%(gs_indx)
+                            label_text = "g%d,dv %d/%d"%(dlnk_wind.gs_indx,dlnk_wind.scheduled_data_vol,dlnk_wind.data_vol) 
+
+                            #   put label in desired vertical spot
+                            # left_horizontal_loc = dlnk_start + 0.15
+                            left_horizontal_loc = dlnk_start - 0.3
+                            
+                            #  update the rotator value if we've already added this window to the plot in the "choices" code above
+                            if dlnk_wind in dlnk_choices_rectangle_rotator_hist.keys ():
+                                bottom_vert_loc = dlnk_choices_rectangle_rotator_hist[dlnk_wind]
+                            if dlnk_wind in dlnk_label_rotator_hist.keys ():
+                                dlnk_label_rotator = dlnk_label_rotator_hist[dlnk_wind]
+
+                            vert_offset=0.2*dlnk_label_rotator
+                            plt.text(left_horizontal_loc, bottom_vert_loc+0.5+vert_offset, label_text , fontsize=10, color = 'k')
+
+                            dlnk_label_rotator = (dlnk_label_rotator+1)%dlnk_label_rotation_rollover
+                            dlnk_label_rotator_hist[dlnk_wind] = dlnk_label_rotator
+
+
+                        num_dlnk_exe += 1
+
 
             # plot the observations that are actually executed
             if self.winds_plot_obs:
@@ -362,77 +435,13 @@ class GPPlotting():
                         current_axis.add_patch(d)
 
                         if plot_include_labels:
-                            plt.text(obs_start+0.15, bottom_vert_loc+0.4, "%s,dv %d/%d"%(obs_wind.target_IDs,obs_wind.scheduled_data_vol,obs_wind.data_vol) , fontsize=10, color = 'k')
+                            plt.text(obs_start+0.15, bottom_vert_loc+0.1, "%s,dv %d/%d"%(obs_wind.target_IDs,obs_wind.scheduled_data_vol,obs_wind.data_vol) , fontsize=10, color = 'k')
 
                         obs_rectangle_rotator =  (obs_rectangle_rotator+1)%obs_rotation_rollover
 
                         if obs_wind.window_ID in all_wind_ids:
                             raise Exception('Found a duplicate unique window ID where it should not have been possible')
                         all_wind_ids.append(obs_wind.window_ID)
-
-            # plot the executed down links
-            if self.winds_plot_dlnks:
-                num_dlnk_exe = 0
-                if dlnk_winds_flat and len(dlnk_winds_flat) > 0:
-                    for dlnk_wind in dlnk_winds_flat[sat_indx]:
-
-                        dlnk_start = (get_start(dlnk_wind)-base_time).total_seconds()/time_divisor
-                        dlnk_end = (get_end(dlnk_wind)-base_time).total_seconds()/time_divisor
-
-                        out_of_filter_bounds = get_start(dlnk_wind) < plot_start or get_end(dlnk_wind) > plot_end
-
-                        gs_indx = dlnk_wind.gs_indx
-
-                        #  update the rotator value if we've already added this window to the plot in the "choices" code above
-                        if dlnk_wind in dlnk_choices_rectangle_rotator_hist.keys ():
-                            dlnk_rectangle_rotator = dlnk_choices_rectangle_rotator_hist[dlnk_wind]
-
-                        hatch = '///////'
-                        if out_of_filter_bounds:
-                            hatch = '.'
-
-                        # plot the task duration
-                        bottom_vert_loc = dlnk_rectangle_rotator
-                        d = Rectangle((dlnk_start, bottom_vert_loc), dlnk_end-dlnk_start, bottom_vert_loc+1,alpha=1,fill=False,color='#0000FF',hatch=hatch)
-                        current_axis.add_patch(d)
-
-                        if plot_include_labels:
-                            plt.text( dlnk_start - 0.30, bottom_vert_loc+0.7, "g%d,dv %d/%d"%(dlnk_wind.gs_indx,dlnk_wind.scheduled_data_vol,dlnk_wind.data_vol) , fontsize=10, color = 'k')
-
-                        dlnk_rectangle_rotator =  (dlnk_rectangle_rotator+1)%dlnk_rotation_rollover
-
-                        if dlnk_wind.window_ID in all_wind_ids:
-                            raise Exception('Found a duplicate unique window ID where it should not have been possible')
-                        all_wind_ids.append(dlnk_wind.window_ID)
-
-                        if plot_include_labels:
-                            label_text = ""
-
-                            # if we have been given route indices, then include them in the label
-                            if (len(route_ids_by_wind.keys())) > 0:
-                                dr_indcs = route_ids_by_wind[dlnk_wind]
-                                for dr_id in dr_indcs:
-                                    label_text += "%d,"%(dr_id.get_indx())
-                                label_text += ";"
-                            
-                            #  add the ground station index to the label
-                            label_text += "%d"%(gs_indx)
-
-                            #   put label in desired vertical spot
-                            left_horizontal_loc = dlnk_start + 0.15
-                            
-                            #  update the rotator value if we've already added this window to the plot in the "choices" code above
-                            if dlnk_wind in dlnk_choices_rectangle_rotator_hist.keys ():
-                                dlnk_label_rotator = dlnk_choices_rectangle_rotator_hist[dlnk_wind]
-                            
-                            if dlnk_label_rotator == 0:
-                                plt.text(left_horizontal_loc, 0.1, label_text , fontsize=10, color = 'k')
-                            elif dlnk_label_rotator == 1:
-                                plt.text( left_horizontal_loc, 1.1, label_text , fontsize=10, color = 'k')
-
-                            dlnk_label_rotator = (dlnk_label_rotator+1)%dlnk_rotation_rollover
-
-                        num_dlnk_exe += 1
 
             #  if were at the last satellite ( at the bottom of all the plots), then add X axis labels
             if not plot_indx+1 == num_sats:

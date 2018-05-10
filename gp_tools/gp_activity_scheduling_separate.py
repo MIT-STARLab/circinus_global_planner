@@ -882,7 +882,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             ("b", "Observation window capacity fully utilized"),
             ("c", "cross-link window capacity fully utilized"),
             ("d", "downlink window capacity fully utilized"),
-            ("e", "data route utilization below minimum"),
+            ("e", "data route utilization below minimum (symptomatic)"),
             # ("f", "(non-conclusive) intra-satellite or inter-satellite activity overlap, or minimum activity time constraint violated"),
             ("g", "energy storage too low"),
             ("h", "data storage too high"),
@@ -999,8 +999,10 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         num_successful = count_by_reason['a']
         num_unsuccessful = len(all_routes) - num_successful
         if verbose:
+            print('num_routes: %d'%(len(all_routes)))
             print('num_successful: %d'%(num_successful))
             print('num_unsuccessful: %d'%(num_unsuccessful))
+            print('#\t  reason')
             for reason_code,count in count_by_reason.items():
                 print('%d\t: %s'%(count,reasons[reason_code]))
 

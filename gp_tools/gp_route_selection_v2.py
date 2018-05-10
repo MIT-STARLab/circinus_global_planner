@@ -535,12 +535,6 @@ class GPDataRouteSelection():
                     # 0 indx is "new_dv"
                     best_xlnk_cand = max(xlnk_candidates,key= lambda cand: cand[0])
 
-                # mini_list= [item[3].window_ID for item in xlnk_candidates]
-                # if 6026 in mini_list and obs_wind.window_ID == 39:
-                #     from circinus_tools import debug_tools
-                #     debug_tools.debug_breakpt()
-
-
 
                 ################
                 #  now, for the best cross-link candidate (if there is one),  make a new route record

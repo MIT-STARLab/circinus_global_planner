@@ -670,13 +670,14 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         model.c10_11  = pe.ConstraintList()
         model.c12  = pe.ConstraintList()
         # pass the model objects getter function so it can be called in place
-        used_default_transition_time &= self.gen_intra_sat_act_overlap_constraints(model.c10_11,model.c12,sats_acts,self.get_act_model_objs,constraint_violation_model_objs)
-
+        used_default_transition_time_temp,_,_ = self.gen_intra_sat_act_overlap_constraints(model.c10_11,model.c12,sats_acts,self.get_act_model_objs,constraint_violation_model_objs)
+        used_default_transition_time &= used_default_transition_time_temp
 
         # inter-satellite downlink overlap constraints [9],[10]
         model.c14_15  = pe.ConstraintList()
         # pass the model objects getter function so it can be called in place
-        used_default_transition_time &= self.gen_inter_sat_act_overlap_constraints(model.c14_15,sats_dlnks,self.get_act_model_objs,constraint_violation_model_objs)
+        used_default_transition_time_temp,_ = self.gen_inter_sat_act_overlap_constraints(model.c14_15,sats_dlnks,self.get_act_model_objs,constraint_violation_model_objs)
+        used_default_transition_time &= used_default_transition_time_temp
 
         if verbose:
             if used_default_transition_time:

@@ -136,7 +136,7 @@ class GPActivityScheduling():
 
     def gen_inter_act_constraint(self,var_list,constr_list,transition_time_req,model_objs_act1,model_objs_act2):
             #  the regular constraint is the constraint that is enforced in the mixed integer linear program
-            #  the "binding expression"  is the expression that, when evaluated after MILP solution, will be zero if the constraint is binding and greater than zero if the constraint is not binding ( i.e., if the constraint is not binding, there is room for one of the variables to grow). The constraint should have any big M factors removed in the binding expression, because those obfuscate information about whether the constraint is binding or not. The binding expression shall not be negative (that would indicate an infeasible solution)
+            #  the "binding expression"  is the expression that, when evaluated after MILP solution, will be zero if the constraint is binding and greater than zero if the constraint is not binding ( i.e., if the constraint is not binding, there is room for one of the variables to grow). The constraint should have any big M factors removed in the binding expression, because those obfuscate information about whether the constraint is binding or not. The binding expression shall may be negative if big M components are normally present.
 
             var_constr_violation = None
             min_constr_violation = None

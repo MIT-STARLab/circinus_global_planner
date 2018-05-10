@@ -362,9 +362,9 @@ class GlobalPlannerRunner:
                 print_verbose(np.max(route_times_s),verbose)
                 print_verbose('np.std(route_times_s)',verbose)
                 print_verbose(np.std(route_times_s),verbose)
-                passthru = False
+                passthru = True
                 if passthru:
-                    sel_routes_by_obs = {obs:[DataMultiRoute(ID=0,data_routes=[dr]) for dr in rts] for obs,rts in routes_by_obs.items()}
+                    sel_routes_by_obs = {obs:[DataMultiRoute(None,None,data_routes=[dr],ro_ID=dr.ID) for dr in rts] for obs,rts in routes_by_obs.items()}
                 else:
                     # run step 2. todo:  move this elsewhere
                     sel_routes_by_obs,stats_rs2_pre,stats_rs2_post = self.run_route_selection_v2_step2(routes_by_obs,verbose)
