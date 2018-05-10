@@ -7,7 +7,7 @@
 #  note that a path is the same as a route. 
 
 from  datetime import timedelta
-from copy import copy
+from copy import copy,deepcopy
 from collections import namedtuple
 from numpy import argmin
 from math import floor
@@ -309,7 +309,7 @@ class GPDataRouteSelection():
 
 
     @staticmethod
-    def  filter_windows(dlnk_winds_flat,xlnk_winds,num_sats,start,end_dt_by_sat_indx):
+    def  filter_windows(dlnk_winds_flat,xlnk_winds,num_sats,start,end_dt_by_sat_indx,trim_windows_at_start=False):
 
         dlink_winds_flat_filtered = [[] for sat_indx in  range (num_sats)]
         xlink_winds_flat_filtered = [[[] for xsat_indx in  range ( num_sats)] for sat_indx in  range (num_sats)]
@@ -324,6 +324,12 @@ class GPDataRouteSelection():
             for wind in dlnk_winds_flat[sat_indx]:
                 if  wind.start > start  and  wind.end  < end_dt_by_sat_indx[sat_indx]:
                     dlink_winds_flat_filtered[sat_indx]. append ( wind)
+                # Consider case where the start overlaps with the window, but the center of the window is past the start so we can still get some data volume from the window.  we do this to allow down links that are overlapping with an observation to be considered for that observation -  in practice it turns out to be a large sacrifice to not allow such dumplings to execute ( dictation put dumplings instead of down links, but I'm just gonna leave that there :D WUBBA LUBBA DUB DUB)
+                elif trim_windows_at_start and (wind.start < start and wind.center > start):
+                    wind_copy = deepcopy(wind)
+                    wind_copy.original_wind_ref = wind
+                    wind_copy.modify_time(start,'start')  #  update start and end time. also updates data volume
+                    dlink_winds_flat_filtered[sat_indx]. append ( wind_copy)
 
         return dlink_winds_flat_filtered, xlink_winds_flat_filtered
 
@@ -352,7 +358,7 @@ class GPDataRouteSelection():
         # crazy looking line, but it's easy... dictionary of end times by sat_indx - end_dt if not observing sat, else end_obs_sat_dt
         end_dt_by_sat_indx = {sat_indx: end_dt if sat_indx != obs_wind.sat_indx else end_obs_sat_dt for sat_indx in range (self.num_sats)}
         
-        dlnk_winds_flat_filt,xlnk_winds_filt =  self.filter_windows (dlnk_winds_flat,xlnk_winds, self.num_sats, obs_wind.end, end_dt_by_sat_indx )
+        dlnk_winds_flat_filt,xlnk_winds_filt =  self.filter_windows (dlnk_winds_flat,xlnk_winds, self.num_sats, obs_wind.end, end_dt_by_sat_indx , trim_windows_at_start=True)
 
         if verbose:
             print ('Running route selection for obs: %s'%(obs_wind))
@@ -612,6 +618,7 @@ class GPDataRouteSelection():
                                     new_dr.data_vol = dv_slice
                                     new_dr.set_id(self.gp_agent_ID,dr_uid)
                                     new_dr.append_wind_to_route(act,window_start_sat_indx=sat_indx)
+                                    new_dr.fix_window_copies()
                                     rr_dlnk.routes.append(new_dr)
 
                                     dr_uid +=1
