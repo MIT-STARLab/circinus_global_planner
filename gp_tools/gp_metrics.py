@@ -927,18 +927,6 @@ class GPMetrics():
 
     def calc_overlaps(self,routes_by_obs,verbose=False):
 
-        # Note: no longer  implementing the window_overlap_option of "shared_window". the "mutex_window" option is hardcoded below (i.e.  if two routes share the same window at all they are considered overlapping, we don't consider how much data volume is available for that window)
-
-        #  in this case we increment one for each individual route that a given route is found to have an overlap with
-        #  this is hardcoded below currently
-        if self.overlap_count_option=='single_overlap':
-            pass
-        #  in this case  we increment by the number of overlapping windows for each individual route that a given route is found to have an overlap with
-        elif self.overlap_count_option=='multiple_overlap':
-            raise NotImplementedError
-        else:
-            raise NotImplementedError
-
         num_obs = len(routes_by_obs.keys())
 
         overlap_cnt_by_route = {}
@@ -971,33 +959,13 @@ class GPMetrics():
                     elif type(wind) == DlnkWindow:
                         rts_by_dlnk.setdefault(wind,[]).append(dr)
 
-        # print('hi1')
-
         #  look through all of the route lists as indexed by cross-link window and wherever we find a list that has more than one data route,  mark an overlap for all of the data routes in that list
         len_rts_by_xlnk = len(rts_by_xlnk.keys())
-        # from circinus_tools import debug_tools 
-        # debug_tools.debug_breakpt()
         for indx, (wind, rts) in enumerate(rts_by_xlnk.items()):
-            # if indx % 100 == 0:
-            #     print('indx %d/%d'%(indx,len_rts_by_xlnk))
 
             if len(rts) > 1:
                 for dr1 in rts:
                     overlap_cnt_by_route[dr1] += len(rts)-1
-
-                    # overlap_rts_by_route.setdefault(dr1, [])
-                    
-                    # for dr2 in rts:
-                    #     if dr2 == dr1:
-                    #         continue
-                    #     if self.overlap_remove_same_obs and obs_by_route[dr1] == obs_by_route[dr2]:
-                    #         continue
-
-                    #     overlap_rts_by_route[dr1].append(dr2)
-
-                    # #  leaving this as a list addition rather than a set addition to reduce memory requirements
-                    # overlap_rts_by_route[dr] += rts
-        # print('hi2')
 
         #  do the same for downlinks, if so desired
         if self.overlap_include_dlnks:
@@ -1006,38 +974,6 @@ class GPMetrics():
                 if len(rts) > 1:
                     for dr1 in rts:
                         overlap_cnt_by_route[dr1] += len(rts)-1
-                        # overlap_rts_by_route.setdefault(dr1, set())
-                        
-                        # for dr2 in rts:
-                        #     if dr2 == dr1:
-                        #         continue
-                        #     if self.overlap_remove_same_obs and dr1.get_obs() == dr2.get_obs():
-                        #         continue
-
-                        #     overlap_rts_by_route[dr1].add(dr2)
-
-                # for dr in rts:
-                #     if len(rts) > 1:
-                #         overlap_rts_by_route[dr] += rts
-
-        # print('hi3')
-
-        # sanitize this by removing any duplicates,
-        # for dr,rts in overlap_rts_by_route.items():
-        # for rts in routes_by_obs.values(): 
-        #     for dr in rts:
-        #         overlap_cnt_by_route[dr] = len(overlap_rts_by_route[dr]) if dr in overlap_rts_by_route.keys() else 0
-
-            # #  for removing overlap counts for routes from the same observation
-            # if self.overlap_remove_same_obs:
-            #     obs = obs_by_route[dr]
-            #     overlap_rts_by_route[dr] = list(set(rts) - set(routes_by_obs[obs]))
-            # else:
-            #     #  take the set of the lists in order to get rid of duplicate elements
-            #     overlap_rts_by_route[dr] = list(set(rts))
-
-            # #  final overlap count is the number of routes left
-            # overlap_cnt_by_route[dr] = len(overlap_rts_by_route[dr])
 
         if verbose:
             print("finished calc overlaps")
@@ -1045,10 +981,6 @@ class GPMetrics():
         return overlap_cnt_by_route,overlap_rts_by_route
 
     def assess_route_overlap(  self,routes_by_obs,verbose=False):
-        # overlap_count_option='single_overlap'
-        # overlap_count_option='multiple_overlap'
-        # overlap_count_option='shared_window'
-        # overlap_count_option='mutex_window'
 
         t_a = time.time()
         overlap_cnt_by_route,overlap_rts_by_route = self.calc_overlaps(routes_by_obs,verbose=False)

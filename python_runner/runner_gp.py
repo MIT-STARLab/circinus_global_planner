@@ -362,7 +362,8 @@ class GlobalPlannerRunner:
                 print_verbose(np.max(route_times_s),verbose)
                 print_verbose('np.std(route_times_s)',verbose)
                 print_verbose(np.std(route_times_s),verbose)
-                passthru = True
+                passthru = False
+                # passthru is what you use if you just want to feed ALL the data routes from S1 to activity scheduling
                 if passthru:
                     sel_routes_by_obs = {obs:[DataMultiRoute(None,None,data_routes=[dr],ro_ID=dr.ID) for dr in rts] for obs,rts in routes_by_obs.items()}
                 else:

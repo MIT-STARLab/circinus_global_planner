@@ -551,10 +551,6 @@ class GPDataRouteSelection():
                     #  note that it may be possible that the "best" candidate cross-link (most dv moved) has a later release time than another candidate, and this causes some later cross-links to be ruled out because they start before the best (and end after the other candidate). We'll assume this is an acceptable error though. the time step for the dance cards should be made small enough that this is not a big deal.
                     rr_new.release_time = xlnk_wind.end
 
-                    # if sat_indx == 16:
-                    #     import ipdb
-                    #     ipdb.set_trace()
-                    
                     # deconf_rt is a DeconflictedRoute namedtuple, from above
                     for deconf_rt in xlnk_candidate_rts:
                         #  again, make a copy because the existing data routes need to be left as is for future consideration and the algorithm
@@ -642,20 +638,54 @@ class GPDataRouteSelection():
 
         return all_routes
 
+    def best_route_dv_availability(self,rts,dv_avail_by_wind,check_availability):
+        # if we're not paying attention to which windows have already had dv "spoken for", then just return the first index
+        if not check_availability:
+            if len(rts) > 0:
+                best_rt = rts[0]
+                best_rt_indx = 0
+                return best_rt,best_rt_indx
 
-    def get_from_sorted(self,sorted_rts,num_rts,min_dmr_candidate_dv,dmr_uid,drs_taken):
+        best_rt_dv = None
+        best_rt = None
+        best_rt_indx = None
+        for rt_indx,rt in enumerate(rts):
+            rt_dv = rt.data_vol
+            for act in rt.get_winds():
+                # ignore the data availability of the obs windows
+                if type(act) == ObsWindow:
+                    continue
+                dv_avail_by_wind.setdefault(act,act.data_vol)
+                rt_dv = min(rt_dv,dv_avail_by_wind[act])
+
+            if (best_rt_dv and rt_dv > best_rt_dv) or best_rt_dv is None:
+                best_rt_dv = rt_dv
+                best_rt = rt
+                best_rt_indx = rt_indx
+
+        return best_rt,best_rt_indx
+
+    def get_from_sorted(self,sorted_rts,num_rts,min_dmr_candidate_dv,dmr_uid,drs_taken,dv_avail_by_wind,check_availability=False):
         rt_index = 0
         sel_rts = []
-        while rt_index < len(sorted_rts):
-            curr_dr = sorted_rts[rt_index]
+        rts_remaining = sorted_rts
+        # while rt_index < len(sorted_rts):
+        while len(rts_remaining) > 0:            
+            # curr_dr = sorted_rts[rt_index]
+            curr_dr,_ = self.best_route_dv_availability(rts_remaining,dv_avail_by_wind,check_availability)
 
             # don't consider the route if it's already spoken for within another dmr.
             if curr_dr in drs_taken:
-                rt_index += 1
+                # rt_index += 1
+                rts_remaining.remove(curr_dr)
                 continue
 
             dmr = DataMultiRoute(self.gp_agent_ID,dmr_uid,data_routes=[curr_dr],dv_epsilon=self.dv_epsilon)
             dmr_uid += 1
+            rts_remaining.remove(curr_dr) 
+            for act in curr_dr.get_winds():
+                dv_avail_by_wind.setdefault(act,act.data_vol)
+                dv_avail_by_wind[act] -= curr_dr.data_vol
 
             #  if the data route already has enough data volume to meet the minimum requirement for the activity scheduling stage, add it as a selected route
             if dmr.data_vol >= self.min_obs_dv_dlnk_req:
@@ -666,16 +696,26 @@ class GPDataRouteSelection():
             else:
                 
                 #  consider all subsequent data routes in the list. add them to the data multi-route to see if we can make minimum data volume requirement
-                next_rt_index = rt_index+1
-                while next_rt_index < len(sorted_rts):
-                    next_dr = sorted_rts[next_rt_index]
+                # next_rt_index = rt_index+1
+                # while next_rt_index < len(sorted_rts):
+                # todo: should I do this by index?
+                
+
+                while len(rts_remaining) > 0:
+                    next_dr,_ = self.best_route_dv_availability(rts_remaining,dv_avail_by_wind,check_availability)
+                    # next_dr = sorted_rts[next_rt_index]
 
                     if next_dr in drs_taken:
-                        next_rt_index += 1
+                        rts_remaining.remove(next_dr)
+                        # next_rt_index += 1
                         continue
 
                     #  add the data route to the data multi-route if possible
                     dmr.accumulate_dr( next_dr,min_dmr_candidate_dv)
+                    rts_remaining.remove(next_dr)
+                    for act in next_dr.get_winds():
+                        dv_avail_by_wind.setdefault(act,act.data_vol)
+                        dv_avail_by_wind[act] -= next_dr.data_vol
 
                     #  check if we are meeting the minimum data volume requirement after the accumulation. if yes include the selected route and  and break out of the loop
                     if dmr.data_vol >= self.min_obs_dv_dlnk_req:
@@ -683,12 +723,12 @@ class GPDataRouteSelection():
                         for dr in dmr.data_routes: drs_taken.add(dr)
                         break
 
-                    next_rt_index += 1
+                    # next_rt_index += 1
 
             if len(sel_rts) >= num_rts:
                 break 
 
-            rt_index += 1
+            # rt_index += 1
 
         return sel_rts,dmr_uid,drs_taken
 
@@ -706,12 +746,12 @@ class GPDataRouteSelection():
                 )
 
         for obs,rts in routes_by_obs.items():
-            #  sort the routes for each observation by overlap count. Prefer routes with less overlap
-            rts_by_obs_sorted_overlap[obs] = sorted(rts,key=lambda dr: overlap_cnt_by_route[dr])
             #  sort the routes for each observation by data volume. Prefer routes with more data volume
             rts_by_obs_sorted_dv[obs] = sorted(rts,key=lambda dr: dr.data_vol,reverse=True)
             #  sort the routes for each observation by latency. Prefer routes with lower latency
             rts_by_obs_sorted_lat[obs] = sorted(rts,key=lambda dr: latency_getter(dr))
+            #  sort the routes for each observation by overlap count. Prefer routes with less overlap
+            rts_by_obs_sorted_overlap[obs] = sorted(rts,key=lambda dr: overlap_cnt_by_route[dr])
 
             
         dmr_uid = 0
@@ -719,20 +759,22 @@ class GPDataRouteSelection():
         # selected data multi routes
         selected_dmrs_by_obs = {}
         drs_taken = set()
-        for obs in routes_by_obs.keys():
+        dv_avail_by_wind = {}
+        obs_last_to_first = sorted(routes_by_obs.keys(),key=lambda act:act.center,reverse=True)
+        for obs in obs_last_to_first:
             selected_dmrs_by_obs[obs] = []
 
+            sel_rts,dmr_uid,drs_taken = self.get_from_sorted(rts_by_obs_sorted_dv[obs],self.step2_params['num_rts_sel_per_obs_dv'],self.min_dmr_candidate_dv,dmr_uid,drs_taken,dv_avail_by_wind,check_availability=False)
+            selected_dmrs_by_obs[obs] += sel_rts
+
+            sel_rts,dmr_uid,drs_taken = self.get_from_sorted(rts_by_obs_sorted_lat[obs],self.step2_params['num_rts_sel_per_obs_lat'],self.min_dmr_candidate_dv,dmr_uid,drs_taken,dv_avail_by_wind,check_availability=False)
+            selected_dmrs_by_obs[obs] += sel_rts
+
+
             # note: Don't need to worry about a data route appearing multiple times across the selected routes returned from get_from_sorted, because each data route map be only used once (enforced with drs_taken)
-            sel_rts,dmr_uid,drs_taken = self.get_from_sorted(rts_by_obs_sorted_overlap[obs],self.step2_params['num_rts_sel_per_obs_overlap'],self.min_dmr_candidate_dv,dmr_uid,drs_taken)
+            sel_rts,dmr_uid,drs_taken = self.get_from_sorted(rts_by_obs_sorted_overlap[obs],self.step2_params['num_rts_sel_per_obs_overlap'],self.min_dmr_candidate_dv,dmr_uid,drs_taken,dv_avail_by_wind,check_availability=True)
             selected_dmrs_by_obs[obs] += sel_rts
-            sel_rts,dmr_uid,drs_taken = self.get_from_sorted(rts_by_obs_sorted_dv[obs],self.step2_params['num_rts_sel_per_obs_dv'],self.min_dmr_candidate_dv,dmr_uid,drs_taken)
-            selected_dmrs_by_obs[obs] += sel_rts
-            sel_rts,dmr_uid,drs_taken = self.get_from_sorted(rts_by_obs_sorted_lat[obs],self.step2_params['num_rts_sel_per_obs_lat'],self.min_dmr_candidate_dv,dmr_uid,drs_taken)
-            selected_dmrs_by_obs[obs] += sel_rts
-
-            # from circinus_tools import debug_tools 
-            # debug_tools.debug_breakpt()
-
+            
         return selected_dmrs_by_obs
 
     def get_stats(self,final_route_records,verbose=False):

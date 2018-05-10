@@ -875,6 +875,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             ("h", "data storage too high"),
             ("i", "intra-satellite activity overlap constraint would be violated"),
             ("j", "inter-satellite downlink overlap constraint would be violated"),
+            ("k", "route filtered before scheduling"),
             ("z", "no reason found")
         ])
 
@@ -890,6 +891,10 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
             dmr_id = dmr.ID
             reasons_by_route[dmr] = set()
+
+            if dmr_id not in self.routes_filt:
+                reasons_by_route[dmr].add('k')
+                continue
 
             #  check if successfully scheduled
             if pe.value(self.model.var_dmr_indic[dmr_id]) >= 1.0 - self.binary_epsilon:
