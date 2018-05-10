@@ -669,14 +669,11 @@ class GPDataRouteSelection():
         rt_index = 0
         sel_rts = []
         rts_remaining = sorted_rts
-        # while rt_index < len(sorted_rts):
         while len(rts_remaining) > 0:            
-            # curr_dr = sorted_rts[rt_index]
             curr_dr,_ = self.best_route_dv_availability(rts_remaining,dv_avail_by_wind,check_availability)
 
             # don't consider the route if it's already spoken for within another dmr.
             if curr_dr in drs_taken:
-                # rt_index += 1
                 rts_remaining.remove(curr_dr)
                 continue
 
@@ -694,20 +691,13 @@ class GPDataRouteSelection():
 
             #  otherwise, we need to smoosh routes together in order to meet that requirement
             else:
+                #  consider additional data routes in the list. add them to the data multi-route to see if we can make minimum data volume requirement
                 
-                #  consider all subsequent data routes in the list. add them to the data multi-route to see if we can make minimum data volume requirement
-                # next_rt_index = rt_index+1
-                # while next_rt_index < len(sorted_rts):
-                # todo: should I do this by index?
-                
-
                 while len(rts_remaining) > 0:
                     next_dr,_ = self.best_route_dv_availability(rts_remaining,dv_avail_by_wind,check_availability)
-                    # next_dr = sorted_rts[next_rt_index]
 
                     if next_dr in drs_taken:
                         rts_remaining.remove(next_dr)
-                        # next_rt_index += 1
                         continue
 
                     #  add the data route to the data multi-route if possible
@@ -723,12 +713,10 @@ class GPDataRouteSelection():
                         for dr in dmr.data_routes: drs_taken.add(dr)
                         break
 
-                    # next_rt_index += 1
 
             if len(sel_rts) >= num_rts:
                 break 
 
-            # rt_index += 1
 
         return sel_rts,dmr_uid,drs_taken
 
