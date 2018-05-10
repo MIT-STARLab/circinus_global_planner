@@ -20,6 +20,10 @@ from circinus_tools.scheduling.custom_window import   ObsWindow,  DlnkWindow, Xl
 from circinus_tools.scheduling.schedule_objects import Dancecard
 from circinus_tools.scheduling.routing_objects import DataRoute,DataMultiRoute
 
+def print_verbose(string,verbose=False):
+    if verbose:
+        print(string)
+
 class GPActivitySchedulingCoupled(GPActivityScheduling):
     """docstring for GP activity scheduling"""
     
@@ -340,10 +344,9 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
             self.model_constructed = False
             return
 
-
-        #  really useful code below!!!
-        if verbose:
-            pass
+        print_verbose('num obs winds filt: %d'%(sum(len(winds) for winds in obs_winds_filt)),verbose)
+        print_verbose('num obs winds filt: %d'%(sum(len(winds) for winds in dlnk_winds_filt)),verbose)
+        print_verbose('num obs winds filt: %d'%(sum(len(winds) for winds in xlnk_winds_filt)),verbose)
 
         ##############################
         #  Make indices/ subscripts
@@ -524,6 +527,8 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         #  Make constraints
         ##############################
 
+        print_verbose('creating constraints',verbose)
+
         # TODO: renumber  these with the final numbering
 
         # note that the observations show up within model.acts as well, so we also constraint route scheduled DV by the real available DV from each observation
@@ -553,6 +558,8 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
         # from circinus_tools import debug_tools
         # debug_tools.debug_breakpt()
+
+        print_verbose('make c5 constraints',verbose)
 
         # c5
         model.c5  = pe.ConstraintList()
@@ -659,7 +666,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                     model.par_latency_sf_dlnk_obs[curr_d,o] + 
                     self.big_M_lat * sum(model.var_dlnk_obs_indic[d,o] for d in dlnk_windids_sorted[curr_d_indx+1:]) )
 
-
+        print_verbose('make act overlap constraints',verbose)
 
         #  intra-satellite activity overlap constraints [10],[11],[12]
         #  well, 12 is activity minimum time duration
@@ -765,6 +772,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         #  Make objective
         ##############################
 
+        print_verbose('make obj',verbose)
 
         #  determine which time points to use as "spot checks" on resource margin. These are the points that will be used in the objective function for maximizing resource margin
         timepoint_spacing = ceil(es_num_timepoints/self.resource_margin_obj_num_timepoints)

@@ -115,8 +115,9 @@ class GlobalPlannerRunner:
         routes = gp_as.extract_utilized_routes ( verbose  = False)
         energy_usage,data_usage = gp_as.extract_resource_usage(  decimation_factor =1)
         # look at reasons routes weren't scheduled
-        if verbose:
-            gp_as.extract_schedule_reasoning( routes_flat, verbose = True)
+        extract_reasoning = False
+        if extract_reasoning:
+            gp_as.extract_schedule_reasoning( routes_flat, verbose = verbose)
 
         time_elapsed = t_b-t_a
 

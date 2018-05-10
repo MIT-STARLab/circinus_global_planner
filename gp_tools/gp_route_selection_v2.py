@@ -304,8 +304,16 @@ class GPDataRouteSelection():
 
         self.final_route_records = None
 
+        sat_activity_params = sat_params['activity_params']
+        self.min_act_duration_s = {
+            ObsWindow: sat_activity_params['min_duration_s']['obs'],
+            DlnkWindow: sat_activity_params['min_duration_s']['dlnk'],
+            XlnkWindow: sat_activity_params['min_duration_s']['xlnk']
+        }
+
         # specifies how much data volume from a given obs is allowed to be selected for routing to other satellites. Want this to be greater than one so that routes account for more than just the exact amount of the obs dv, so that there's more choice in routes to ground 
         self.routable_obs_dv_multiplier = 8
+
 
 
     @staticmethod
@@ -317,11 +325,17 @@ class GPDataRouteSelection():
         for sat_indx in  range (num_sats):
             for xsat_indx in  range ( num_sats):
                 for wind in xlnk_winds[sat_indx][xsat_indx]:
+                    if wind.duration < self.min_act_duration_s[type(wind)]:
+                        continue
+
                     min_end = min(end_dt_by_sat_indx[sat_indx],end_dt_by_sat_indx[xsat_indx])
                     if  wind.start > start  and  wind.end  < min_end:
                         xlink_winds_flat_filtered[sat_indx][xsat_indx]. append ( wind)
 
             for wind in dlnk_winds_flat[sat_indx]:
+                if wind.duration < self.min_act_duration_s[type(wind)]:
+                    continue
+                        
                 if  wind.start > start  and  wind.end  < end_dt_by_sat_indx[sat_indx]:
                     dlink_winds_flat_filtered[sat_indx]. append ( wind)
                 # Consider case where the start overlaps with the window, but the center of the window is past the start so we can still get some data volume from the window.  we do this to allow down links that are overlapping with an observation to be considered for that observation -  in practice it turns out to be a large sacrifice to not allow such dumplings to execute ( dictation put dumplings instead of down links, but I'm just gonna leave that there :D WUBBA LUBBA DUB DUB)
