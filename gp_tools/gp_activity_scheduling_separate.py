@@ -508,17 +508,12 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         model.c3c =pe.Constraint ( model.dmr_ids,  rule=c3c_rule)
 
 
-        # keep track of this, so we know to warn user about default transition time usage
-        #  note: this is not a parameter! it's merely helpful for reporting warnings
-        used_default_transition_time = False
-
         #  intra-satellite activity overlap constraints [4],[5],[5b]
         #  well, 5B is activity minimum time duration
         model.c4_5  = pe.ConstraintList() # this now contains all of the activity overlap constraints
         model.c5b  = pe.ConstraintList()
         # pass the model objects getter function so it can be called in place
-        (used_default_transition_time_temp,
-            self.c5b_binding_exprs_by_act,
+        (self.c5b_binding_exprs_by_act,
             self.c4_5_binding_exprs_by_act) =  self.gen_intra_sat_act_overlap_constraints(
                 model.c4_5,
                 model.c5b,
@@ -526,22 +521,14 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                 self.get_act_model_objs,
                 constraint_violation_model_objs
             )
-        used_default_transition_time &= used_default_transition_time_temp
 
         # inter-satellite downlink overlap constraints [9],[10]
         model.c9_10  = pe.ConstraintList()
-        (used_default_transition_time_temp,
-            self.c9_10_binding_exprs_by_act) = self.gen_inter_sat_act_overlap_constraints(
-                model.c9_10,sats_dlnks,
-                self.get_act_model_objs,
-                constraint_violation_model_objs
-            )
-        used_default_transition_time &= used_default_transition_time_temp
-
-        if verbose:
-            if used_default_transition_time:
-                print('\nWarning: used default transition time for inter- or intra- satellite activity timing constraints\n')
-
+        self.c9_10_binding_exprs_by_act = self.gen_inter_sat_act_overlap_constraints(
+            model.c9_10,sats_dlnks,
+            self.get_act_model_objs,
+            constraint_violation_model_objs
+        )
 
 
         #  energy constraints [6]
@@ -573,7 +560,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                             #  if this is a "standard activity" that we can choose to perform or not
                             if type(act) in self.standard_activities:
                                 act_windid = all_act_windids_by_obj[act]
-                                act_code = act.get_code(sat_indx) if type(act) == XlnkWindow else act.get_code()
+                                act_code = act.get_code(sat_indx)
                                 activity_delta_e += (
                                     model.par_sats_edot_by_mode[sat_indx][act_code] 
                                     * model.var_activity_utilization[act_windid]

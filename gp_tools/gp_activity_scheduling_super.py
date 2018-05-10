@@ -80,7 +80,7 @@ class GPActivityScheduling():
         self.power_params = sat_params['power_params_sorted']
         self.data_storage_params = sat_params['data_storage_params_sorted']
         self.initial_state = sat_params['initial_state_sorted']
-        sat_activity_params = sat_params['activity_params']
+        self.sat_activity_params = sat_params['activity_params']
 
 
         self.sats_dmin_Mb = [1000*ds_params['data_storage_Gbit']['d_min'][ds_params['storage_option']] for ds_params in self.data_storage_params]
@@ -105,15 +105,10 @@ class GPActivityScheduling():
             self.sats_emin_Wh.append (sat_batt_storage['e_min'])
             self.sats_emax_Wh.append (sat_batt_storage['e_max'])
 
-        self.act_transition_time_map = {
-            ('inter-sat',DlnkWindow,DlnkWindow): sat_activity_params['transition_time_s']['inter-sat']['dlnk-dlnk'],
-            "default":  sat_activity_params['transition_time_s']['default']
-        }
-
         self.min_act_duration_s = {
-            ObsWindow: sat_activity_params['min_duration_s']['obs'],
-            DlnkWindow: sat_activity_params['min_duration_s']['dlnk'],
-            XlnkWindow: sat_activity_params['min_duration_s']['xlnk']
+            ObsWindow: self.sat_activity_params['min_duration_s']['obs'],
+            DlnkWindow: self.sat_activity_params['min_duration_s']['dlnk'],
+            XlnkWindow: self.sat_activity_params['min_duration_s']['xlnk']
         }
 
         # this is now less useful than I thought
@@ -193,10 +188,6 @@ class GPActivityScheduling():
 
     def gen_intra_sat_act_overlap_constraints(self,c_overlap,c_duration,sats_acts,act_model_objs_getter,constraint_violation_model_objs):
 
-        # keep track of this, so we know to warn user about default transition time usage
-        #  note: this is not a parameter! it's merely helpful for reporting warnings
-        used_default_transition_time = False
-
         intra_sat_act_constr_violation_acts_list = constraint_violation_model_objs['intra_sat_act_constr_violation_acts_list']
         var_intra_sat_act_constr_violations = constraint_violation_model_objs['var_intra_sat_act_constr_violations']
         intra_sat_act_constr_bounds = constraint_violation_model_objs['intra_sat_act_constr_bounds']
@@ -223,12 +214,7 @@ class GPActivityScheduling():
                     assert(act2.center >= act1.center)
 
                     # get the transition time requirement between these activities
-                    try:
-                        transition_time_req = self.act_transition_time_map[("intra-sat",type(act1),type(act2))]
-                    # if not explicitly specified, go with default transition time requirement
-                    except KeyError:
-                        used_default_transition_time = True
-                        transition_time_req = self.act_transition_time_map["default"]
+                    transition_time_req = io_tools.get_transition_time_req(act1,act2,sat_indx,sat_indx,self.sat_activity_params)
 
                     # if there is enough transition time between the two activities, no constraint needs to be added
                     #  note that we are okay even if for some reason Act 2 starts before Act 1 ends, because time deltas return negative total seconds as well
@@ -258,14 +244,10 @@ class GPActivityScheduling():
                             min_var_intra_sat_act_constr_violation_list.append(min_constr_violation)
                             intra_sat_act_constr_violation_acts_list.append((act1,act2))
 
-        return used_default_transition_time,binding_expr_duration_by_act,binding_expr_overlap_by_act
+        return binding_expr_duration_by_act,binding_expr_overlap_by_act
 
 
     def gen_inter_sat_act_overlap_constraints(self,c_overlap,sats_dlnks,act_model_objs_getter,constraint_violation_model_objs):
-
-        # keep track of this, so we know to warn user about default transition time usage
-        #  note: this is not a parameter! it's merely helpful for reporting warnings
-        used_default_transition_time = False
 
         inter_sat_act_constr_violation_acts_list = constraint_violation_model_objs['inter_sat_act_constr_violation_acts_list']
         var_inter_sat_act_constr_violations = constraint_violation_model_objs['var_inter_sat_act_constr_violations']
@@ -300,14 +282,8 @@ class GPActivityScheduling():
                         if (act2.center - act1.center).total_seconds() < 0:
                             continue
 
-
                         # get the transition time requirement between these activities
-                        try:
-                            transition_time_req = self.act_transition_time_map[("inter-sat",DlnkWindow,DlnkWindow)]
-                        # if not explicitly specified, go with default transition time requirement
-                        except KeyError:
-                            used_default_transition_time = True
-                            transition_time_req = self.act_transition_time_map["default"]
+                        transition_time_req = io_tools.get_transition_time_req(act1,act2,sat_indx,other_sat_indx,self.sat_activity_params)                   
 
                         # if there is enough transition time between the two activities, no constraint needs to be added
                         #  note that we are okay even if for some reason Act 2 starts before Act 1 ends, because time deltas return negative total seconds as well
@@ -340,7 +316,7 @@ class GPActivityScheduling():
                                 min_var_inter_sat_act_constr_violation_list.append(min_constr_violation)
                                 inter_sat_act_constr_violation_acts_list.append((act1,act2))
 
-        return used_default_transition_time,binding_expr_overlap_by_act
+        return binding_expr_overlap_by_act
 
     def solve(self):
 
