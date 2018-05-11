@@ -284,18 +284,18 @@ class GlobalPlannerRunner:
 
 
         gp_met = GPMetrics(self.params)
-        # t_a = time.time()
         # note: the method used below has proved to be quite slow, and there's probably a more efficient way to go about downselecting routes. todo: that
         print_verbose('Assess route overlap pre RS step 2',verbose)
         overlap_cnt_by_route,stats_rs2_pre = gp_met.assess_route_overlap( routes_by_obs,verbose=verbose)
-        # t_b = time.time()
-        # time_elapsed = t_b-t_a
-        # print_verbose('time_elapsed',verbose)
         # print_verbose(time_elapsed,verbose)
 
         gp_rs = gprsv2.GPDataRouteSelection ( self.params)
 
+        t_a = time.time()
         selected_rts_by_obs = gp_rs.run_step2(routes_by_obs,overlap_cnt_by_route)
+        t_b = time.time()
+        time_elapsed = t_b-t_a
+        print_verbose('RS step2 time_elapsed %f'%(time_elapsed),verbose)
 
         print_verbose('Assess route overlap post RS step 2',verbose)
         overlap_cnt_by_route,stats_rs2_post = gp_met.assess_route_overlap( selected_rts_by_obs,verbose=verbose)
@@ -363,9 +363,10 @@ class GlobalPlannerRunner:
                 print_verbose(np.max(route_times_s),verbose)
                 print_verbose('np.std(route_times_s)',verbose)
                 print_verbose(np.std(route_times_s),verbose)
-                passthru = False
+                passthru = True
                 # passthru is what you use if you just want to feed ALL the data routes from S1 to activity scheduling
                 if passthru:
+                    stats_rs2_pre = stats_rs2_post = []
                     sel_routes_by_obs = {obs:[DataMultiRoute(None,None,data_routes=[dr],ro_ID=dr.ID) for dr in rts] for obs,rts in routes_by_obs.items()}
                 else:
                     # run step 2. todo:  move this elsewhere

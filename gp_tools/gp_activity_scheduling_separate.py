@@ -20,6 +20,10 @@ from circinus_tools.scheduling.custom_window import   ObsWindow,  DlnkWindow, Xl
 from circinus_tools.scheduling.schedule_objects import Dancecard
 from circinus_tools.scheduling.routing_objects import DataMultiRoute
 
+def print_verbose(string,verbose=False):
+    if verbose:
+        print(string)
+
 class GPActivitySchedulingSeparate(GPActivityScheduling):
     """docstring for GP activity scheduling"""
     
@@ -478,6 +482,8 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         #  Make constraints
         ##############################
 
+        print_verbose('make constraints',verbose)
+
         # TODO: renumber  these with the final numbering
 
         # note that the observations show up within model.act_windids as well, so we also constraint route scheduled DV by the real available DV from each observation
@@ -507,6 +513,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             return model.var_dmr_indic[p] >=  model.var_dmr_utilization[p]
         model.c3c =pe.Constraint ( model.dmr_ids,  rule=c3c_rule)
 
+        print_verbose('make overlap constraints',verbose)
 
         #  intra-satellite activity overlap constraints [4],[5],[5b]
         #  well, 5B is activity minimum time duration
@@ -530,6 +537,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             constraint_violation_model_objs
         )
 
+        print_verbose('make energy, data constraints',verbose)
 
         #  energy constraints [6]
         # todo: maybe this ought to be moved to the super class, but i don't anticipate this code changing much any time soon, so i'll punt that.
@@ -644,10 +652,10 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         model.c11  = pe.ConstraintList()
         for p in model.dmr_ids:
             if p in fixed_routes_ids:
-                # less than constraint because equality should be achivable (if we're only using existing routes that have all previously been scheduled and deconflicted together - which is the case for current version of GP), but want to allow route to lessen its utilization if a more valuable route is available. 
+                # less than constraint because equality should be achievable (if we're only using existing routes that have all previously been scheduled and deconflicted together - which is the case for current version of GP), but want to allow route to lessen its utilization if a more valuable route is available. 
                 model.c11.add( model.var_dmr_utilization[p] <= utilization_by_existing_route_id[p]) 
             
-
+        print_verbose('make obj',verbose)
 
 
         # from circinus_tools import debug_tools

@@ -336,8 +336,13 @@ class GPActivityScheduling():
 
         elif self.solver_name == 'cplex':
             solver.options['timelimit'] = self.solver_params['max_runtime_s']
-            solver.options['mip_tolerances_mipgap'] = self.solver_params['optimality_gap']
-            solver.options['mip_tolerances_integrality'] = self.solver_params['integer_feasibility_tolerance']
+
+            # these params don't seem to work remotely...
+            if not self.solver_params['run_remotely']:
+                solver.options['mip_tolerances_mipgap'] = self.solver_params['optimality_gap']
+                solver.options['mip_tolerances_integrality'] = self.solver_params['integer_feasibility_tolerance']
+            else:
+                print('AS solve() - warning, not setting params mip_tolerances_mipgap and mip_tolerances_integrality')
 
 
         # if we're running things remotely, then we will use the NEOS server (https://neos-server.org/neos/)

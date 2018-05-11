@@ -778,10 +778,10 @@ class GPDataRouteSelection():
             sel_rts,dmr_uid,drs_taken = self.get_from_sorted(rts_by_obs_sorted_lat[obs],self.step2_params['num_rts_sel_per_obs_lat'],self.min_dmr_candidate_dv,dmr_uid,drs_taken,dv_avail_by_wind,check_availability=False)
             selected_dmrs_by_obs[obs] += sel_rts
 
-
             # note: Don't need to worry about a data route appearing multiple times across the selected routes returned from get_from_sorted, because each data route map be only used once (enforced with drs_taken)
             sel_rts,dmr_uid,drs_taken = self.get_from_sorted(rts_by_obs_sorted_overlap[obs],self.step2_params['num_rts_sel_per_obs_overlap'],self.min_dmr_candidate_dv,dmr_uid,drs_taken,dv_avail_by_wind,check_availability=True)
             selected_dmrs_by_obs[obs] += sel_rts
+
             
         return selected_dmrs_by_obs
 
