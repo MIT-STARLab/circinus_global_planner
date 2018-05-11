@@ -345,8 +345,8 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
             return
 
         print_verbose('num obs winds filt: %d'%(sum(len(winds) for winds in obs_winds_filt)),verbose)
-        print_verbose('num obs winds filt: %d'%(sum(len(winds) for winds in dlnk_winds_filt)),verbose)
-        print_verbose('num obs winds filt: %d'%(sum(len(winds) for winds in xlnk_winds_filt)),verbose)
+        print_verbose('num dlnk winds filt: %d'%(sum(len(winds) for winds in dlnk_winds_filt)),verbose)
+        print_verbose('num xlnk winds filt: %d'%(sum(len(winds) for winds in xlnk_winds_filt)),verbose)
 
         ##############################
         #  Make indices/ subscripts

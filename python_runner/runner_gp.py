@@ -357,7 +357,7 @@ class GlobalPlannerRunner:
                 sel_routes_by_obs,ecl_winds,window_uid,stats_rs2_pre,stats_rs2_post = pickle_helper.unpickle_rtsel_s2_stuff(self)
                 pas_a = time.time()
             else:
-                print_verbose('num_routes_calced',verbose)
+                print_verbose('num_obs_calced',verbose)
                 print_verbose(len(route_times_s),verbose)
                 print_verbose('np.mean(route_times_s)',verbose)
                 print_verbose(np.mean(route_times_s),verbose)

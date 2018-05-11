@@ -330,6 +330,7 @@ class GPActivityScheduling():
             solver.options['TimeLimit'] = self.solver_params['max_runtime_s']
             solver.options['MIPGap'] = self.solver_params['optimality_gap']
             solver.options['IntFeasTol'] = self.solver_params['integer_feasibility_tolerance']
+            # solver.options['IterationLimit'] = 100  # limit on simplex iterations (ends Gurobi solving at this point - not great)
             # other options...
             # solver.options['Cuts'] = 0
             # solver.options['MIPFocus'] = 1 #for finding feasible solutions quickly

@@ -266,6 +266,8 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         routes_filt = self.filter_routes(new_routes,existing_routes)
         routes_by_dmr_id = {dmr.ID:dmr for dmr in routes_filt}
 
+        print_verbose('considering %d routes'%(len(routes_filt)))
+
         self.routes_filt = routes_filt
         fixed_routes_ids = {dmr.ID for dmr in existing_routes}
         self.utilization_by_existing_route_id = utilization_by_existing_route_id
