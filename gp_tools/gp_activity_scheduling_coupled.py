@@ -89,7 +89,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
         for sat_indx in  range (num_sats):
             for wind in obs_winds[sat_indx]:
-                if  wind.start >= self.planning_start_dt  and  wind.end  <= self.planning_end_obs_xlnk_dt:
+                if  wind.start >= self.planning_start_dt  and  wind.end  <= self.planning_end_obs_dt:
                     obs_winds_filtered[sat_indx]. append ( wind)
 
             for wind in dlnk_winds_flat[sat_indx]:
@@ -97,7 +97,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                     dlink_winds_flat_filtered[sat_indx]. append ( wind)
 
             for wind in xlnk_winds_flat[sat_indx]:
-                if  wind.start >= self.planning_start_dt  and  wind.end  <= self.planning_end_obs_xlnk_dt:
+                if  wind.start >= self.planning_start_dt  and  wind.end  <= self.planning_end_xlnk_dt:
                     xlink_winds_flat_filtered[sat_indx]. append ( wind)
 
         return obs_winds_filtered, dlink_winds_flat_filtered, xlink_winds_flat_filtered
@@ -416,7 +416,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
             # can possibly execute at any given time slice delta T. 
             # this is for constructing energy storage constraints
             # using resource_delta_t_s because this dancecard is solely for use in constructing resource constraints
-            # note that these dancecards will baloon in size pretty quickly as the planning_end_dt increases. However most of the complexity they introduce is before planning_end_obs_xlnk_dt because that's the horizon where obs,xlnk actitivities are included. After that there should only be sparse downlinks
+            # note that these dancecards will baloon in size pretty quickly as the planning_end_dt increases. However most of the complexity they introduce is before planning_end_obs,xlnk_dt because that's the horizon where obs,xlnk actitivities are included. After that there should only be sparse downlinks
             es_act_dancecards = [Dancecard(self.planning_start_dt,self.planning_end_dt,self.resource_delta_t_s,item_init=None,mode='timestep') for sat_indx in range (self.num_sats)]
             
             for sat_indx in range (self.num_sats): 

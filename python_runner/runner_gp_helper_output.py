@@ -9,7 +9,7 @@ def calc_activity_scheduling_results ( gp_runner_inst,obs_winds,dlnk_winds_flat,
 
     def in_planning_window(wind):
         if type(wind) == ObsWindow:
-            return wind.start >= gp_runner_inst.gp_inst_planning_params['planning_start_dt'] and wind.end <= gp_runner_inst.gp_inst_planning_params['planning_end_obs_xlnk_dt']
+            return wind.start >= gp_runner_inst.gp_inst_planning_params['planning_start_dt'] and wind.end <= gp_runner_inst.gp_inst_planning_params['planning_end_obs_dt']
         if type(wind) == DlnkWindow:
             return wind.start >= gp_runner_inst.gp_inst_planning_params['planning_start_dt'] and wind.end <= gp_runner_inst.gp_inst_planning_params['planning_end_dlnk_dt']
 

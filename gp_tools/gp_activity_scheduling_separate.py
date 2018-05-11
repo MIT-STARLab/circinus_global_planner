@@ -318,7 +318,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             # can possibly execute at any given time slice delta T. 
             # this is for constructing energy storage constraints
             # using resource_delta_t_s because this dancecard is solely for use in constructing resource constraints
-            # note that these dancecards will baloon in size pretty quickly as the planning_end_dt increases. However most of the complexity they introduce is before planning_end_obs_xlnk_dt because that's the horizon where obs,xlnk actitivities are included. After that there should only be sparse downlinks
+            # note that these dancecards will baloon in size pretty quickly as the planning_end_dt increases. However most of the complexity they introduce is before planning_end_obs,xlnk_dt because that's the horizon where obs,xlnk actitivities are included. After that there should only be sparse downlinks
             es_act_dancecards = [Dancecard(self.planning_start_dt,self.planning_end_dt,self.resource_delta_t_s,item_init=None,mode='timestep') for sat_indx in range (self.num_sats)]
             
             for sat_indx in range (self.num_sats): 

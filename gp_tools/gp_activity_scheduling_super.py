@@ -65,7 +65,8 @@ class GPActivityScheduling():
         self.planning_start_dt  = gp_inst_planning_params['planning_start_dt']
         # planning_fixed_end is the time before which any pre-existing data routes will be considered "already scheduled for good", and their utilization will be fixed, unchangeable. This reckoning is based on the beginning of the route (start of the obs window) - if the start of the obs window falls before planning_fixed_end, then the route will be considered fixed. Also, no activity windows from new routes may be scheduled before this time.
         self.planning_fixed_end_dt  = gp_inst_planning_params['planning_fixed_end_dt']
-        self.planning_end_obs_xlnk_dt = gp_inst_planning_params['planning_end_obs_xlnk_dt']
+        self.planning_end_obs_dt = gp_inst_planning_params['planning_end_obs_dt']
+        self.planning_end_xlnk_dt = gp_inst_planning_params['planning_end_xlnk_dt']
         self.planning_end_dlnk_dt  = gp_inst_planning_params['planning_end_dlnk_dt']
         self.planning_end_dt  = self.planning_end_dlnk_dt
 

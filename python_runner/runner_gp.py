@@ -80,8 +80,10 @@ class GlobalPlannerRunner:
         # it's no good if the planning window (the activities to select) goes outside of the scenario window (the possible activities, eclipse windows)
         if self.gp_inst_planning_params['planning_start_dt'] < self.scenario_params['start_utc_dt']:
             raise RuntimeError("GP instance start time (%s) is less than scenario start time (%s)"%(self.gp_inst_planning_params['planning_start_dt'],self.scenario_params['start_utc']))
-        if self.gp_inst_planning_params['planning_end_obs_xlnk_dt'] > self.scenario_params['end_utc_dt']:
-            raise RuntimeError("GP instance obs,xlnk end time (%s) is greater than scenario end time (%s)"%(self.gp_inst_planning_params['planning_end_obs_xlnk_dt'],self.scenario_params['end_utc']))
+        if self.gp_inst_planning_params['planning_end_obs_dt'] > self.scenario_params['end_utc_dt']:
+            raise RuntimeError("GP instance obs,xlnk end time (%s) is greater than scenario end time (%s)"%(self.gp_inst_planning_params['planning_end_obs_dt'],self.scenario_params['end_utc']))
+        if self.gp_inst_planning_params['planning_end_xlnk_dt'] > self.scenario_params['end_utc_dt']:
+            raise RuntimeError("GP instance obs,xlnk end time (%s) is greater than scenario end time (%s)"%(self.gp_inst_planning_params['planning_end_xlnk_dt'],self.scenario_params['end_utc']))
         if self.gp_inst_planning_params['planning_end_dlnk_dt'] > self.scenario_params['end_utc_dt']:
             raise RuntimeError("GP instance dlnk end time (%s) is greater than scenario end time (%s)"%(self.gp_inst_planning_params['planning_end_dlnk_dt'],self.scenario_params['end_utc']))
 
@@ -172,7 +174,7 @@ class GlobalPlannerRunner:
             for sat_indx in range( self.sat_params['num_sats']):
                 for sat_obs_index,obs_wind in enumerate(obs_winds[sat_indx]):
                     # filter for observations that come between end of fixed planning time and end of planning window.  the fixed planning time is the time up to which we are saying no new activity windows are allowed to be scheduled.  before that only existing routes may have activity window scheduled.
-                    if obs_wind.start >= self.gp_inst_planning_params['planning_fixed_end_dt'] and obs_wind.end <= self.gp_inst_planning_params['planning_end_obs_xlnk_dt']:
+                    if obs_wind.start >= self.gp_inst_planning_params['planning_fixed_end_dt'] and obs_wind.end <= self.gp_inst_planning_params['planning_end_obs_dt']:
                         obs_winds_filt[sat_indx].append(obs_wind)
             return obs_winds_filt
 
@@ -572,20 +574,22 @@ class PipelineRunner:
             raise NotImplementedError
 
         #  check that it's the right version
-        if not gp_general_params['version'] == "0.3":
+        if not gp_general_params['version'] == "0.4":
             raise NotImplementedError
 
         #  check that it's the right version
-        if gp_instance_params['version'] == "0.4":
+        if gp_instance_params['version'] == "0.5":
 
             gp_instance_params['planning_params']['planning_start_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_start'])
             gp_instance_params['planning_params']['planning_fixed_end_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_fixed_end'])
-            gp_instance_params['planning_params']['planning_end_obs_xlnk_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_end_obs_xlnk'])
+            gp_instance_params['planning_params']['planning_end_obs_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_end_obs'])
+            gp_instance_params['planning_params']['planning_end_xlnk_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_end_xlnk'])
             gp_instance_params['planning_params']['planning_end_dlnk_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_end_dlnk'])
 
             dlnk_end = gp_instance_params['planning_params']['planning_end_dlnk_dt']
-            obs_xlnk_end = gp_instance_params['planning_params']['planning_end_obs_xlnk_dt']
-            if not dlnk_end >= obs_xlnk_end:
+            obs_end = gp_instance_params['planning_params']['planning_end_obs_dt']
+            xlnk_end = gp_instance_params['planning_params']['planning_end_xlnk_dt']
+            if not (dlnk_end >= obs_end and dlnk_end >= xlnk_end):
                 raise RuntimeWarning('Planning window end for dlnk (%s) should be set equal or later than end for observations, crosslinks (%s)'%(dlnk_end,obs_xlnk_end))
         else:
             raise NotImplementedError

@@ -278,8 +278,9 @@ class GPDataRouteSelection():
         self.num_sats=sat_params['num_sats']
         #  the end of the route selection search window for a given obs will either be the time input from the instance params file, or the end time of the obs plus the filter window length
         self.planning_start_dt  = gp_inst_planning_params['planning_start_dt']
-        self.planning_end_obs_xlnk_dt  = gp_inst_planning_params['planning_end_obs_xlnk_dt']
-        self.planning_end_dlnk_dt  = gp_inst_planning_params['planning_end_obs_xlnk_dt']
+        self.planning_end_obs_dt  = gp_inst_planning_params['planning_end_obs_dt']
+        self.planning_end_xlnk_dt  = gp_inst_planning_params['planning_end_xlnk_dt']
+        self.planning_end_dlnk_dt  = gp_inst_planning_params['planning_end_dlnk_dt']
 
         # get the smallest time step used in orbit link. this is the smallest time step we need to worry about in data route selection
         self.act_timestep = min(link_params['xlnk_max_len_s'],link_params['dlnk_max_len_s'])
@@ -297,8 +298,8 @@ class GPDataRouteSelection():
         
         #  the "effectively zero" number.
         self.dv_epsilon = as_params['dv_epsilon_Mb']
-        self.wind_filter_duration =  timedelta (seconds =rs_general_params['wind_filter_duration_s'])
-        self.wind_filter_duration_obs_sat =  timedelta (seconds =rs_general_params['wind_filter_duration_obs_sat_s'])
+        self.wind_filter_duration_xlnk =  timedelta (seconds =rs_general_params['wind_filter_duration_xlnk_s'])
+        self.wind_filter_duration_dlnk =  timedelta (seconds =rs_general_params['wind_filter_duration_dlnk_s'])
 
         self.latency_params = gp_params['gp_general_params']['other_params']['latency_calculation']
 
@@ -316,7 +317,7 @@ class GPDataRouteSelection():
 
 
 
-    def filter_windows(self,dlnk_winds_flat,xlnk_winds,num_sats,start,end_dt_by_sat_indx,trim_windows_at_start=False):
+    def filter_windows(self,dlnk_winds_flat,xlnk_winds,num_sats,start,dlnk_end_dt,xlnk_end_dt,trim_windows_at_start=False):
 
         dlink_winds_flat_filtered = [[] for sat_indx in  range (num_sats)]
         xlink_winds_flat_filtered = [[[] for xsat_indx in  range ( num_sats)] for sat_indx in  range (num_sats)]
@@ -327,15 +328,15 @@ class GPDataRouteSelection():
                     if wind.duration.total_seconds() < self.min_act_duration_s[type(wind)]:
                         continue
 
-                    min_end = min(end_dt_by_sat_indx[sat_indx],end_dt_by_sat_indx[xsat_indx])
-                    if  wind.start > start  and  wind.end  < min_end:
+                    # min_end = min(end_dt_by_sat_indx[sat_indx],end_dt_by_sat_indx[xsat_indx])
+                    if  wind.start > start  and  wind.end  < xlnk_end_dt:
                         xlink_winds_flat_filtered[sat_indx][xsat_indx]. append ( wind)
 
             for wind in dlnk_winds_flat[sat_indx]:
                 if wind.duration.total_seconds() < self.min_act_duration_s[type(wind)]:
                     continue
 
-                if  wind.start > start  and  wind.end  < end_dt_by_sat_indx[sat_indx]:
+                if  wind.start > start  and  wind.end  < dlnk_end_dt:
                     dlink_winds_flat_filtered[sat_indx]. append ( wind)
                 # Consider case where the start overlaps with the window, but the center of the window is past the start so we can still get some data volume from the window.  we do this to allow down links that are overlapping with an observation to be considered for that observation -  in practice it turns out to be a large sacrifice to not allow such dumplings to execute ( dictation put dumplings instead of down links, but I'm just gonna leave that there :D WUBBA LUBBA DUB DUB)
                 elif trim_windows_at_start and (wind.start < start and wind.center > start):
@@ -356,7 +357,7 @@ class GPDataRouteSelection():
         dr_uid = 0
 
         # if the obs window ends later than the time prescribed, then we can't find any routes!
-        if obs_wind.end > self.planning_end_obs_xlnk_dt:
+        if obs_wind.end > self.planning_end_obs_dt:
             return []
         if obs_wind.start < self.planning_start_dt:
             return []
@@ -364,29 +365,30 @@ class GPDataRouteSelection():
         # print("ids: dlnk_winds_flat %d xlnk_winds %d"%(id(dlnk_winds_flat),id(xlnk_winds)))
 
         start_dt = obs_wind.end
-        # planning_end_dlnk_dt should be > planning_end_obs_xlnk_dt, to allow the observing sat to reach far into the future for a dlnk to counter the case where it can only get a small amount of DV offboard through xlnks. It might be a while till it has a dlnk though.
-        end_dt = min(self.planning_end_obs_xlnk_dt, start_dt + self.wind_filter_duration)
-        end_obs_sat_dt = min(self.planning_end_dlnk_dt, start_dt + self.wind_filter_duration_obs_sat)
+        # planning_end_dlnk_dt should be > planning_end_obs,xlnk_dt, to allow the sats to reach into the future for dlnk "backhaul" - high latency, bulk DV delivery
+        dlnk_end_dt = min(self.planning_end_dlnk_dt, start_dt + self.wind_filter_duration_dlnk)
+        xlnk_end_dt = min(self.planning_end_xlnk_dt, start_dt + self.wind_filter_duration_xlnk)
 
         # crazy looking line, but it's easy... dictionary of end times by sat_indx - end_dt if not observing sat, else end_obs_sat_dt
-        end_dt_by_sat_indx = {sat_indx: end_dt if sat_indx != obs_wind.sat_indx else end_obs_sat_dt for sat_indx in range (self.num_sats)}
+        # end_dt_by_sat_indx = {sat_indx: end_dt if sat_indx != obs_wind.sat_indx else end_obs_sat_dt for sat_indx in range (self.num_sats)}
         
-        dlnk_winds_flat_filt,xlnk_winds_filt =  self.filter_windows (dlnk_winds_flat,xlnk_winds, self.num_sats, obs_wind.end, end_dt_by_sat_indx , trim_windows_at_start=True)
+
+        dlnk_winds_flat_filt,xlnk_winds_filt =  self.filter_windows (dlnk_winds_flat,xlnk_winds, self.num_sats, obs_wind.end, dlnk_end_dt, xlnk_end_dt , trim_windows_at_start=True)
 
         if verbose:
             print ('Running route selection for obs: %s'%(obs_wind))
-            print ('from %s to %s'%(start_dt, end_dt))
+            print ('from %s to %s'%(start_dt, dlnk_end_dt))
 
 
         # construct a set of dance cards for every satellite, 
         # each of which keeps track of all of the activities of satellite 
         # can possibly execute at any given time slice delta T. 
         #  start the dance card from the end of the observation window, because we are only selecting routes after the observation
-        act_dancecards = [Dancecard(start_dt,end_dt_by_sat_indx[sat_indx],self.act_timestep,mode='timestep') for sat_indx in range (self.num_sats)]
+        act_dancecards = [Dancecard(start_dt,dlnk_end_dt,self.act_timestep,mode='timestep') for sat_indx in range (self.num_sats)]
         
         #  make another set of dance cards that keep track of the route record data structures at a given time point
         #  note that even though these dance cards are in different modes, they share the same time points and time steps (both values and indices)
-        rr_dancecards = [Dancecard(start_dt,end_dt_by_sat_indx[sat_indx],self.act_timestep,item_init=None,mode='timepoint') for sat_indx in range (self.num_sats)]
+        rr_dancecards = [Dancecard(start_dt,dlnk_end_dt,self.act_timestep,item_init=None,mode='timepoint') for sat_indx in range (self.num_sats)]
 
         for sat_indx in range (self.num_sats): 
             act_dancecards[sat_indx].add_winds_to_dancecard(dlnk_winds_flat_filt[sat_indx])
@@ -455,7 +457,7 @@ class GPDataRouteSelection():
 
             for sat_indx in range (self.num_sats):
                 #  if we reach the end of time for this sat index, go to next satellite (i.e. were only looking for down links from observing sat at this point)
-                if tp_dt > end_dt_by_sat_indx[sat_indx]:
+                if tp_dt > dlnk_end_dt:
                     continue
 
                 #  get the activities that were active during the time step immediately preceding time point

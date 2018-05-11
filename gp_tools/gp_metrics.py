@@ -38,7 +38,7 @@ class GPMetrics():
         # these are used for AoI calculation
         # todo: update these times once receding horizon working...
         self.met_obs_start_dt  = gp_inst_planning_params['planning_start_dt']
-        self.met_obs_end_dt  = gp_inst_planning_params['planning_end_obs_xlnk_dt']
+        self.met_obs_end_dt  = gp_inst_planning_params['planning_end_obs_dt']
         self.num_sats=sat_params['num_sats']
         self.num_targ = obs_params['num_targets']
         self.all_targ_IDs = [targ['id'] for targ in obs_params['targets']]

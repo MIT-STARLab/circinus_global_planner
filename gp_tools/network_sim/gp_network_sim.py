@@ -29,7 +29,8 @@ class GPNetSim():
         gp_general_other_params = gp_params['gp_general_params']['other_params']
 
         self.planning_start_dt  = gp_inst_planning_params['planning_start_dt']
-        self.planning_end_obs_xlnk_dt = gp_inst_planning_params['planning_end_obs_xlnk_dt']
+        self.planning_end_obs_dt = gp_inst_planning_params['planning_end_obs_dt']
+        self.planning_end_xlnk_dt = gp_inst_planning_params['planning_end_xlnk_dt']
         self.planning_end_dlnk_dt  = gp_inst_planning_params['planning_end_dlnk_dt']
         self.planning_end_dt  = self.planning_end_dlnk_dt
         self.resource_delta_t_s  = as_params['resource_delta_t_s']
