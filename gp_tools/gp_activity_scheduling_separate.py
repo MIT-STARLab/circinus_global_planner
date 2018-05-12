@@ -14,11 +14,12 @@ from pyomo import opt  as po
 import numpy as np
 
 from circinus_tools  import time_tools as tt
-from .gp_activity_scheduling_super import  GPActivityScheduling
 from circinus_tools  import  constants as const
 from circinus_tools.scheduling.custom_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
 from circinus_tools.scheduling.schedule_objects import Dancecard
 from circinus_tools.scheduling.routing_objects import DataMultiRoute
+from .gp_activity_scheduling_super import  GPActivityScheduling
+from . import gp_general_tools as gp_gen
 
 def print_verbose(string,verbose=False):
     if verbose:
@@ -200,11 +201,11 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         routes_filt = []
 
         def process_dmr(dmr,start_filt_dt,filter_opt):
-            dmr_start = dmr.get_obs().start
+            dmr_start = dmr.get_dlnk().start
             dmr_end = dmr.get_dlnk().end
 
             # check if all act windows in route are completely within the planning window. Pass if not.
-            if filter_opt=='totally_within' and (dmr_start < start_filt_dt or dmr_end > self.planning_end_dt):
+            if filter_opt=='totally_within' and not gp_gen.dr_in_planning_window(self,dmr,start_time_override=start_filt_dt): #(dmr_start < start_filt_dt or dmr_end > self.planning_end_dt):
                 pass
             # check if at least one act window in route is partially within the planning window. Pass if not.
             elif filter_opt=='partially_within' and (dmr_end < start_filt_dt or dmr_start > self.planning_end_dt):
@@ -261,6 +262,10 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
         model = pe.ConcreteModel()
         self.model = model
+
+        # verify that each route is unique. If duplicate routes are present, would cause problems in constraints (e.g. a route would require double its actual needed throuput in a given act)
+        assert(len(new_routes) == len(set(new_routes)))
+        assert(len(existing_routes) == len(set(existing_routes)))
 
         # filter the routes to make sure that  none of their activities fall outside the scheduling window
         routes_filt = self.filter_routes(new_routes,existing_routes)
@@ -947,36 +952,38 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                         # note: can't really gain any information from c5b_binding_exprs_by_act
 
                     def get_act_resource_usage(act,model_resource,sat_indx):
-                        tp_indx_center = self.ds_time_getter_dc.get_tp_indx_pre_t(act.center)
+                        tp_indx_center_at_act = self.ds_time_getter_dc.get_tp_indx_pre_t(act.center)
                         return pe.value(model_resource[sat_indx,tp_indx_center])
 
+                    # note that the energy resource usage check below is not very robust, because the effects of energy usage by an activity are not necessarily instantaneous - they can overconstrain the satellite at a later time. Case in point: satellite collects obs data for too long at time t = 10 mins, while in eclipse. It has enough energy to stay above min bound for the whole activity, and a while afterward. But at time t = 20 mins, right before the end of the eclipse, energy goes below lower bound. If we had executed the obs and spent a little less energy at t = 10 mins, we'd be able to stay in the green, but we didn't, so we're hosed. (note this is a hypothetical - the scheduler is only capable of solving the problem if it reduces the obs time and stays within energy constraints.)
 
                     # check if energy storage is too low at an activity
                     estore_too_low_factor = 1.05 # assume if we're within certain % of energy lower bound then the activity is too constrained
                     if type(act) == ObsWindow or type(act) == DlnkWindow:
-                        sat_estore = get_act_resource_usage(act,self.model.var_sats_estore,act.sat_indx)
+                        sat_estore = get_resource_usage_at_act(act,self.model.var_sats_estore,act.sat_indx)
                         if sat_estore < estore_too_low_factor * self.model.par_sats_estore_min[act.sat_indx]:
                             reasons_by_route[dmr].add('g')
                     if type(act) == XlnkWindow:
-                        sat_estore = get_act_resource_usage(act,self.model.var_sats_estore,act.sat_indx)
+                        sat_estore = get_resource_usage_at_act(act,self.model.var_sats_estore,act.sat_indx)
                         if sat_estore < estore_too_low_factor * self.model.par_sats_estore_min[act.sat_indx]:
                             reasons_by_route[dmr].add('g')
-                        xsat_estore = get_act_resource_usage(act,self.model.var_sats_estore,act.xsat_indx)
+                        xsat_estore = get_resource_usage_at_act(act,self.model.var_sats_estore,act.xsat_indx)
                         if xsat_estore < estore_too_low_factor * self.model.par_sats_estore_min[act.xsat_indx]:
                             reasons_by_route[dmr].add('g')
 
+                    # data storage check is robust though, because data storage effects are instananeous, unlinke energy (see above)
 
                     # check if data storage is too high at an activity
                     # if data storage is within the minimum data route data volume requirement of the maximum, then it's too high
                     if type(act) == ObsWindow or type(act) == DlnkWindow:
-                        sat_dstore = get_act_resource_usage(act,self.model.var_sats_dstore,act.sat_indx)
+                        sat_dstore = get_resource_usage_at_act(act,self.model.var_sats_dstore,act.sat_indx)
                         if sat_dstore > self.model.par_sats_dstore_max[act.sat_indx] - self.min_obs_dv_dlnk_req:
                             reasons_by_route[dmr].add('h')
                     if type(act) == XlnkWindow:
-                        sat_dstore = get_act_resource_usage(act,self.model.var_sats_dstore,act.sat_indx)
+                        sat_dstore = get_resource_usage_at_act(act,self.model.var_sats_dstore,act.sat_indx)
                         if sat_dstore > self.model.par_sats_dstore_max[act.sat_indx] - self.min_obs_dv_dlnk_req:
                             reasons_by_route[dmr].add('h')
-                        xsat_dstore = get_act_resource_usage(act,self.model.var_sats_dstore,act.xsat_indx)
+                        xsat_dstore = get_resource_usage_at_act(act,self.model.var_sats_dstore,act.xsat_indx)
                         if xsat_dstore > self.model.par_sats_dstore_max[act.xsat_indx] - self.min_obs_dv_dlnk_req:
                             reasons_by_route[dmr].add('h')
 

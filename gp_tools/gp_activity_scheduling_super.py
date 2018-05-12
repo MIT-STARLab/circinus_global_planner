@@ -38,6 +38,7 @@ class GPActivityScheduling():
         as_params = gp_params['gp_general_params']['activity_scheduling_params']
         gp_inst_planning_params = gp_params['gp_instance_params']['planning_params']
 
+        self.gp_inst_planning_params = gp_inst_planning_params
         self.gp_agent_ID = gp_params['gp_instance_params']['gp_agent_ID']
 
         # records if the formulation model has been constructed successfully

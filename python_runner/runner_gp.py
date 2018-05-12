@@ -33,6 +33,7 @@ from gp_tools.gp_activity_scheduling_separate import GPActivitySchedulingSeparat
 from gp_tools.gp_activity_scheduling_coupled import GPActivitySchedulingCoupled
 from gp_tools.gp_metrics import GPMetrics
 import gp_tools.gp_rs_execution as gp_rs_exec
+import gp_tools.gp_general_tools as gp_gen
 
 import runner_gp_helper_pickle as pickle_helper 
 import runner_gp_helper_other as other_helper
@@ -174,7 +175,8 @@ class GlobalPlannerRunner:
             for sat_indx in range( self.sat_params['num_sats']):
                 for sat_obs_index,obs_wind in enumerate(obs_winds[sat_indx]):
                     # filter for observations that come between end of fixed planning time and end of planning window.  the fixed planning time is the time up to which we are saying no new activity windows are allowed to be scheduled.  before that only existing routes may have activity window scheduled.
-                    if obs_wind.start >= self.gp_inst_planning_params['planning_fixed_end_dt'] and obs_wind.end <= self.gp_inst_planning_params['planning_end_obs_dt']:
+                    # if obs_wind.start >= self.gp_inst_planning_params['planning_fixed_end_dt'] and obs_wind.end <= self.gp_inst_planning_params['planning_end_obs_dt']:
+                    if gp_gen.wind_in_planning_window(self,obs_wind):
                         obs_winds_filt[sat_indx].append(obs_wind)
             return obs_winds_filt
 
@@ -275,26 +277,25 @@ class GlobalPlannerRunner:
 
         return routes_by_obs,all_stats,route_times_s,obs_indx, dr_uid
 
-    
-
-    
 
 
     def run_route_selection_v2_step2(self,routes_by_obs,verbose=False):
+
+        routes_by_obs_filt = gp_gen.filt_routes_by_obs(self,routes_by_obs)
+
         print_verbose('num routes',verbose)
-        print_verbose(sum(len(rts) for rts in routes_by_obs.values()),verbose)
+        print_verbose(sum(len(rts) for rts in routes_by_obs_filt.values()),verbose)
 
 
         gp_met = GPMetrics(self.params)
-        # note: the method used below has proved to be quite slow, and there's probably a more efficient way to go about downselecting routes. todo: that
         print_verbose('Assess route overlap pre RS step 2',verbose)
-        overlap_cnt_by_route,stats_rs2_pre = gp_met.assess_route_overlap( routes_by_obs,verbose=verbose)
+        overlap_cnt_by_route,stats_rs2_pre = gp_met.assess_route_overlap( routes_by_obs_filt,verbose=verbose)
         # print_verbose(time_elapsed,verbose)
 
         gp_rs = gprsv2.GPDataRouteSelection ( self.params)
 
         t_a = time.time()
-        selected_rts_by_obs = gp_rs.run_step2(routes_by_obs,overlap_cnt_by_route)
+        selected_rts_by_obs = gp_rs.run_step2(routes_by_obs_filt,overlap_cnt_by_route)
         t_b = time.time()
         time_elapsed = t_b-t_a
         print_verbose('RS step2 time_elapsed %f'%(time_elapsed),verbose)
@@ -310,6 +311,7 @@ class GlobalPlannerRunner:
         return selected_rts_by_obs,stats_rs2_pre,stats_rs2_post
 
     def run_route_selection(self,obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,window_uid,verbose=False):
+
 
         #################################
         #  route selection step 1
@@ -365,11 +367,12 @@ class GlobalPlannerRunner:
                 print_verbose(np.max(route_times_s),verbose)
                 print_verbose('np.std(route_times_s)',verbose)
                 print_verbose(np.std(route_times_s),verbose)
-                passthru = True
+                passthru = False
                 # passthru is what you use if you just want to feed ALL the data routes from S1 to activity scheduling
                 if passthru:
                     stats_rs2_pre = stats_rs2_post = []
-                    sel_routes_by_obs = {obs:[DataMultiRoute(None,None,data_routes=[dr],ro_ID=dr.ID) for dr in rts] for obs,rts in routes_by_obs.items()}
+                    routes_by_obs_filt = gp_gen.filt_routes_by_obs(self,routes_by_obs)  # may not have been filtered already, if we're loading from a pickle
+                    sel_routes_by_obs = {obs:[DataMultiRoute(None,None,data_routes=[dr],ro_ID=dr.ID) for dr in rts] for obs,rts in routes_by_obs_filt.items()}
                 else:
                     # run step 2. todo:  move this elsewhere
                     sel_routes_by_obs,stats_rs2_pre,stats_rs2_post = self.run_route_selection_v2_step2(routes_by_obs,verbose)

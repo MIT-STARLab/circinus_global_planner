@@ -3,54 +3,55 @@ from copy import deepcopy
 from circinus_tools.scheduling.custom_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
 from gp_tools.gp_metrics import GPMetrics
 from gp_tools.network_sim.gp_network_sim import GPNetSim
+import gp_tools.gp_general_tools as gp_gen
 
 def calc_activity_scheduling_results ( gp_runner_inst,obs_winds,dlnk_winds_flat,rs_routes_by_obs,sched_routes, energy_usage):
     gp_met = GPMetrics(gp_runner_inst.params)
 
-    def in_planning_window(wind):
-        if type(wind) == ObsWindow:
-            return wind.start >= gp_runner_inst.gp_inst_planning_params['planning_start_dt'] and wind.end <= gp_runner_inst.gp_inst_planning_params['planning_end_obs_dt']
-        if type(wind) == DlnkWindow:
-            return wind.start >= gp_runner_inst.gp_inst_planning_params['planning_start_dt'] and wind.end <= gp_runner_inst.gp_inst_planning_params['planning_end_dlnk_dt']
+    rs_routes_by_obs_filt = gp_gen.filt_routes_by_obs(gp_runner_inst,rs_routes_by_obs)
+    sched_routes_filt = gp_gen.filt_routes(gp_runner_inst,sched_routes)
 
-    num_collectible_obs_winds = sum(1 for winds in obs_winds for obs in winds if in_planning_window(obs))
-    total_collectible_DV_all_obs_winds = sum(obs.data_vol for winds in obs_winds for obs in winds  if in_planning_window(obs))
-    total_dlnkable_DV_all_dlnk_winds = sum(dlnk.data_vol for winds in dlnk_winds_flat for dlnk in winds if in_planning_window(dlnk))
-    rs_output_routes = [rt for rts in rs_routes_by_obs.values() for rt in rts]
-    total_throughput_DV_rs_routes = sum(sum(rt.data_vol for rt in rts) for obs, rts in rs_routes_by_obs.items() if in_planning_window(obs))
-    total_collectible_DV_rs_routes = sum(min(obs.data_vol,sum(rt.data_vol for rt in rts)) for obs, rts in rs_routes_by_obs.items() if in_planning_window(obs))
+    # these should actually be equal, because we shouldn't have tried to schedule any routed that should be filtered!
+    assert(len(sched_routes_filt) == len(sched_routes))
+
+    num_collectible_obs_winds = sum(1 for winds in obs_winds for obs in winds if gp_gen.wind_in_planning_window(gp_runner_inst,obs))
+    total_collectible_DV_all_obs_winds = sum(obs.data_vol for winds in obs_winds for obs in winds  if gp_gen.wind_in_planning_window(gp_runner_inst,obs))
+    total_dlnkable_DV_all_dlnk_winds = sum(dlnk.data_vol for winds in dlnk_winds_flat for dlnk in winds if gp_gen.wind_in_planning_window(gp_runner_inst,dlnk))
+    rs_output_routes = [rt for rts in rs_routes_by_obs_filt.values() for rt in rts]
+    total_throughput_DV_rs_routes = sum(sum(rt.data_vol for rt in rts) for obs, rts in rs_routes_by_obs_filt.items())
+    total_collectible_DV_rs_routes = sum(min(obs.data_vol,sum(rt.data_vol for rt in rts)) for obs, rts in rs_routes_by_obs_filt.items())
 
     print('------------------------------')
     print('calc_activity_scheduling_results()')
     print('in scheduling window:')
     print('num_collectible_obs_winds')
     print(num_collectible_obs_winds)
-    if len(rs_routes_by_obs.keys()) == 0:
+    if len(rs_routes_by_obs_filt.keys()) == 0:
         print('no RS routes found')
     else:
         print('len(rs_output_routes)')
         print(len(rs_output_routes))
-    print('len(sched_routes)')
-    print(len(sched_routes))
+    print('len(sched_routes_filt)')
+    print(len(sched_routes_filt))
     print('total_collectible_DV_all_obs_winds')
     print(total_collectible_DV_all_obs_winds)
     print('total_dlnkable_DV_all_dlnk_winds')
     print(total_dlnkable_DV_all_dlnk_winds)
-    if len(rs_routes_by_obs.keys()) > 0:
+    if len(rs_routes_by_obs_filt.keys()) > 0:
         print('total_throughput_DV_rs_routes')
         print(total_throughput_DV_rs_routes)
         print('total_collectible_DV_rs_routes')
         print(total_collectible_DV_rs_routes)
     print('weights')
     print(gp_runner_inst.as_params['obj_weights'])
-    # dv_stats = gp_met.assess_dv_all_routes (sched_routes,verbose = True)
-    dv_obs_stats = gp_met.assess_dv_by_obs (rs_routes_by_obs,sched_routes,verbose = True)
-    lat_stats = gp_met.assess_latency_all_routes (sched_routes,verbose = True)
-    lat_obs_stats = gp_met.assess_latency_by_obs (rs_routes_by_obs,sched_routes,verbose = True)
-    aoi_targ_stats = gp_met.assess_aoi_by_obs_target(rs_routes_by_obs,sched_routes,verbose = True)
+    # dv_stats = gp_met.assess_dv_all_routes (sched_routes_filt,verbose = True)
+    dv_obs_stats = gp_met.assess_dv_by_obs (rs_routes_by_obs_filt,sched_routes_filt,verbose = True)
+    lat_stats = gp_met.assess_latency_all_routes (sched_routes_filt,verbose = True)
+    lat_obs_stats = gp_met.assess_latency_by_obs (rs_routes_by_obs_filt,sched_routes_filt,verbose = True)
+    aoi_targ_stats = gp_met.assess_aoi_by_obs_target(rs_routes_by_obs_filt,sched_routes_filt,verbose = True)
 
     gp_netsim = GPNetSim ( gp_runner_inst.params, gp_runner_inst.io_proc)
-    gp_netsim.sim_tlm_cmd_routing(sched_routes, verbose =  False)
+    gp_netsim.sim_tlm_cmd_routing(sched_routes_filt, verbose =  False)
     #  this is indexed by sat index
     sats_cmd_update_hist = gp_netsim.get_all_sats_cmd_update_hist()
     aoi_sat_cmd_stats = gp_met.assess_aoi_sat_cmd(sats_cmd_update_hist,verbose = True)
@@ -188,6 +189,28 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
 
     all_obs_winds,all_dlnk_winds_flat,all_xlnk_winds_flat = all_possible_winds
 
+    # plot the selected down links and cross-links this
+    gp_runner_inst.gp_plot.plot_winds(
+        sats_to_include,
+        sel_obs_winds_flat,
+        sched_obs_winds_flat,
+        sel_dlnk_winds_flat,
+        sched_dlnk_winds_flat,
+        sel_xlnk_winds_flat,
+        sched_xlnk_winds_flat,
+        route_indcs_by_wind,
+        gp_runner_inst.gp_inst_planning_params['planning_start_dt'],
+        # gp_runner_inst.gp_inst_planning_params['planning_start_dt'] + timedelta( seconds= gp_runner_inst.rs_general_params['wind_filter_duration_s']),
+        gp_runner_inst.gp_inst_planning_params['planning_end_dlnk_dt'],
+        base_time = gp_runner_inst.scenario_params['start_utc_dt'],
+        plot_title = 'Scheduled Activities',
+        plot_size_inches = (18,12),
+        plot_include_labels = gp_runner_inst.plot_params['plot_AS_include_labels'],
+        plot_original_times = False,
+        show=  False,
+        fig_name='plots/test_sched_windows.pdf'
+    )
+
     # plot all winds
     gp_runner_inst.gp_plot.plot_winds(
         sats_to_include,
@@ -234,27 +257,6 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
         )
 
 
-    # plot the selected down links and cross-links this
-    gp_runner_inst.gp_plot.plot_winds(
-        sats_to_include,
-        sel_obs_winds_flat,
-        sched_obs_winds_flat,
-        sel_dlnk_winds_flat,
-        sched_dlnk_winds_flat,
-        sel_xlnk_winds_flat,
-        sched_xlnk_winds_flat,
-        route_indcs_by_wind,
-        gp_runner_inst.gp_inst_planning_params['planning_start_dt'],
-        # gp_runner_inst.gp_inst_planning_params['planning_start_dt'] + timedelta( seconds= gp_runner_inst.rs_general_params['wind_filter_duration_s']),
-        gp_runner_inst.gp_inst_planning_params['planning_end_dlnk_dt'],
-        base_time = gp_runner_inst.scenario_params['start_utc_dt'],
-        plot_title = 'Scheduled Activities',
-        plot_size_inches = (18,12),
-        plot_include_labels = gp_runner_inst.plot_params['plot_AS_include_labels'],
-        plot_original_times = False,
-        show=  False,
-        fig_name='plots/test_sched_windows.pdf'
-    )
 
     # # gp_runner_inst.gp_plot.plot_data_circles(
     # #     sats_to_include,

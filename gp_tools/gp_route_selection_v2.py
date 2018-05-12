@@ -740,7 +740,7 @@ class GPDataRouteSelection():
                 break 
 
 
-        return sel_rts,dmr_uid,drs_taken
+        return sel_rts,dmr_uid,drs_taken,rts_remaining
 
     def run_step2(self,routes_by_obs,overlap_cnt_by_route):
 
@@ -774,16 +774,42 @@ class GPDataRouteSelection():
         for obs in obs_last_to_first:
             selected_dmrs_by_obs[obs] = []
 
-            sel_rts,dmr_uid,drs_taken = self.get_from_sorted(rts_by_obs_sorted_dv[obs],self.step2_params['num_rts_sel_per_obs_dv'],self.min_dmr_candidate_dv,dmr_uid,drs_taken,dv_avail_by_wind,check_availability=False)
+            sel_rts,dmr_uid,drs_taken,_ = self.get_from_sorted(rts_by_obs_sorted_dv[obs],self.step2_params['num_rts_sel_per_obs_dv'],self.min_dmr_candidate_dv,dmr_uid,drs_taken,dv_avail_by_wind,check_availability=False)
             selected_dmrs_by_obs[obs] += sel_rts
 
-            sel_rts,dmr_uid,drs_taken = self.get_from_sorted(rts_by_obs_sorted_lat[obs],self.step2_params['num_rts_sel_per_obs_lat'],self.min_dmr_candidate_dv,dmr_uid,drs_taken,dv_avail_by_wind,check_availability=False)
+            sel_rts,dmr_uid,drs_taken,_ = self.get_from_sorted(rts_by_obs_sorted_lat[obs],self.step2_params['num_rts_sel_per_obs_lat'],self.min_dmr_candidate_dv,dmr_uid,drs_taken,dv_avail_by_wind,check_availability=False)
             selected_dmrs_by_obs[obs] += sel_rts
 
-            # note: Don't need to worry about a data route appearing multiple times across the selected routes returned from get_from_sorted, because each data route map be only used once (enforced with drs_taken)
-            sel_rts,dmr_uid,drs_taken = self.get_from_sorted(rts_by_obs_sorted_overlap[obs],self.step2_params['num_rts_sel_per_obs_overlap'],self.min_dmr_candidate_dv,dmr_uid,drs_taken,dv_avail_by_wind,check_availability=True)
-            selected_dmrs_by_obs[obs] += sel_rts
+        curr_num_rts = 0
+        yo = None
+        hi = None
+        num_overlap_sel_rts = self.step2_params['num_rts_sel_per_obs_overlap']
+        while curr_num_rts < num_overlap_sel_rts:
+            # i = 1
+            for obs in obs_last_to_first:
+                if len(rts_by_obs_sorted_overlap[obs]) == 0:
+                    continue
 
+                # note: Don't need to worry about a data route appearing multiple times across the selected routes returned from get_from_sorted, because each data route may be only used once (enforced with drs_taken)
+                sel_rts,dmr_uid,drs_taken,rts_by_obs_sorted_overlap[obs] = self.get_from_sorted(rts_by_obs_sorted_overlap[obs],1,self.min_dmr_candidate_dv,dmr_uid,drs_taken,dv_avail_by_wind,check_availability=True)
+                selected_dmrs_by_obs[obs] += sel_rts
+
+                # if obs.sat_indx == 18:
+                #     from circinus_tools import debug_tools
+                #     debug_tools.debug_breakpt()
+
+                # if i == 12:
+                #     print(len(rts_by_obs_sorted_overlap[obs])) 
+                #     yo = obs
+                # i+=1
+
+            curr_num_rts += 1
+
+        print(yo)
+        print(selected_dmrs_by_obs[obs])
+
+        # from circinus_tools import debug_tools
+        # debug_tools.debug_breakpt()
             
         return selected_dmrs_by_obs
 

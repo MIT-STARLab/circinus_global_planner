@@ -122,17 +122,14 @@ class GPMetrics():
         num_sched_obs = 0
         num_rs_obs_dv_not_zero = 0
 
-        rs_obs = rs_routes_by_obs.keys()
-        obs_to_consider = rs_obs if len(rs_obs)>0 else sched_rts_by_obs.keys()
-        for obs in obs_to_consider:
-            if obs in rs_routes_by_obs.keys():
-                rs_collectible_dvs_by_obs[obs] = min(obs.data_vol,sum (rt.data_vol for rt in rs_routes_by_obs[obs]))
-                if rs_collectible_dvs_by_obs[obs] > 0:
-                    num_rs_obs_dv_not_zero += 1
+        for obs in rs_routes_by_obs.keys():
+            rs_collectible_dvs_by_obs[obs] = min(obs.data_vol,sum (rt.data_vol for rt in rs_routes_by_obs[obs]))
+            if rs_collectible_dvs_by_obs[obs] > 0:
+                num_rs_obs_dv_not_zero += 1
 
-            if obs in sched_rts_by_obs.keys():
-                sched_dvs_by_obs[obs] = sum (rt.scheduled_dv for rt in sched_rts_by_obs[obs])
-                num_sched_obs +=1
+        for obs in sched_rts_by_obs.keys():
+            sched_dvs_by_obs[obs] = sum (rt.scheduled_dv for rt in sched_rts_by_obs[obs])
+            num_sched_obs +=1
 
 
         rs_dvs = [dv for dv in rs_collectible_dvs_by_obs. values ()]
@@ -176,7 +173,7 @@ class GPMetrics():
             if valid_sched:
                 print("%s: \t\t\t\t %f"%('num_obs_sched',stats['num_obs_sched']))
             if valid_rs:
-                print("%s: \t\t\t %f"%('total_collectible_dv_rs',stats['total_collectible_dv']))
+                print("%s: \t\t %f"%('total_collectible_dv_rs',stats['total_collectible_dv']))
             if valid_sched:
                 print("%s: \t\t\t %f"%('total_sched_dv',stats['total_sched_dv']))
             if valid_rs:
@@ -258,6 +255,7 @@ class GPMetrics():
         #  for selected routes
         initial_lat_by_obs_rs =  {}
         for obs, rts in rs_routes_by_obs.items ():
+
             # want to make this a fair comparison. Only consider latency in rs for those obs that show up in AS
             if not obs in sched_obs:
                 continue
@@ -372,8 +370,8 @@ class GPMetrics():
                 print("%s: %f"%('max_obs_initial_lat_rs',stats['max_obs_initial_lat_rs']))
 
             if i_valid_sched:
-                print("%s: \t\t\t %f"%('ave_obs_initial_lat_sched',stats['ave_obs_initial_lat_sched']))
-                print("%s: \t\t\t %f"%('std_obs_initial_lat_sched',stats['std_obs_initial_lat_sched']))
+                print("%s: \t\t %f"%('ave_obs_initial_lat_sched',stats['ave_obs_initial_lat_sched']))
+                print("%s: \t\t %f"%('std_obs_initial_lat_sched',stats['std_obs_initial_lat_sched']))
                 print("%s: %f"%('min_obs_initial_lat_sched',stats['min_obs_initial_lat_sched']))
                 print("%s: %f"%('max_obs_initial_lat_sched',stats['max_obs_initial_lat_sched']))
                 print("%s: %f"%('ave_obs_final_lat_sched',stats['ave_obs_final_lat_sched']))
@@ -994,6 +992,7 @@ class GPMetrics():
         non_overlap_has_xlnk_rt_cnt_by_obs = {}
         num_rts_with_xlnk_by_obs = {}
         for obs_indx,(obs,rts) in  enumerate (routes_by_obs.items()):
+
             rts_overlap_counts = {dr:overlap_cnt_by_route[dr] for dr in rts}
 
             non_overlap_rt_cnt_by_obs[obs] = 0

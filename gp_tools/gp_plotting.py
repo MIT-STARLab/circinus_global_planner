@@ -337,9 +337,9 @@ class GPPlotting():
                             include_xlnk_labels = False
                             if include_xlnk_labels:
                                 if xlnk_label_rotator == 0:
-                                    plt.text(left_horizontal_loc, 0.1, label_text , fontsize=10, color = 'k')
+                                    plt.text(left_horizontal_loc, 0.1, label_text , fontsize=7, color = 'k')
                                 elif xlnk_label_rotator == 1:
-                                    plt.text( left_horizontal_loc, 1.1, label_text , fontsize=10, color = 'k')
+                                    plt.text( left_horizontal_loc, 1.1, label_text , fontsize=7, color = 'k')
 
                             xlnk_label_rotator = (xlnk_label_rotator+1)%xlnk_rotation_rollover
 
@@ -402,7 +402,7 @@ class GPPlotting():
                                 dlnk_label_rotator = dlnk_label_rotator_hist[dlnk_wind]
 
                             vert_offset=0.2*dlnk_label_rotator
-                            plt.text(left_horizontal_loc, bottom_vert_loc+0.5+vert_offset, label_text , fontsize=10, color = 'k')
+                            plt.text(left_horizontal_loc, bottom_vert_loc+0.5+vert_offset, label_text , fontsize=6, color = 'k')
 
                             dlnk_label_rotator = (dlnk_label_rotator+1)%dlnk_label_rotation_rollover
                             dlnk_label_rotator_hist[dlnk_wind] = dlnk_label_rotator
@@ -435,7 +435,7 @@ class GPPlotting():
                         current_axis.add_patch(d)
 
                         if plot_include_labels:
-                            plt.text(obs_start+0.15, bottom_vert_loc+0.1, "%s,dv %d/%d"%(obs_wind.target_IDs,obs_wind.scheduled_data_vol,obs_wind.data_vol) , fontsize=10, color = 'k')
+                            plt.text(obs_start+0.15, bottom_vert_loc+0.1, "%s,dv %d/%d"%(obs_wind.target_IDs,obs_wind.scheduled_data_vol,obs_wind.data_vol) , fontsize=7, color = 'k')
 
                         obs_rectangle_rotator =  (obs_rectangle_rotator+1)%obs_rotation_rollover
 
