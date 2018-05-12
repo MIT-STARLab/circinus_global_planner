@@ -101,7 +101,6 @@ class GlobalPlannerRunner:
         # from circinus_tools import debug_tools
         # debug_tools.debug_breakpt()
 
-        # TODO: deal with existing_routes, utilization_by_existing_route_id
         existing_routes = existing_route_data.get('existing_routes',[])
         utilization_by_existing_route_id = existing_route_data.get('utilization_by_existing_route_id',{})
 
@@ -159,6 +158,7 @@ class GlobalPlannerRunner:
 
 
     def run_route_selection_v2_step1( self,obs_winds,dlnk_winds_flat,xlnk_winds,verbose=False):
+        # todo: it would be nice at some point to incorporate the use of existing routes into here.  but that's definitely for future work.
 
         print_verbose ('nominal route selection v2 step 1',verbose)
 
@@ -279,13 +279,22 @@ class GlobalPlannerRunner:
 
 
 
-    def run_route_selection_v2_step2(self,routes_by_obs,verbose=False):
+    def run_route_selection_v2_step2(self,routes_by_obs,existing_route_data,verbose=False):
 
         routes_by_obs_filt = gp_gen.filt_routes_by_obs(self,routes_by_obs)
 
+        existing_routes = existing_route_data.get('existing_routes',[])
+        utilization_by_existing_route_id = existing_route_data.get('utilization_by_existing_route_id',{})
+
         print_verbose('num routes',verbose)
         print_verbose(sum(len(rts) for rts in routes_by_obs_filt.values()),verbose)
+        print_verbose('num routes existing',verbose)
+        print_verbose(len(existing_routes),verbose)
 
+        #  go ahead and throw in the existing routes as well.  note that in the general case existing routes might be outside of the filter window.  this is okay because the algorithms below should not depend on data routes being within the filter times.  if route selection step two happens to not choose one or more of the existing routes, that's okay - we'll add them back in at activity scheduling.  however we do want to feed them into step two so that we don't choose new routes that are basically the equivalent of the existing routes just because we don't know that the existing routes exist.
+        for rt in existing_routes:
+            obs = rt.get_obs()
+            routes_by_obs_filt.setdefault(obs,[]).append(obs)
 
         gp_met = GPMetrics(self.params)
         print_verbose('Assess route overlap pre RS step 2',verbose)
@@ -310,7 +319,7 @@ class GlobalPlannerRunner:
 
         return selected_rts_by_obs,stats_rs2_pre,stats_rs2_post
 
-    def run_route_selection(self,obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,window_uid,verbose=False):
+    def run_route_selection(self,obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,existing_route_data,window_uid,verbose=False):
 
 
         #################################
@@ -375,7 +384,7 @@ class GlobalPlannerRunner:
                     sel_routes_by_obs = {obs:[DataMultiRoute(None,None,data_routes=[dr],ro_ID=dr.ID) for dr in rts] for obs,rts in routes_by_obs_filt.items()}
                 else:
                     # run step 2. todo:  move this elsewhere
-                    sel_routes_by_obs,stats_rs2_pre,stats_rs2_post = self.run_route_selection_v2_step2(routes_by_obs,verbose)
+                    sel_routes_by_obs,stats_rs2_pre,stats_rs2_post = self.run_route_selection_v2_step2(routes_by_obs,existing_route_data,verbose)
 
             if self.pickle_params['pickle_route_selection_step2_results']:
                 pickle_helper.pickle_rtsel_s2_stuff(self,sel_routes_by_obs,ecl_winds,window_uid,stats_rs2_pre,stats_rs2_post)
@@ -451,7 +460,7 @@ class GlobalPlannerRunner:
 
         pas_a_new = None
         if run_rs:
-            sel_routes_by_obs,ecl_winds,window_uid,pas_a_new = self.run_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,window_uid,verbose)
+            sel_routes_by_obs,ecl_winds,window_uid,pas_a_new = self.run_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,existing_route_data,window_uid,verbose)
 
         if pas_a_new:
             pas_a = pas_a_new
