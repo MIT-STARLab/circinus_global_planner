@@ -276,9 +276,11 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
         #  in the  route selection stage, we could have added some of the existing routes as "newly selected routes".  this is okay.  however, we do want to remove them from new routes right now in order to avoid constraint problems as mentioned above.
         new_routes_dedup = []
+        #  count the number of times we removed an existing route from the new routes.  ideally all existing routes would be included in new routes (note: new routes are made at route selection step two).
+        num_existing_routes_deduped = 0
         for dmr in new_routes:
             if dmr in existing_routes_set:
-                pass
+                num_existing_routes_deduped += 1
             else:
                 new_routes_dedup.append(dmr)
 
@@ -286,7 +288,8 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         routes_filt,existing_routes_fixed = self.filter_routes(new_routes_dedup,existing_routes)
         routes_by_dmr_id = {dmr.ID:dmr for dmr in routes_filt}
 
-        print_verbose('considering %d routes'%(len(routes_filt)))
+        print_verbose('considering %d routes'%(len(routes_filt)),verbose)
+        print_verbose('Fraction of existing routes included at RS step two: %d/%d'%(len(num_existing_routes_deduped),len(existing_routes)),verbose)
 
         self.routes_filt = routes_filt
         self.utilization_by_existing_route_id = utilization_by_existing_route_id
