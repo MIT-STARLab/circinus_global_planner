@@ -199,6 +199,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
     def filter_routes( self,new_routes,existing_routes):
 
         routes_filt = []
+        existing_routes_before_planning_fixed_end = []
 
         def process_dmr(dmr,start_filt_dt,filter_opt):
             dmr_start = dmr.get_dlnk().start
@@ -225,9 +226,14 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
         # want existing routes to be at least partially within whole planning window, so that we will be able to later filter for all act windows on which they impose constraints (but note that we don't have to worry anymore about the constraints on the route, because the input utilization number for the route accounts for it) 
         for dmr in existing_routes:
-            added = process_dmr(dmr,self.planning_start_dt,"partially_within")
+            process_dmr(dmr,self.planning_start_dt,"partially_within")
 
-        return routes_filt
+            # mark those  existing routes that start before the fixed planning window end.
+            dmr_start = dmr.get_dlnk().start
+            if dmr_start <= self.planning_fixed_end_dt:
+                existing_routes_before_planning_fixed_end.append(dmr)
+
+        return routes_filt, existing_routes_before_planning_fixed_end
 
     def get_dmr_latency_score_factors(self,routes_by_dmr_id,dmr_ids_by_obs_act_windid):
 
@@ -268,13 +274,12 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         assert(len(existing_routes) == len(set(existing_routes)))
 
         # filter the routes to make sure that  none of their activities fall outside the scheduling window
-        routes_filt = self.filter_routes(new_routes,existing_routes)
+        routes_filt,existing_routes_fixed = self.filter_routes(new_routes,existing_routes)
         routes_by_dmr_id = {dmr.ID:dmr for dmr in routes_filt}
 
         print_verbose('considering %d routes'%(len(routes_filt)))
 
         self.routes_filt = routes_filt
-        fixed_routes_ids = {dmr.ID for dmr in existing_routes}
         self.utilization_by_existing_route_id = utilization_by_existing_route_id
         self.routes_by_dmr_id = routes_by_dmr_id
         self.ecl_winds = ecl_winds
@@ -289,6 +294,9 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         #  should only be using data multi-route objects for activity scheduling, even if they're just a shallow wrapper around a DataRoute
         for dmr in routes_filt:
             assert(type(dmr) == DataMultiRoute)
+
+        fixed_routes_ids = [dmr.ID for dmr in existing_routes_fixed]
+        sum_fixed_route_utilization = sum(utilization_by_existing_route_id[rt_id] for rt_id in fixed_routes_ids)
 
         ##############################
         #  Make indices/ subscripts
@@ -358,6 +366,8 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
         #  subscript for each dmr (data multi route) p  (p index is a hold-over from when I called them paths)
         model.dmr_ids = pe.Set(initialize= routes_by_dmr_id.keys())
+        #  these are all the routes that have acts occurring before the fixed planning window end.  we assume that these routes are no longer as "malleable" as other routes -  they have an upper limit on their utilization based on their existing utilization. this is because if any of these activities has already been executed, the route is now constrained by the throughput used from that act
+        model.fixed_dmr_ids = pe.Set(initialize= fixed_routes_ids)
         #  subscript for each activity a
         model.act_windids = pe.Set(initialize= all_acts_windids)
         #  subscript for each satellite
@@ -657,10 +667,9 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
         # constrain utilization of existing routes that are within planning_fixed_end
         model.c11  = pe.ConstraintList()
-        for p in model.dmr_ids:
-            if p in fixed_routes_ids:
-                # less than constraint because equality should be achievable (if we're only using existing routes that have all previously been scheduled and deconflicted together - which is the case for current version of GP), but want to allow route to lessen its utilization if a more valuable route is available. 
-                model.c11.add( model.var_dmr_utilization[p] <= utilization_by_existing_route_id[p]) 
+        for p in model.fixed_dmr_ids:
+            # less than constraint because equality should be achievable (if we're only using existing routes that have all previously been scheduled and deconflicted together - which is the case for current version of GP), but want to allow route to lessen its utilization if a more valuable route is available. 
+            model.c11.add( model.var_dmr_utilization[p] <= utilization_by_existing_route_id[p]) 
             
         print_verbose('make obj',verbose)
 
@@ -681,11 +690,17 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         rsrc_norm_f = len(decimated_tp_indcs) * len(model.sat_indcs)
 
         def obj_rule(model):
+            # obj [1]
             total_dv_term = self.obj_weights['obs_dv'] * 1/model.par_total_obs_dv * sum(model.par_dmr_dv[p]*model.var_dmr_utilization[p] for p in model.dmr_ids) 
 
+            # obj [2]
             latency_term = self.obj_weights['route_latency'] * 1/len(model.obs_windids) * sum(model.var_latency_sf_obs[o] for o in model.obs_windids)
             
+            # obj [5]
             energy_margin_term = self.obj_weights['energy_storage'] * 1/rsrc_norm_f * sum(model.var_sats_estore[sat_indx,tp_indx]/model.par_sats_estore_max[sat_indx] for tp_indx in decimated_tp_indcs for sat_indx in model.sat_indcs)
+
+            # obj [6]
+            existing_routes_term = self.obj_weights['existing_routes'] * 1/sum_fixed_route_utilization * sum(model.var_dmr_utilization[p] for p in model.fixed_dmr_ids) if len(model.fixed_dmr_ids) > 0 else 0
 
             if len(min_var_inter_sat_act_constr_violation_list) > 0:
                 inter_sat_act_constr_violations_term = self.obj_weights['inter_sat_act_constr_violations'] * 1/sum(min_var_inter_sat_act_constr_violation_list) * sum(model.var_inter_sat_act_constr_violations[indx] for indx in range(1,len(model.var_inter_sat_act_constr_violations)+1))
@@ -700,7 +715,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             # from circinus_tools import debug_tools
             # debug_tools.debug_breakpt()
 
-            return total_dv_term + latency_term + energy_margin_term - inter_sat_act_constr_violations_term - intra_sat_act_constr_violations_term
+            return total_dv_term + latency_term + energy_margin_term + existing_routes_term - inter_sat_act_constr_violations_term - intra_sat_act_constr_violations_term
             
         model.obj = pe.Objective( rule=obj_rule, sense=pe.maximize )
 
