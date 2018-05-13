@@ -289,7 +289,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         routes_by_dmr_id = {dmr.ID:dmr for dmr in routes_filt}
 
         print_verbose('considering %d routes'%(len(routes_filt)),verbose)
-        print_verbose('Fraction of existing routes included at RS step two: %d/%d'%(len(num_existing_routes_deduped),len(existing_routes)),verbose)
+        print_verbose('Fraction of existing routes included at RS step two: %d/%d'%(num_existing_routes_deduped,len(existing_routes)),verbose)
 
         self.routes_filt = routes_filt
         self.utilization_by_existing_route_id = utilization_by_existing_route_id

@@ -18,7 +18,7 @@ from circinus_tools  import time_tools as tt
 from circinus_tools  import  constants as const
 from circinus_tools.scheduling.custom_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
 from circinus_tools.scheduling.schedule_objects import Dancecard
-from circinus_tools.scheduling.routing_objects import DataRoute,DataMultiRoute
+from circinus_tools.scheduling.routing_objects import DataRoute,DataMultiRoute,RoutingObjectID
 
 def print_verbose(string,verbose=False):
     if verbose:
@@ -328,6 +328,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
     def make_model ( self,obs_winds,dlnk_winds_flat,xlnk_winds_flat, ecl_winds, verbose = False):
         # note this model only works for non-symmetric crosslink windows!
+        # also note: this version of the algorithm does not support incorporation of existing routes currently. todo: and that capability?
 
         model = pe.ConcreteModel()
         self.model = model
@@ -1016,7 +1017,8 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
         # the rest of the code expects DataMultiRoute objects, so we'll create these as shallow wrappers around the data routes we just fabricated
         for dr in data_routes:
-            scheduled_route = DataMultiRoute(self.gp_agent_ID,dr_uid,[dr],dv_epsilon=self.dv_epsilon)
+            ro_ID = RoutingObjectID(self.gp_agent_ID,dr_uid)
+            scheduled_route = DataMultiRoute(ro_ID,[dr],dv_epsilon=self.dv_epsilon)
             # the dr within is fully utilized (1.0) 
             scheduled_route.set_scheduled_dv_frac(1.0)
             scheduled_routes_flat.append(scheduled_route)

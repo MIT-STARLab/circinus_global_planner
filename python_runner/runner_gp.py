@@ -157,7 +157,7 @@ class GlobalPlannerRunner:
         return  routes, energy_usage, data_usage
 
 
-    def run_route_selection_v2_step1( self,obs_winds,dlnk_winds_flat,xlnk_winds,verbose=False):
+    def run_route_selection_v2_step1( self,obs_winds,dlnk_winds_flat,xlnk_winds,existing_route_data,verbose=False):
         # todo: it would be nice at some point to incorporate the use of existing routes into here.  but that's definitely for future work.
 
         print_verbose ('nominal route selection v2 step 1',verbose)
@@ -253,8 +253,9 @@ class GlobalPlannerRunner:
         t_b = time.time()
         time_elapsed = t_b-t_a
 
-        # this should be unique across all data routes
-        dr_uid = 0
+        # this data route ID should be unique across all data routes (and the datamultiroutes encasing them).  this is important because data route IDs are used for indexing in many places, not just in the global planner.
+        #  get the last unique ID that was created by the global planner, or failing that set it to zero.
+        dr_uid = existing_route_data.get('latest_gp_route_uid',0)
 
         # explicitly validate routes
         for routes in routes_by_obs.values():
@@ -342,7 +343,7 @@ class GlobalPlannerRunner:
             #  otherwise run route selection step 1
             else:
                 print_verbose('Run route selection step 1',verbose)
-                routes_by_obs,all_stats,route_times_s, obs_indx, dr_uid  =  self.run_route_selection_v2_step1(obs_winds,dlnk_winds_flat,xlnk_winds,verbose=self.rs_v2_params['verbose_step1'])
+                routes_by_obs,all_stats,route_times_s, obs_indx, latest_dr_uid  =  self.run_route_selection_v2_step1(obs_winds,dlnk_winds_flat,xlnk_winds,existing_route_data,verbose=self.rs_v2_params['verbose_step1'])
                 # routes_by_obs,all_stats,route_times_s, obs_indx, weights_tups  =  self.run_test_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
 
             #  pickle before step 2 because step 2 doesn't take that long
@@ -381,7 +382,8 @@ class GlobalPlannerRunner:
                 if passthru:
                     stats_rs2_pre = stats_rs2_post = []
                     routes_by_obs_filt = gp_gen.filt_routes_by_obs(self,routes_by_obs)  # may not have been filtered already, if we're loading from a pickle
-                    sel_routes_by_obs = {obs:[DataMultiRoute(None,None,data_routes=[dr],ro_ID=dr.ID) for dr in rts] for obs,rts in routes_by_obs_filt.items()}
+                    sel_routes_by_obs = {obs:[DataMultiRoute(dr.ID,data_routes=[dr]) for dr in rts] for obs,rts in 
+                    routes_by_obs_filt.items()}
                 else:
                     # run step 2. todo:  move this elsewhere
                     sel_routes_by_obs,stats_rs2_pre,stats_rs2_post = self.run_route_selection_v2_step2(routes_by_obs,existing_route_data,verbose)
@@ -401,7 +403,7 @@ class GlobalPlannerRunner:
             # todo: currently broken - update
             output_helper.plot_route_selection_results (self,sel_routes_by_obs,dlnk_winds_flat,xlnk_winds_flat,num_obs_to_plot = 5)
 
-        return sel_routes_by_obs,ecl_winds,window_uid,pas_a
+        return sel_routes_by_obs,ecl_winds,latest_dr_uid,window_uid,pas_a
 
     def run( self, existing_route_data, verbose=False):
 
@@ -460,7 +462,7 @@ class GlobalPlannerRunner:
 
         pas_a_new = None
         if run_rs:
-            sel_routes_by_obs,ecl_winds,window_uid,pas_a_new = self.run_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,existing_route_data,window_uid,verbose)
+            sel_routes_by_obs,ecl_winds,latest_dr_uid,window_uid,pas_a_new = self.run_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,existing_route_data,window_uid,verbose)
 
         if pas_a_new:
             pas_a = pas_a_new
@@ -524,7 +526,7 @@ class GlobalPlannerRunner:
         viz_outputs= self.io_proc.make_sat_history_outputs (sched_obs_winds_flat, sched_xlnk_winds_flat, sched_dlnk_winds_flat, link_info_by_wind)
 
 
-        return scheduled_routes,viz_outputs
+        return scheduled_routes,viz_outputs,latest_dr_uid
 
 
 class PipelineRunner:
@@ -620,13 +622,14 @@ class PipelineRunner:
 
         # get data related to existing routes, if they were provided
         existing_route_data = data.get('existing_route_data',{})
-        scheduled_routes,viz_outputs = gp_runner.run (existing_route_data,verbose)
+        scheduled_routes,viz_outputs,latest_dr_uid = gp_runner.run (existing_route_data,verbose)
 
         output = {}
         output['version'] = OUTPUT_JSON_VER
         output['scenario_params'] = data['orbit_prop_inputs']['scenario_params']
         output['viz_data'] = viz_outputs
         output['scheduled_routes'] = scheduled_routes
+        output['latest_dr_uid'] = latest_dr_uid
         output['update_time'] = datetime.utcnow().isoformat()
 
         return output

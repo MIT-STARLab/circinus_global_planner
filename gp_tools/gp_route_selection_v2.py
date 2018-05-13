@@ -687,7 +687,7 @@ class GPDataRouteSelection():
 
         return best_rt,best_rt_indx
 
-    def get_from_sorted(self,sorted_rts,num_rts,min_dmr_candidate_dv,dmr_uid,drs_taken,dv_avail_by_wind,check_availability=False):
+    def get_from_sorted(self,sorted_rts,num_rts,min_dmr_candidate_dv,drs_taken,dv_avail_by_wind,check_availability=False):
         rt_index = 0
         sel_rts = []
         rts_remaining = sorted_rts
@@ -699,8 +699,8 @@ class GPDataRouteSelection():
                 rts_remaining.remove(curr_dr)
                 continue
 
-            dmr = DataMultiRoute(self.gp_agent_ID,dmr_uid,data_routes=[curr_dr],dv_epsilon=self.dv_epsilon)
-            dmr_uid += 1
+            #  create a new data multi-route encapsulating the data route. use the existing route's ID -  it won't need it anymore.
+            dmr = DataMultiRoute(curr_dr.ID,data_routes=[curr_dr],dv_epsilon=self.dv_epsilon)
             rts_remaining.remove(curr_dr) 
             for act in curr_dr.get_winds():
                 dv_avail_by_wind.setdefault(act,act.data_vol)
@@ -740,7 +740,7 @@ class GPDataRouteSelection():
                 break 
 
 
-        return sel_rts,dmr_uid,drs_taken,rts_remaining
+        return sel_rts,drs_taken,rts_remaining
 
     def run_step2(self,routes_by_obs,overlap_cnt_by_route):
 
@@ -764,7 +764,7 @@ class GPDataRouteSelection():
             rts_by_obs_sorted_overlap[obs] = sorted(rts,key=lambda dr: overlap_cnt_by_route[dr])
 
             
-        dmr_uid = 0
+        # dmr_uid = 0
 
         # selected data multi routes
         selected_dmrs_by_obs = {}
@@ -774,10 +774,10 @@ class GPDataRouteSelection():
         for obs in obs_last_to_first:
             selected_dmrs_by_obs[obs] = []
 
-            sel_rts,dmr_uid,drs_taken,_ = self.get_from_sorted(rts_by_obs_sorted_dv[obs],self.step2_params['num_rts_sel_per_obs_dv'],self.min_dmr_candidate_dv,dmr_uid,drs_taken,dv_avail_by_wind,check_availability=False)
+            sel_rts,drs_taken,_ = self.get_from_sorted(rts_by_obs_sorted_dv[obs],self.step2_params['num_rts_sel_per_obs_dv'],self.min_dmr_candidate_dv,drs_taken,dv_avail_by_wind,check_availability=False)
             selected_dmrs_by_obs[obs] += sel_rts
 
-            sel_rts,dmr_uid,drs_taken,_ = self.get_from_sorted(rts_by_obs_sorted_lat[obs],self.step2_params['num_rts_sel_per_obs_lat'],self.min_dmr_candidate_dv,dmr_uid,drs_taken,dv_avail_by_wind,check_availability=False)
+            sel_rts,drs_taken,_ = self.get_from_sorted(rts_by_obs_sorted_lat[obs],self.step2_params['num_rts_sel_per_obs_lat'],self.min_dmr_candidate_dv,drs_taken,dv_avail_by_wind,check_availability=False)
             selected_dmrs_by_obs[obs] += sel_rts
 
         curr_num_rts = 0
@@ -788,7 +788,7 @@ class GPDataRouteSelection():
                     continue
 
                 # note: Don't need to worry about a data route appearing multiple times across the selected routes returned from get_from_sorted, because each data route may be only used once (enforced with drs_taken)
-                sel_rts,dmr_uid,drs_taken,rts_by_obs_sorted_overlap[obs] = self.get_from_sorted(rts_by_obs_sorted_overlap[obs],1,self.min_dmr_candidate_dv,dmr_uid,drs_taken,dv_avail_by_wind,check_availability=True)
+                sel_rts,drs_taken,rts_by_obs_sorted_overlap[obs] = self.get_from_sorted(rts_by_obs_sorted_overlap[obs],1,self.min_dmr_candidate_dv,drs_taken,dv_avail_by_wind,check_availability=True)
                 selected_dmrs_by_obs[obs] += sel_rts
 
             curr_num_rts += 1
