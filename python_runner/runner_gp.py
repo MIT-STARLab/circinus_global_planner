@@ -583,7 +583,7 @@ class PipelineRunner:
 
             orbit_prop_inputs['sat_params']['power_params_sorted'] = io_tools.sort_input_params_by_sat_IDs(orbit_prop_inputs['sat_params']['power_params'],sat_id_order)
             orbit_prop_inputs['sat_params']['data_storage_params_sorted'] = io_tools.sort_input_params_by_sat_IDs(orbit_prop_inputs['sat_params']['data_storage_params'],sat_id_order)
-            orbit_prop_inputs['sat_params']['initial_state_sorted'] = io_tools.sort_input_params_by_sat_IDs(orbit_prop_inputs['sat_params']['initial_state'],sat_id_order)
+            orbit_prop_inputs['sat_params']['sats_state_sorted'] = io_tools.sort_input_params_by_sat_IDs(orbit_prop_inputs['sat_params']['initial_state'],sat_id_order)
         else:
             raise NotImplementedError
 
@@ -592,7 +592,7 @@ class PipelineRunner:
             raise NotImplementedError
 
         #  check that it's the right version
-        if gp_instance_params['version'] == "0.5":
+        if gp_instance_params['version'] == "0.6":
 
             gp_instance_params['planning_params']['planning_start_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_start'])
             gp_instance_params['planning_params']['planning_fixed_end_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_fixed_end'])
@@ -605,6 +605,11 @@ class PipelineRunner:
             xlnk_end = gp_instance_params['planning_params']['planning_end_xlnk_dt']
             if not (dlnk_end >= obs_end and dlnk_end >= xlnk_end):
                 raise RuntimeWarning('Planning window end for dlnk (%s) should be set equal or later than end for observations, crosslinks (%s)'%(dlnk_end,obs_xlnk_end))
+
+            if gp_instance_params["sats_state"] is None:
+                gp_instance_params["sats_state_sorted"] = orbit_prop_inputs['sat_params']['sats_state_sorted']
+            else:
+                gp_instance_params["sats_state_sorted"] = io_tools.sort_input_params_by_sat_IDs(gp_instance_params["sats_state"],sat_id_order)
         else:
             raise NotImplementedError
 

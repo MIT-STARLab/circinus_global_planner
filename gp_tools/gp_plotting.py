@@ -1,6 +1,8 @@
 #  plotting tools for global planner
 # 
 # @author Kit Kennedy
+#
+# The code below is terrible, I know. I really let myself go here. Don't judge too hard.
 
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import savefig

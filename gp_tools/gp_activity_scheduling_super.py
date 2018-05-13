@@ -81,7 +81,7 @@ class GPActivityScheduling():
 
         self.power_params = sat_params['power_params_sorted']
         self.data_storage_params = sat_params['data_storage_params_sorted']
-        self.initial_state = sat_params['initial_state_sorted']
+        self.sats_state = gp_params['gp_instance_params']['sats_state_sorted']
         self.sat_activity_params = sat_params['activity_params']
 
 
@@ -91,7 +91,7 @@ class GPActivityScheduling():
         self.energy_unit = "Wh"  # watt hours
 
         # these lists are in order of satellite index because we've sorted 
-        self.sats_init_estate_Wh = [sat_state['batt_e_Wh'] for sat_state in self.initial_state]
+        self.sats_init_estate_Wh = [sat_state['batt_e_Wh'] for sat_state in self.sats_state]
         self.sats_edot_by_mode_W = []
         self.sats_emin_Wh = []
         self.sats_emax_Wh = []
