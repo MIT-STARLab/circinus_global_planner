@@ -333,6 +333,10 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         # note this model only works for non-symmetric crosslink windows!
         # also note: this version of the algorithm does not support incorporation of existing routes currently. todo: and that capability?
 
+        #  first run pre-check on satellite states, to make sure that we can actually solve the MILP
+        self.run_sat_state_precheck(ecl_winds)
+        print_verbose('Passed state pre-check',verbose)
+
         model = pe.ConcreteModel()
         self.model = model
 

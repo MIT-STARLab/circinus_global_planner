@@ -266,6 +266,10 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
     def make_model ( self,new_routes, existing_routes, utilization_by_existing_route_id, ecl_winds, verbose = True):
         # important assumption: all activity window IDs are unique!
 
+        #  first run pre-check on satellite states, to make sure that we can actually solve the MILP
+        self.run_sat_state_precheck(ecl_winds)
+        print_verbose('Passed state pre-check',verbose)
+
         model = pe.ConcreteModel()
         self.model = model
 

@@ -18,6 +18,7 @@ from circinus_tools  import io_tools
 from circinus_tools.scheduling.custom_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
 from circinus_tools.scheduling.schedule_objects import Dancecard
 from circinus_tools.scheduling.routing_objects import DataMultiRoute
+from circinus_tools.sat_state_tools import propagate_sat_ES
 
 class GPActivityScheduling():
     """docstring for GP activity scheduling"""
@@ -130,6 +131,33 @@ class GPActivityScheduling():
 
         # allow activities to overlap, and penalize them for doing so. The code should work, but hasn't been extensively vetted for its usefulness (does seem surprisingly unresponsive to changing weights for constraint violation in the obj function...). Note having these violations allowed generally won't play well with extracting routes in coupled AS due to data route validation checks. 
         self.allow_act_timing_constr_violations = False
+
+    def run_sat_state_precheck(self,ecl_winds):
+        """ propagate state forward from the initial state for every satellite to see if they're able to stay within resource limitations.  if we pass this check, then the MILP model should be solvable"""
+
+        for sat_indx in range(self.num_sats):
+            parsed_power_params = {
+                "sat_edot_by_mode": self.sats_edot_by_mode_W[sat_indx],
+                "sat_batt_storage": {'e_min': self.sats_emin_Wh[sat_indx],'e_max': self.sats_emax_Wh[sat_indx]},
+                "power_units": None
+            } 
+
+            #  propagate energy storage from initial state through the whole planning window with no activities performed.  this is just checking if we can still meet any constraints while scheduling no activities whatsoever on this satellite.  in general, the overall planning system should not allow a satellite to get so low in energy usage that it might risk going below minimum without performing any activities whatsoever
+            final_ES_no_acts,ES_state_went_below_min = propagate_sat_ES(
+                self.planning_start_dt,
+                self.planning_end_dt,
+                sat_indx,
+                self.sats_init_estate_Wh[sat_indx],
+                [],
+                ecl_winds[sat_indx],
+                parsed_power_params,
+                self.resource_delta_t_s
+            )
+
+            #  if the energy state did go below the minimum, we're not able to schedule with the satellite included (the MILP simply won't solve)
+            # todo: what should we do if this actually happens? currently we're just assuming that it can't ... perhaps try scheduling with one of the satellites not included?
+            if ES_state_went_below_min:
+                raise RuntimeWarning('energy storage went below minimum for satellite %d in planning window (%s,%s) with initial energy storage state %f'%(sat_indx,self.planning_start_dt,self.planning_end_dt,self.sats_init_estate_Wh[sat_indx]))
 
     def gen_inter_act_constraint(self,var_list,constr_list,transition_time_req,model_objs_act1,model_objs_act2):
             #  the regular constraint is the constraint that is enforced in the mixed integer linear program
