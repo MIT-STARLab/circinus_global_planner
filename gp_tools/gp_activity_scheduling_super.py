@@ -347,6 +347,8 @@ class GPActivityScheduling():
             else:
                 print('AS solve() - warning, not setting params mip_tolerances_mipgap and mip_tolerances_integrality')
 
+        elif self.solver_name == 'glpk':
+            raise NotImplementedError('glpk (v4.47) runs, but takes forever and seems to have numerical instability issues right now')
 
         # if we're running things remotely, then we will use the NEOS server (https://neos-server.org/neos/)
         if self.solver_params['run_remotely']:

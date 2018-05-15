@@ -121,6 +121,9 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         for o in obs_windids:
             latency_by_dlnk_windid = {}
 
+            if len(dlnk_windids_by_obs_windid[o]) == 0:
+                continue
+
             obs = all_act_objs_by_windid[o]
             for d in dlnk_windids_by_obs_windid[o]:
                 dlnk = all_act_objs_by_windid[d]
