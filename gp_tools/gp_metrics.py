@@ -2,7 +2,6 @@
 #
 # @author Kit Kennedy
 #
-#  note that a path is the same as a route.
 
 import time
 from datetime import datetime, timedelta

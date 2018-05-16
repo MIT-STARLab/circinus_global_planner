@@ -183,6 +183,7 @@ class GlobalPlannerRunner:
 
         obs_winds_filt = filter_obs(obs_winds)
 
+
         # this may seem mildy pointless at first, but what we're doing is making a flat lookup table from the hash of wind to the wind object itself. We'll need this to restore the original winds later after running in parallel.
         obs_winds_dict = {wind:wind for sat_indx in range (self.sat_params['num_sats']) for wind in obs_winds_filt[sat_indx] }
         dlnk_winds_dict = {wind:wind for sat_indx in range (self.sat_params['num_sats']) for wind in dlnk_winds_flat[sat_indx] }
@@ -295,7 +296,8 @@ class GlobalPlannerRunner:
         #  go ahead and throw in the existing routes as well.  note that in the general case existing routes might be outside of the filter window.  this is okay because the algorithms below should not depend on data routes being within the filter times.  if route selection step two happens to not choose one or more of the existing routes, that's okay - we'll add them back in at activity scheduling.  however we do want to feed them into step two so that we don't choose new routes that are basically the equivalent of the existing routes just because we don't know that the existing routes exist.
         for rt in existing_routes:
             obs = rt.get_obs()
-            routes_by_obs_filt.setdefault(obs,[]).append(obs)
+            routes_by_obs_filt.setdefault(obs,[]).append(rt)
+        existing_routes_set = set(existing_routes)
 
         gp_met = GPMetrics(self.params)
         print_verbose('Assess route overlap pre RS step 2',verbose)
@@ -305,7 +307,7 @@ class GlobalPlannerRunner:
         gp_rs = gprsv2.GPDataRouteSelection ( self.params)
 
         t_a = time.time()
-        selected_rts_by_obs = gp_rs.run_step2(routes_by_obs_filt,overlap_cnt_by_route)
+        selected_rts_by_obs = gp_rs.run_step2(routes_by_obs_filt,overlap_cnt_by_route,existing_routes_set)
         t_b = time.time()
         time_elapsed = t_b-t_a
         print_verbose('RS step2 time_elapsed %f'%(time_elapsed),verbose)

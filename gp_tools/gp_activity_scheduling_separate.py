@@ -6,7 +6,7 @@
 from  datetime import timedelta
 from copy import  deepcopy
 from math import ceil
-from collections import OrderedDict
+from collections import OrderedDict,Counter
 
 from pyomo import environ  as pe
 from pyomo import opt  as po
@@ -196,13 +196,13 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         return sats_acts,sats_dlnks,all_acts_windids,dmr_ids_by_act_windid,dv_by_act_windid,all_act_windids_by_obj,all_acts_by_windid,all_obs_windids,dmr_ids_by_obs_act_windid,dv_by_obs_act_windid,all_lnk_windids,dmr_ids_by_link_act_windid,dv_by_link_act_windid
                     
 
-    def filter_routes( self,new_routes,existing_routes):
+    def filter_routes( self,selected_routes,existing_routes):
 
         routes_filt = []
         existing_routes_before_planning_fixed_end = []
 
         def process_dmr(dmr,start_filt_dt,filter_opt):
-            dmr_start = dmr.get_dlnk().start
+            dmr_start = dmr.get_obs().start
             dmr_end = dmr.get_dlnk().end
 
             # check if all act windows in route are completely within the planning window. Pass if not.
@@ -221,16 +221,16 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             return False
             
         # want new routes to be entirely within non-fixed planning window (otherwise we could miss enforcing all of the constraints imposed by the route)
-        for dmr in new_routes:
+        for dmr in selected_routes:
             process_dmr(dmr,self.planning_fixed_end_dt,"totally_within")
 
         # want existing routes to be at least partially within whole planning window, so that we will be able to later filter for all act windows on which they impose constraints (but note that we don't have to worry anymore about the constraints on the route, because the input utilization number for the route accounts for it) 
         for dmr in existing_routes:
-            process_dmr(dmr,self.planning_start_dt,"partially_within")
+            added = process_dmr(dmr,self.planning_start_dt,"partially_within")
 
             # mark those  existing routes that start before the fixed planning window end.
-            dmr_start = dmr.get_dlnk().start
-            if dmr_start <= self.planning_fixed_end_dt:
+            dmr_start = dmr.get_obs().start
+            if added and dmr_start <= self.planning_fixed_end_dt:
                 existing_routes_before_planning_fixed_end.append(dmr)
 
         return routes_filt, existing_routes_before_planning_fixed_end
@@ -263,7 +263,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
  
         return latency_sf_by_dmr_id
 
-    def make_model ( self,new_routes, existing_routes, utilization_by_existing_route_id, ecl_winds, verbose = True):
+    def make_model ( self,selected_routes, existing_routes, utilization_by_existing_route_id, ecl_winds, verbose = True):
         # important assumption: all activity window IDs are unique!
 
         #  first run pre-check on satellite states, to make sure that we can actually solve the MILP
@@ -273,29 +273,37 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         model = pe.ConcreteModel()
         self.model = model
 
+        ##############################
+        # filtering/checking of selected routes
+        ##############################
+
         # verify that each route is unique. If duplicate routes are present, would cause problems in constraints (e.g. a route would require double its actual needed throuput in a given act)
-        assert(len(new_routes) == len(set(new_routes)))
         existing_routes_set = set(existing_routes)
+        #  make sure no existing routes are duplicated
         assert(len(existing_routes) == len(existing_routes_set))
+        duplicated_new_routes = [dmr for dmr, count in Counter(selected_routes).items() if count > 1 and dmr not in existing_routes_set]
+        #  this makes sure that for every route that is not in existing Routes (i.e., a new route), there is no duplicate for it
+        assert( len(duplicated_new_routes) == 0)
 
         #  in the  route selection stage, we could have added some of the existing routes as "newly selected routes".  this is okay.  however, we do want to remove them from new routes right now in order to avoid constraint problems as mentioned above.
-        new_routes_dedup = []
+        new_routes = []
         #  count the number of times we removed an existing route from the new routes.  ideally all existing routes would be included in new routes (note: new routes are made at route selection step two).
-        num_existing_routes_deduped = 0
-        for dmr in new_routes:
+        existing_routes_selected = set()
+        for dmr in selected_routes:
             if dmr in existing_routes_set:
-                num_existing_routes_deduped += 1
+                existing_routes_selected.add(dmr)
             else:
-                new_routes_dedup.append(dmr)
+                new_routes.append(dmr)
 
         # filter the routes to make sure that  none of their activities fall outside the scheduling window
-        routes_filt,existing_routes_fixed = self.filter_routes(new_routes_dedup,existing_routes)
+        routes_filt,existing_routes_fixed = self.filter_routes(new_routes,existing_routes)
         routes_by_dmr_id = {dmr.ID:dmr for dmr in routes_filt}
 
         print_verbose('considering %d routes'%(len(routes_filt)),verbose)
-        print_verbose('Fraction of existing routes included at RS step two: %d/%d'%(num_existing_routes_deduped,len(existing_routes)),verbose)
+        print_verbose('Fraction of existing routes included at RS step two: %d/%d'%(len(existing_routes_selected),len(existing_routes)),verbose)
 
         self.routes_filt = routes_filt
+        self.existing_routes = existing_routes
         self.utilization_by_existing_route_id = utilization_by_existing_route_id
         self.routes_by_dmr_id = routes_by_dmr_id
         self.ecl_winds = ecl_winds
@@ -352,9 +360,10 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             # note that these dancecards will baloon in size pretty quickly as the planning_end_dt increases. However most of the complexity they introduce is before planning_end_obs,xlnk_dt because that's the horizon where obs,xlnk actitivities are included. After that there should only be sparse downlinks
             es_act_dancecards = [Dancecard(self.planning_start_dt,self.planning_end_dt,self.resource_delta_t_s,item_init=None,mode='timestep') for sat_indx in range (self.num_sats)]
             
+            #  add windows to dance card, silenty dropping any time steps that appear outside of the planning window bounds ( we don't need to enforce resource constraints on out-of-bounds activities)
             for sat_indx in range (self.num_sats): 
-                es_act_dancecards[sat_indx].add_winds_to_dancecard(sats_acts[sat_indx])
-                es_act_dancecards[sat_indx].add_winds_to_dancecard(ecl_winds[sat_indx])
+                es_act_dancecards[sat_indx].add_winds_to_dancecard(sats_acts[sat_indx],drop_out_of_bounds=True)
+                es_act_dancecards[sat_indx].add_winds_to_dancecard(ecl_winds[sat_indx],drop_out_of_bounds=True)
 
             # this is for data storage
             # for each sat/timepoint, we store a list of all those data multi routes that are storing data on the sat at that timepoint
@@ -366,8 +375,8 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                 dmr_ds_intervs = dmr.get_data_storage_intervals()
 
                 for interv in dmr_ds_intervs:
-                    # store the dmr object at this timepoint
-                    ds_route_dancecards[interv.sat_indx].add_item_in_interval(dmr.ID,interv.start,interv.end)
+                    # store the dmr object at this timepoint, silenty dropping any time points that appear outside of the planning window bounds ( we don't need to enforce resource constraints on out-of-bounds intervals)
+                    ds_route_dancecards[interv.sat_indx].add_item_in_interval(dmr.ID,interv.start,interv.end,drop_out_of_bounds=True)
 
         except IndexError:
             raise RuntimeWarning('sat_indx out of range. Are you sure all of your input files are consistent? (including pickles)')        
@@ -438,12 +447,12 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         model.par_dmr_dv = pe.Param(model.dmr_ids,initialize ={ dmr.ID: dmr.data_vol for dmr in routes_filt})
         #  data volume for each activity in each data multi-route
 
-        # todo: will probably have to fix this to not be the full set multiplication of model.dmr_ids, model.act_windids - can use dmr_ids_by_act_windid
+        #  stored data volume for each activity used by each data route. only store this for the activity if the activity was found to be within the planning window filter (hence, the act in self.all_act_windids_by_obj.keys() check)
         model.par_dmr_act_dv = pe.Param(
             model.dmr_ids,
             model.act_windids,
             initialize = { (dmr.ID,self.all_act_windids_by_obj[act]): 
-                dmr.data_vol_for_wind(act) for dmr in routes_filt for act in dmr.get_winds()
+                dmr.data_vol_for_wind(act) for dmr in routes_filt for act in dmr.get_winds() if act in self.all_act_windids_by_obj.keys() 
             }
         )
 
@@ -688,7 +697,8 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         model.c11  = pe.ConstraintList()
         for p in model.fixed_dmr_ids:
             # less than constraint because equality should be achievable (if we're only using existing routes that have all previously been scheduled and deconflicted together - which is the case for current version of GP), but want to allow route to lessen its utilization if a more valuable route is available. 
-            model.c11.add( model.var_dmr_utilization[p] <= utilization_by_existing_route_id[p]) 
+            #  add in an epsilon at the end, because it may be that the utilization number was precisely chosen to meet the minimum data volume requirement -  don't want to not make the minimum data volume requirement this time because of round off error
+            model.c11.add( model.var_dmr_utilization[p] <= utilization_by_existing_route_id[p] + self.epsilon_fixed_utilization) 
             
         print_verbose('make obj',verbose)
 
@@ -815,9 +825,14 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         #  note that this code is slightly inefficient because it might duplicate windows across routes. that's fine though, because we're thorough in checking across all routes
         # note: dmr is for DataMultiRoute
         wind_sched_dv_check = {}
+        winds_in_planning_wind = set(self.all_act_windids_by_obj.keys())
         for dmr in scheduled_routes_flat:
             # wind may get set multiple times due to Windows appearing across routes, but that's not really a big deal
             for wind in dmr.get_winds():
+                #  only consider windows that were in the planning window
+                if not wind in winds_in_planning_wind:
+                    continue
+
                 act_indx = self.all_act_windids_by_obj[wind]
                 # wind_sched_dv_check[wind] = wind.data_vol * pe.value(self.model.var_act_indic[act_indx])
                 wind_sched_dv_check[wind] = wind.data_vol * pe.value(self.model.var_activity_utilization[act_indx])
@@ -826,8 +841,9 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
             # similar to winds, set dr data vols to 0
             for dr in dmr.data_routes:
-                # dmrs should not be sharing drs across themselves, so no scheduled dv should be seen yet
-                assert(dr.scheduled_dv == const.UNASSIGNED)
+                if not dr in self.existing_routes:
+                    # dmrs should not be sharing drs across themselves, so no scheduled dv should be seen yet
+                    assert(dr.scheduled_dv == const.UNASSIGNED)
                 dr.scheduled_dv = dmr.scheduled_dv_by_dr[dr] 
 
 
@@ -835,6 +851,10 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         #  add data volume for every route passing through every window
         for dmr in scheduled_routes_flat:
             for wind in dmr.get_winds():
+                #  only consider windows that were in the planning window
+                if not wind in winds_in_planning_wind:
+                    continue
+
                 wind.scheduled_data_vol += dmr.scheduled_dv_for_wind(wind)
 
 
@@ -846,6 +866,10 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             dmr.validate()
 
             for wind in dmr.get_winds():
+                #  only consider windows that were in the planning window
+                if not wind in winds_in_planning_wind:
+                    continue
+
                 #  this check should be at least as big as the scheduled data volume as calculated from all of the route data volumes. (it's not constrained from above, so it could be bigger)
                 if wind_sched_dv_check[wind] < wind.scheduled_data_vol - self.dv_epsilon:
                     raise RuntimeWarning('inconsistent activity scheduling results: activity window data volume determined from route dvs (%f) is greater than dv from var_act_indic (%f) [dmr: %s, wind: %s]'%(wind.scheduled_data_vol,wind_sched_dv_check[wind],dmr,wind))
@@ -936,6 +960,8 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         def expression_is_binding(be):
             return pe.value(be) < 0.001  # i.e., basically zero
 
+        winds_in_planning_wind = set(self.all_act_windids_by_obj.keys())
+
         for dmr in all_routes:
 
             dmr_id = dmr.ID
@@ -956,6 +982,10 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                     reasons_by_route[dmr].add('e')
 
                 for act in dmr.get_winds():
+                    #  only consider windows that were in the planning window
+                    if not act in winds_in_planning_wind:
+                        continue
+
                     #  check if window capacity is fully or very near fully utilized
                     if act.scheduled_data_vol >= act.data_vol - self.dv_epsilon:
                         if type(act) == ObsWindow:

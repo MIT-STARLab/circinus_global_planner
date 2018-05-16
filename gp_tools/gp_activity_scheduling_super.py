@@ -57,6 +57,8 @@ class GPActivityScheduling():
 
         # this is the minimum obs dv that must be downlinked for an obs (data route/obs dlnk) in order for it to count it towards objective terms (other than total dv)
         self.min_obs_dv_dlnk_req =as_params['min_obs_dv_dlnk_req_Mb']
+        #  the amount of extra utilization a fixed route is allowed in the model.
+        self.epsilon_fixed_utilization = 0.001
         # this is the mimimum latency requirement for the highest latency score factor, 1.0. If multiple routes/dlnks for a single obs have latency less than this, they will both have sf 1.0
         self.min_latency_for_sf_1_mins =as_params['min_latency_for_sf_1_mins']
 
@@ -131,6 +133,7 @@ class GPActivityScheduling():
 
         # allow activities to overlap, and penalize them for doing so. The code should work, but hasn't been extensively vetted for its usefulness (does seem surprisingly unresponsive to changing weights for constraint violation in the obj function...). Note having these violations allowed generally won't play well with extracting routes in coupled AS due to data route validation checks. 
         self.allow_act_timing_constr_violations = False
+
 
     def run_sat_state_precheck(self,ecl_winds):
         """ propagate state forward from the initial state for every satellite to see if they're able to stay within resource limitations.  if we pass this check, then the MILP model should be solvable"""

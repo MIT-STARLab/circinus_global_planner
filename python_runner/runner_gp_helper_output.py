@@ -11,8 +11,9 @@ def calc_activity_scheduling_results ( gp_runner_inst,obs_winds,dlnk_winds_flat,
     rs_routes_by_obs_filt = gp_gen.filt_routes_by_obs(gp_runner_inst,rs_routes_by_obs)
     sched_routes_filt = gp_gen.filt_routes(gp_runner_inst,sched_routes)
 
-    # these should actually be equal, because we shouldn't have tried to schedule any routed that should be filtered!
-    assert(len(sched_routes_filt) == len(sched_routes))
+    # todo: this no longer true because we can have routes that are partly outside of the planning window. need to make results calculation more robust
+    # these should actually be equal, because we shouldn't have tried to schedule any route that should be filtered!
+    # assert(len(sched_routes_filt) == len(sched_routes))
 
     num_collectible_obs_winds = sum(1 for winds in obs_winds for obs in winds if gp_gen.wind_in_planning_window(gp_runner_inst,obs))
     total_collectible_DV_all_obs_winds = sum(obs.data_vol for winds in obs_winds for obs in winds  if gp_gen.wind_in_planning_window(gp_runner_inst,obs))
