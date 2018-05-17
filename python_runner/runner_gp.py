@@ -656,7 +656,7 @@ def remote_multiproc_run(self,mp_queue,verbose=False):
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(description='orbit propagation')
+    ap = argparse.ArgumentParser(description='global planner')
     ap.add_argument('--prop_inputs_file',
                     type=str,
                     default='orbit_prop_inputs.json',
@@ -696,6 +696,9 @@ if __name__ == "__main__":
                     type=str,
                     default=None,
                     help='specify post activity scheduling pickle to load')
+
+    #  added this to deal with trailing white space at the command line.  freaking argparse can't understand the fact that two trailing spaces is not another argument....
+    ap.add_argument('args', nargs=argparse.REMAINDER)
 
     args = ap.parse_args()
 
