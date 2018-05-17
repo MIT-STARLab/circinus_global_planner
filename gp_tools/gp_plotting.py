@@ -16,7 +16,7 @@ def plot_window_schedule(current_axis,winds,get_start_func,get_end_func,sat_plot
     viz_object_rotator_hist = sat_plot_params['viz_object_rotator_hist']
     label_rotator_hist = sat_plot_params['label_rotator_hist']
 
-    base_time = sat_plot_params['base_time']
+    base_time_dt = sat_plot_params['base_time_dt']
 
     viz_objects = []
 
@@ -27,12 +27,12 @@ def plot_window_schedule(current_axis,winds,get_start_func,get_end_func,sat_plot
     if winds and len(winds) > 0:
         for wind in winds:
 
-            act_start = (get_start_func(wind)-base_time).total_seconds()/sat_plot_params['time_divisor']
-            act_end = (get_end_func(wind)-base_time).total_seconds()/sat_plot_params['time_divisor']
+            act_start = (get_start_func(wind)-base_time_dt).total_seconds()/sat_plot_params['time_divisor']
+            act_end = (get_end_func(wind)-base_time_dt).total_seconds()/sat_plot_params['time_divisor']
 
             #  check if the activity is out of the time bounds for the plot or overlapping them
-            out_of_bounds = get_end_func(wind) < sat_plot_params['plot_start'] or get_start_func(wind) > sat_plot_params['plot_end']
-            overlapping_bounds = get_start_func(wind) < sat_plot_params['plot_start'] or get_end_func(wind) > sat_plot_params['plot_end']
+            out_of_bounds = get_end_func(wind) < sat_plot_params['plot_start_dt'] or get_start_func(wind) > sat_plot_params['plot_end_dt']
+            overlapping_bounds = get_start_func(wind) < sat_plot_params['plot_start_dt'] or get_end_func(wind) > sat_plot_params['plot_end_dt']
 
             if out_of_bounds:
                 continue
@@ -144,42 +144,117 @@ class GPPlotting():
         self.sats_dmin_Gb = [ds_params['data_storage_Gbit']['d_min'][ds_params['storage_option']] for ds_params in self.data_storage_params]
         self.sats_dmax_Gb = [ds_params['data_storage_Gbit']['d_max'][ds_params['storage_option']] for ds_params in self.data_storage_params]
 
-
-    def plot_all_sats_acts(
-        self,
+    def gp_plot_all_sats_acts(self,
         sats_ids_list,
-        all_obs_winds_flat,
-        obs_winds_flat,
-        all_dlnk_winds_flat,
-        dlnk_winds_flat, 
-        all_xlnk_winds_flat,
-        xlnk_winds_flat,
+        sats_obs_winds_choices,
+        sats_obs_winds,
+        sats_dlnk_winds_choices,
+        sats_dlnk_winds, 
+        sats_xlnk_winds_choices,
+        sats_xlnk_winds,
         route_ids_by_wind,
-        plot_start,
-        plot_end,
-        base_time,
+        plot_start_dt,
+        plot_end_dt,
+        base_time_dt,
         plot_title = 'Route Plot', 
         plot_size_inches = (12,12),
         plot_include_labels = False,
         plot_original_times = False,
         show=False,
         fig_name='plots/xlnk_dlnk_plot.pdf'):
+
+        plot_params = {}
+        plot_params['route_ids_by_wind'] = route_ids_by_wind
+        plot_params['plot_start_dt'] = plot_start_dt
+        plot_params['plot_end_dt'] = plot_end_dt
+        plot_params['base_time_dt'] = base_time_dt
+        plot_params['plot_title'] = plot_title
+        plot_params['plot_size_inches'] = plot_size_inches
+        plot_params['plot_include_labels'] = plot_include_labels
+        plot_params['plot_original_times'] = plot_original_times
+        plot_params['show'] = show
+        plot_params['fig_name'] = fig_name
+
+        plot_params['time_units'] = self.time_units
+        plot_params['sat_id_order'] = self.sat_id_order
+        plot_params['plot_fig_extension'] = self.plot_fig_extension
+
+        plot_params['plot_xlnks_choices'] = self.winds_plot_xlnks_choices
+        plot_params['plot_dlnks_choices'] = self.winds_plot_dlnks_choices
+        plot_params['plot_obs_choices'] = self.winds_plot_obs_choices
+        plot_params['plot_xlnks'] = self.winds_plot_xlnks
+        plot_params['plot_dlnks'] = self.winds_plot_dlnks
+        plot_params['plot_obs'] = self.winds_plot_obs
+
+        plot_params['xlnk_route_index_to_use'] = self.route_index_to_use
+        plot_params['xlnk_color_rollover'] = self.xlnk_color_rollover
+        plot_params['xlnk_colors'] = self.xlnk_colors
+
+        self.plot_all_sats_acts(
+            sats_ids_list,
+            sats_obs_winds_choices,
+            sats_obs_winds,
+            sats_dlnk_winds_choices,
+            sats_dlnk_winds, 
+            sats_xlnk_winds_choices,
+            sats_xlnk_winds,
+            plot_params)
+
+
+    def plot_all_sats_acts(
+        self,
+        sats_ids_list,
+        sats_obs_winds_choices,
+        sats_obs_winds,
+        sats_dlnk_winds_choices,
+        sats_dlnk_winds, 
+        sats_xlnk_winds_choices,
+        sats_xlnk_winds,
+        plot_params):
         '''
         Displays a 2D plot of assignments for each agent with respect to time
 
         '''
 
+        # input params dict handling
+        route_ids_by_wind = plot_params.get('route_ids_by_wind',None)
+        plot_start_dt = plot_params['plot_start_dt']
+        plot_end_dt = plot_params['plot_end_dt']
+        base_time_dt = plot_params['base_time_dt']
+        sat_id_order = plot_params['sat_id_order']
+
+        plot_title = plot_params.get('plot_title','Activities Plot')
+        plot_size_inches = plot_params.get('plot_size_inches',(12,12))
+        plot_include_labels = plot_params.get('plot_include_labels',False)
+        plot_original_times = plot_params.get('plot_original_times',False)
+        show = plot_params.get('show',False)
+        fig_name = plot_params.get('fig_name','plots/xlnk_dlnk_plot.pdf')
+        time_units = plot_params.get('time_units','minutes')
+        plot_fig_extension = plot_params.get('plot_fig_extension','pdf')
+
+        plot_xlnks_choices = plot_params.get('plot_xlnks_choices',True)
+        plot_dlnks_choices = plot_params.get('plot_dlnks_choices',True)
+        plot_obs_choices = plot_params.get('plot_obs_choices',True)
+        plot_xlnks = plot_params.get('plot_xlnks',True)
+        plot_dlnks = plot_params.get('plot_dlnks',False)
+        plot_obs = plot_params.get('plot_obs',False)
+
+        xlnk_route_index_to_use = plot_params.get('xlnk_route_index_to_use',0)
+        xlnk_color_rollover = plot_params.get('xlnk_color_rollover',1)
+        xlnk_colors = plot_params.get('xlnk_colors',['#FF0000'])
+
+
         fontsize_obs = 10
         fontsize_dlnk = 7
 
-        if self.time_units == 'hours':
+        if time_units == 'hours':
             time_divisor = 3600
-        if self.time_units == 'minutes':
+        if time_units == 'minutes':
             time_divisor = 60
         
-        # time_to_end = (plot_end-plot_start).total_seconds()/time_divisor
-        start_time = (plot_start-base_time).total_seconds()/time_divisor
-        end_time = (plot_end-base_time).total_seconds()/time_divisor
+        # time_to_end = (plot_end_dt-plot_start_dt).total_seconds()/time_divisor
+        start_time = (plot_start_dt-base_time_dt).total_seconds()/time_divisor
+        end_time = (plot_end_dt-base_time_dt).total_seconds()/time_divisor
 
         num_sats = len(sats_ids_list)
 
@@ -223,7 +298,7 @@ class GPPlotting():
         obs_count = 0
         for  plot_indx, sat_id in enumerate (sats_ids_list):
             #  get the index for this ID
-            sat_indx = self.sat_id_order.index(str(sat_id))
+            sat_indx = sat_id_order.index(str(sat_id))
 
             SMALL_SIZE = 8
             MEDIUM_SIZE = 10
@@ -278,15 +353,15 @@ class GPPlotting():
 
             # plot the crosslink "choices" -  meant to represent the windows that could have been chosen
             #  plot cross-links first, so that they are the furthest back (lowest z value) on the plot, and observations and downlinks will appear on top ( because there are generally a lot more cross-links than observations and down links)
-            if self.winds_plot_xlnks_choices and all_xlnk_winds_flat is not None:
+            if plot_xlnks_choices and sats_xlnk_winds_choices is not None:
                 sat_plot_params = {
-                    "plot_start": plot_start,
-                    "plot_end": plot_end,
+                    "plot_start_dt": plot_start_dt,
+                    "plot_end_dt": plot_end_dt,
                     "plot_color": "#FFBCBC",
                     "plot_hatch": False,
                     "include_labels": False,
                     "fontsize": 7,
-                    "base_time": base_time,
+                    "base_time_dt": base_time_dt,
                     "time_divisor": time_divisor,
                     "viz_object_vert_bottom_base_offset": 0,
                     "viz_object_rotator_hist": xlnk_rectangle_rotator_hist,
@@ -298,20 +373,20 @@ class GPPlotting():
                     "label_rotation_rollover": xlnk_label_rotation_rollover,
                 }
 
-                xlnk_viz_objects = plot_window_schedule(current_axis,all_xlnk_winds_flat[sat_indx],get_start,get_end,sat_plot_params,label_getter=None,color_getter=None)
+                xlnk_viz_objects = plot_window_schedule(current_axis,sats_xlnk_winds_choices[sat_indx],get_start,get_end,sat_plot_params,label_getter=None,color_getter=None)
                 if len(xlnk_viz_objects) > 0:
                     x_w_obj = xlnk_viz_objects[-1]
 
             # plot the downlink "choices" -  meant to represent the windows that could have been chosen
-            if self.winds_plot_dlnks_choices and all_dlnk_winds_flat is not None:
+            if plot_dlnks_choices and sats_dlnk_winds_choices is not None:
                 sat_plot_params = {
-                    "plot_start": plot_start,
-                    "plot_end": plot_end,
+                    "plot_start_dt": plot_start_dt,
+                    "plot_end_dt": plot_end_dt,
                     "plot_color": "#BFBFFF",
                     "plot_hatch": False,
                     "include_labels": False,
                     "fontsize": 7,
-                    "base_time": base_time,
+                    "base_time_dt": base_time_dt,
                     "time_divisor": time_divisor,
                     "viz_object_vert_bottom_base_offset": 0,
                     "viz_object_rotator_hist": dlnk_rectangle_rotator_hist,
@@ -323,20 +398,20 @@ class GPPlotting():
                     "label_rotation_rollover": dlnk_label_rotation_rollover,
                 }
 
-                dlnk_viz_objects = plot_window_schedule(current_axis,all_dlnk_winds_flat[sat_indx],get_start,get_end,sat_plot_params,label_getter=None,color_getter=None)
+                dlnk_viz_objects = plot_window_schedule(current_axis,sats_dlnk_winds_choices[sat_indx],get_start,get_end,sat_plot_params,label_getter=None,color_getter=None)
                 if len(dlnk_viz_objects) > 0:
                     d_w_obj = dlnk_viz_objects[-1]
 
             # plot the observation "choices" -  meant to represent the windows that could have been chosen
-            if self.winds_plot_obs_choices and all_obs_winds_flat is not None:
+            if plot_obs_choices and sats_obs_winds_choices is not None:
                 sat_plot_params = {
-                    "plot_start": plot_start,
-                    "plot_end": plot_end,
+                    "plot_start_dt": plot_start_dt,
+                    "plot_end_dt": plot_end_dt,
                     "plot_color": "#BFFFBF",
                     "plot_hatch": False,
                     "include_labels": False,
                     "fontsize": 7,
-                    "base_time": base_time,
+                    "base_time_dt": base_time_dt,
                     "time_divisor": time_divisor,
                     "viz_object_vert_bottom_base_offset": 0,
                     "viz_object_rotator_hist": obs_rectangle_rotator_hist,
@@ -348,7 +423,7 @@ class GPPlotting():
                     "label_rotation_rollover": obs_label_rotation_rollover,
                 }
 
-                obs_viz_objects = plot_window_schedule(current_axis,all_obs_winds_flat[sat_indx],get_start,get_end,sat_plot_params,label_getter=None,color_getter=None)
+                obs_viz_objects = plot_window_schedule(current_axis,sats_obs_winds_choices[sat_indx],get_start,get_end,sat_plot_params,label_getter=None,color_getter=None)
                 if len(obs_viz_objects) > 0:
                     o_w_obj = obs_viz_objects[-1]
 
@@ -359,13 +434,13 @@ class GPPlotting():
 
             #  plot the executed cross-links
             #  plot cross-links first, so that they are the furthest back (lowest z value) on the plot, and observations and downlinks will appear on top ( because there are generally a lot more cross-links than observations and down links)
-            if self.winds_plot_xlnks and xlnk_winds_flat is not None:
+            if plot_xlnks and sats_xlnk_winds is not None:
                 def label_getter(xlnk):
                     dr_id = None
                     if route_ids_by_wind:
                         dr_indcs = route_ids_by_wind.get(xlnk,None)
                         if not dr_indcs is None:
-                            dr_id = dr_indcs[self.route_index_to_use]
+                            dr_id = dr_indcs[xlnk_route_index_to_use]
 
                     other_sat_indx = xlnk.get_xlnk_partner(sat_indx)
                     if not dr_id is None:
@@ -381,18 +456,18 @@ class GPPlotting():
                     if route_ids_by_wind:
                         dr_indcs = route_ids_by_wind.get(xlnk,None)
                         if not dr_indcs is None:
-                            dr_id = dr_indcs[self.route_index_to_use]
-                            xlnk_color_indx = dr_id.get_indx() %  self.xlnk_color_rollover
-                    return self.xlnk_colors[xlnk_color_indx]
+                            dr_id = dr_indcs[xlnk_route_index_to_use]
+                            xlnk_color_indx = dr_id.get_indx() %  xlnk_color_rollover
+                    return xlnk_colors[xlnk_color_indx]
 
                 sat_plot_params = {
-                    "plot_start": plot_start,
-                    "plot_end": plot_end,
+                    "plot_start_dt": plot_start_dt,
+                    "plot_end_dt": plot_end_dt,
                     "plot_color": None,
                     "plot_hatch": True,
                     "include_labels": False,
                     "fontsize": 7,
-                    "base_time": base_time,
+                    "base_time_dt": base_time_dt,
                     "time_divisor": time_divisor,
                     "viz_object_vert_bottom_base_offset": 0,
                     "viz_object_rotator_hist": dlnk_rectangle_rotator_hist,
@@ -404,23 +479,23 @@ class GPPlotting():
                     "label_rotation_rollover": xlnk_label_rotation_rollover,
                 }
 
-                xlnk_viz_objects = plot_window_schedule(current_axis,xlnk_winds_flat[sat_indx],get_start,get_end,sat_plot_params,label_getter,color_getter)
+                xlnk_viz_objects = plot_window_schedule(current_axis,sats_xlnk_winds[sat_indx],get_start,get_end,sat_plot_params,label_getter,color_getter)
                 if len(xlnk_viz_objects) > 0:
                     x_obj = xlnk_viz_objects[-1]
 
             # plot the executed down links
-            if self.winds_plot_dlnks and dlnk_winds_flat is not None:
+            if plot_dlnks and sats_dlnk_winds is not None:
                 def label_getter(dlnk):
                     return "g%d,dv %d/%d"%(dlnk.gs_indx,dlnk.scheduled_data_vol,dlnk.data_vol) 
 
                 sat_plot_params = {
-                    "plot_start": plot_start,
-                    "plot_end": plot_end,
+                    "plot_start_dt": plot_start_dt,
+                    "plot_end_dt": plot_end_dt,
                     "plot_color": "#0000FF",
                     "plot_hatch": True,
                     "include_labels": plot_include_labels,
                     "fontsize": 7,
-                    "base_time": base_time,
+                    "base_time_dt": base_time_dt,
                     "time_divisor": time_divisor,
                     "viz_object_vert_bottom_base_offset": 0,
                     "viz_object_rotator_hist": dlnk_rectangle_rotator_hist,
@@ -432,23 +507,23 @@ class GPPlotting():
                     "label_rotation_rollover": dlnk_label_rotation_rollover,
                 }
 
-                dlnk_viz_objects = plot_window_schedule(current_axis,dlnk_winds_flat[sat_indx],get_start,get_end,sat_plot_params,label_getter,color_getter=None)
+                dlnk_viz_objects = plot_window_schedule(current_axis,sats_dlnk_winds[sat_indx],get_start,get_end,sat_plot_params,label_getter,color_getter=None)
                 if len(dlnk_viz_objects) > 0:
                     d_obj = dlnk_viz_objects[-1]
 
             # plot the observations that are actually executed
-            if self.winds_plot_obs and obs_winds_flat is not None:
+            if plot_obs and sats_obs_winds is not None:
                 def label_getter(obs):
                     return "obs %d, dv %d/%d"%(obs_count,obs.scheduled_data_vol,obs.data_vol)
 
                 sat_plot_params = {
-                    "plot_start": plot_start,
-                    "plot_end": plot_end,
+                    "plot_start_dt": plot_start_dt,
+                    "plot_end_dt": plot_end_dt,
                     "plot_color": "#00FF00",
                     "plot_hatch": True,
                     "include_labels": plot_include_labels,
                     "fontsize": 7,
-                    "base_time": base_time,
+                    "base_time_dt": base_time_dt,
                     "time_divisor": time_divisor,
                     "viz_object_vert_bottom_base_offset": 0,
                     "viz_object_rotator_hist": obs_rectangle_rotator_hist,
@@ -460,7 +535,7 @@ class GPPlotting():
                     "label_rotation_rollover": obs_label_rotation_rollover,
                 }
 
-                obs_viz_objects = plot_window_schedule(current_axis,obs_winds_flat[sat_indx],get_start,get_end,sat_plot_params,label_getter,color_getter=None)
+                obs_viz_objects = plot_window_schedule(current_axis,sats_obs_winds[sat_indx],get_start,get_end,sat_plot_params,label_getter,color_getter=None)
                 if len(obs_viz_objects) > 0:
                     o_obj = obs_viz_objects[-1]
 
@@ -500,7 +575,7 @@ class GPPlotting():
 
         plt.legend(legend_objects, legend_objects_labels ,bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 
-        plt.xlabel('Time (%s)'%(self.time_units))
+        plt.xlabel('Time (%s)'%(time_units))
 
         # use the last axes to set the entire plot background color
         axes.patch.set_facecolor('w')
@@ -508,7 +583,7 @@ class GPPlotting():
         if show:
             plt.show()
         else:
-            savefig(fig_name,format=self.plot_fig_extension)
+            savefig(fig_name,format=plot_fig_extension)
 
     def plot_data_circles(
         self,

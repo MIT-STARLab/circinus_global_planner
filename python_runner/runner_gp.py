@@ -331,6 +331,7 @@ class GlobalPlannerRunner:
 
         sel_routes_by_obs = None
         pas_a = None
+        latest_dr_uid = None
 
         # If we need output from step 1
         run_step_1 = not self.other_params['rs_s2_pickle_input'] and not self.other_params['as_pickle_input']
@@ -368,7 +369,7 @@ class GlobalPlannerRunner:
         if run_step_2:
             if self.other_params['rs_s2_pickle_input']:
                 print_verbose('Unpickling route selection step two stuff',verbose)
-                sel_routes_by_obs,ecl_winds,window_uid,stats_rs2_pre,stats_rs2_post = pickle_helper.unpickle_rtsel_s2_stuff(self)
+                sel_routes_by_obs,ecl_winds,window_uid,stats_rs2_pre,stats_rs2_post,latest_dr_uid = pickle_helper.unpickle_rtsel_s2_stuff(self)
                 pas_a = time.time()
             else:
                 print_verbose('num_obs_calced',verbose)
@@ -391,7 +392,7 @@ class GlobalPlannerRunner:
                     sel_routes_by_obs,stats_rs2_pre,stats_rs2_post = self.run_route_selection_v2_step2(routes_by_obs,existing_route_data,verbose)
 
             if self.pickle_params['pickle_route_selection_step2_results']:
-                pickle_helper.pickle_rtsel_s2_stuff(self,sel_routes_by_obs,ecl_winds,window_uid,stats_rs2_pre,stats_rs2_post)
+                pickle_helper.pickle_rtsel_s2_stuff(self,sel_routes_by_obs,ecl_winds,window_uid,stats_rs2_pre,stats_rs2_post,latest_dr_uid)
         else:
             print_verbose('Skipping route selection step two stuff',verbose)
 
@@ -477,7 +478,7 @@ class GlobalPlannerRunner:
             return [],[]
 
         if self.other_params['as_pickle_input']:
-            sel_routes_by_obs,ecl_winds,scheduled_routes,energy_usage,data_usage, window_uid = pickle_helper.unpickle_actsc_stuff(self)
+            sel_routes_by_obs,ecl_winds,scheduled_routes,energy_usage,data_usage, window_uid,latest_dr_uid = pickle_helper.unpickle_actsc_stuff(self)
         else:
             run_coupled_rs_as = self.as_params['run_coupled_rs_as']
 
@@ -498,7 +499,7 @@ class GlobalPlannerRunner:
 
         # if we are saving to file, do that
         if self.pickle_params['pickle_act_scheduling_results']:
-            pickle_helper.pickle_actsc_stuff(self,sel_routes_by_obs,ecl_winds,scheduled_routes,energy_usage,data_usage, window_uid)
+            pickle_helper.pickle_actsc_stuff(self,sel_routes_by_obs,ecl_winds,scheduled_routes,energy_usage,data_usage, window_uid,latest_dr_uid)
 
 
         pas_b = time.time()
@@ -698,9 +699,11 @@ if __name__ == "__main__":
                     help='specify post activity scheduling pickle to load')
 
     #  added this to deal with trailing white space at the command line.  freaking argparse can't understand the fact that two trailing spaces is not another argument....
-    ap.add_argument('args', nargs=argparse.REMAINDER)
+    # ap.add_argument('args', nargs=argparse.REMAINDER)
 
     args = ap.parse_args()
+
+    # print(args)
 
     pr = PipelineRunner()
 
@@ -728,9 +731,9 @@ if __name__ == "__main__":
         "gp_instance_params_inputs": gp_instance_params_inputs,
         # "viz_params": viz_params,
         "data_rates_inputs": data_rates_inputs,
-        "rs_s1_pickle": args.rs_s1_pickle,
-        "rs_s2_pickle": args.rs_s2_pickle,
-        "as_pickle": args.as_pickle,
+        "rs_s1_pickle": args.rs_s1_pickle if args.rs_s1_pickle != '' else None,
+        "rs_s2_pickle": args.rs_s2_pickle if args.rs_s2_pickle != '' else None,
+        "as_pickle": args.as_pickle if args.as_pickle != '' else None,
         "file_params":  {'new_pickle_file_name_pre': args.prop_inputs_file.split('/')[-1].split ('.')[0]}
     }
 
