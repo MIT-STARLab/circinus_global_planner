@@ -120,7 +120,7 @@ def plot_route_selection_results ( gp_runner_inst,routes_by_obs,dlnk_winds_flat,
             plot_len = max(gp_runner_inst.rs_general_params['wind_filter_duration_s'],gp_runner_inst.rs_general_params['wind_filter_duration_obs_sat_s'])
 
             #  plot the selected down links and cross-links
-            gp_runner_inst.gp_plot.plot_winds(
+            gp_runner_inst.gp_plot.plot_all_sats_acts(
                 sats_to_include,
                 sel_obs_winds_flat,
                 sel_obs_winds_flat,
@@ -191,7 +191,7 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
     all_obs_winds,all_dlnk_winds_flat,all_xlnk_winds_flat = all_possible_winds
 
     # plot the selected down links and cross-links this
-    gp_runner_inst.gp_plot.plot_winds(
+    gp_runner_inst.gp_plot.plot_all_sats_acts(
         sats_to_include,
         sel_obs_winds_flat,
         sched_obs_winds_flat,
@@ -204,7 +204,7 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
         # gp_runner_inst.gp_inst_planning_params['planning_start_dt'] + timedelta( seconds= gp_runner_inst.rs_general_params['wind_filter_duration_s']),
         gp_runner_inst.gp_inst_planning_params['planning_end_dlnk_dt'],
         base_time = gp_runner_inst.scenario_params['start_utc_dt'],
-        plot_title = 'Scheduled Activities',
+        plot_title = 'Scheduled Acts / RS Acts',
         plot_size_inches = (18,12),
         plot_include_labels = gp_runner_inst.plot_params['plot_AS_include_labels'],
         plot_original_times = False,
@@ -213,7 +213,7 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
     )
 
     # plot all winds
-    gp_runner_inst.gp_plot.plot_winds(
+    gp_runner_inst.gp_plot.plot_all_sats_acts(
         sats_to_include,
         all_obs_winds,
         all_obs_winds,
@@ -226,7 +226,7 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
         # gp_runner_inst.gp_inst_planning_params['planning_start_dt'] + timedelta( seconds= gp_runner_inst.rs_general_params['wind_filter_duration_s']),
         gp_runner_inst.gp_inst_planning_params['planning_end_dlnk_dt'],
         base_time = gp_runner_inst.scenario_params['start_utc_dt'],
-        plot_title = 'All Possible Activities',
+        plot_title = 'All Acts',
         plot_size_inches = (18,12),
         plot_include_labels = gp_runner_inst.plot_params['plot_AS_include_labels'],
         plot_original_times = True,
@@ -236,7 +236,7 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
 
     if len(sel_routes_by_obs.keys()) > 0:
         # plot RS winds
-        gp_runner_inst.gp_plot.plot_winds(
+        gp_runner_inst.gp_plot.plot_all_sats_acts(
             sats_to_include,
             all_obs_winds,
             sel_obs_winds_flat,
@@ -249,7 +249,7 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
             # gp_runner_inst.gp_inst_planning_params['planning_start_dt'] + timedelta( seconds= gp_runner_inst.rs_general_params['wind_filter_duration_s']),
             gp_runner_inst.gp_inst_planning_params['planning_end_dlnk_dt'],
             base_time = gp_runner_inst.scenario_params['start_utc_dt'],
-            plot_title = 'All RS routes (only obs dv is correct)',
+            plot_title = 'RS Acts / All Acts',
             plot_size_inches = (18,12),
             plot_include_labels = gp_runner_inst.plot_params['plot_RS_include_labels'],
             plot_original_times = False,
