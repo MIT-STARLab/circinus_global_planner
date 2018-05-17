@@ -44,7 +44,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
     def get_stats(self,verbose=True):
 
         num_winds_per_route = [len(dmr.get_winds()) for dmr in self.routes_filt]
-        num_routes_by_act = {act:len(self.dmr_ids_by_act_windid[act_indx]) for act,act_indx in self.all_act_windids_by_obj.items()}
+        num_routes_by_act = {self.all_acts_by_windid[act_windid]:len(self.dmr_ids_by_act_windid[act_windid]) for act_windid in self.all_acts_windids}
 
         stats = {}
         stats['num_routes'] = sum([len ( self.routes_filt)])
@@ -111,72 +111,78 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
     def get_activity_structs( self,routes_filt):
 
         #  all activities are uniquely indexed. these structures keep track of those, and the mapping to activity objects
-        all_acts_windids = []
+        all_acts_windids = set()
+        mutable_acts_windids = set()
+
+        sats_mutable_acts = [[] for sat_indx in range (self.num_sats)]
+        sats_mutable_dlnks = [[] for sat_indx in range (self.num_sats)]
+
+        #  note that the rest of the structures consider both fixed and mutable activities
+
         #  these structures are for lookup in both directions
         all_acts_by_windid = {}
-        all_act_windids_by_obj = {}
 
         # these structures keep track of the subset of unique indices that correspond to observations and links. Also we keep track of what data routes correspond to an activity
-        all_lnk_windids = []
-        all_obs_windids = []
-        # dmr is data multi-route
-        dmr_ids_by_link_act_windid = {}
-        dmr_ids_by_obs_act_windid = {}
-        dmr_ids_by_act_windid = {}
+        all_lnk_windids = set()
+        all_obs_windids = set()
         dv_by_link_act_windid = {}
         dv_by_obs_act_windid = {}
         dv_by_act_windid = {}
 
-        sats_acts = [[] for sat_indx in range (self.num_sats)]
-        sats_dlnks = [[] for sat_indx in range (self.num_sats)]
+        # now dmr structs
+        # dmr is data multi-route
+        dmr_ids_by_link_act_windid = {}
+        dmr_ids_by_obs_act_windid = {}
+        dmr_ids_by_act_windid = {}
 
         for dmr in routes_filt:
             for act in dmr.get_winds():
+                act_is_mutable = True
 
-                # We have already filtered routes, but we also need to filter activities because there may be activities from existing routes that are outside of the planning window. we cannot fully enforce constraints on such windows, so we need to drop them
+                # We have already filtered routes, but we also need to filter activities because there may be activities from existing routes that are outside of the planning window. We do not want to enforce constraints on the windows by treating them like their utilization can change;  however, we do want to include the acts for other calculations in the model
                 if act.start < self.planning_start_dt or act.end > self.planning_end_dt:
-                    continue
+                    act_is_mutable = False
+
+                act_windid = act.window_ID
 
                 # if we haven't yet seen this activity, then add it to bookkeeping
-                if not act in all_act_windids_by_obj.keys():
+                if not act_windid in all_acts_windids:
                     # use activity window ID as a unique id for window in the model
-                    act_windid = act.window_ID
-                    all_acts_windids.append(act_windid)
+                    all_acts_windids.add(act_windid)
+                    if act_is_mutable: mutable_acts_windids.add(act_windid)
                     all_acts_by_windid[act_windid] = act
-                    all_act_windids_by_obj[act] = act_windid
                     dmr_ids_by_act_windid[act_windid] = []
                     dmr_ids_by_act_windid[act_windid].append (dmr.ID)
                     dv_by_act_windid[act_windid] = act.data_vol
 
                     # also need to add it to the list and dictionary for observations
                     if type(act) == ObsWindow:
-                        sats_acts[act.sat_indx].append(act)
-                        all_obs_windids.append(act_windid)
+                        if act_is_mutable: sats_mutable_acts[act.sat_indx].append(act)
+                        all_obs_windids.add(act_windid)
                         dmr_ids_by_obs_act_windid[act_windid] = []
                         dmr_ids_by_obs_act_windid[act_windid].append (dmr.ID)
                         dv_by_obs_act_windid[act_windid] = act.data_vol
 
                     # also need to add it to the list and dictionary for links
                     if type(act) == DlnkWindow:
-                        all_lnk_windids.append(act_windid)
+                        all_lnk_windids.add(act_windid)
                         dmr_ids_by_link_act_windid[act_windid] = []
                         dmr_ids_by_link_act_windid[act_windid].append (dmr.ID)
                         dv_by_link_act_windid[act_windid] = act.data_vol
-                        sats_acts[act.sat_indx].append(act)
+                        if act_is_mutable: sats_mutable_acts[act.sat_indx].append(act)
                         # grab the dlnks for each sat too, while we're looping through
-                        sats_dlnks[act.sat_indx].append(act)
+                        if act_is_mutable: sats_mutable_dlnks[act.sat_indx].append(act)
 
                     if type(act) == XlnkWindow:
-                        all_lnk_windids.append(act_windid)
+                        all_lnk_windids.add(act_windid)
                         dmr_ids_by_link_act_windid[act_windid] = []
                         dmr_ids_by_link_act_windid[act_windid].append (dmr.ID)
                         dv_by_link_act_windid[act_windid] = act.data_vol
-                        sats_acts[act.sat_indx].append(act)
-                        sats_acts[act.xsat_indx].append(act)
+                        if act_is_mutable: sats_mutable_acts[act.sat_indx].append(act)
+                        if act_is_mutable: sats_mutable_acts[act.xsat_indx].append(act)
 
                 #  if we have already seen the activity,  then just need to update the appropriate structures
                 else:
-                    act_windid = all_act_windids_by_obj[act]
                     dmr_ids_by_act_windid[act_windid].append (dmr.ID)
 
                     # add the data route index
@@ -190,10 +196,10 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
         #  sort the activities, because we'll need that for constructing constraints
         for sat_indx in range (self.num_sats):
-            sats_acts[sat_indx].sort(key=lambda x: x.center)
-            sats_dlnks[sat_indx].sort(key=lambda x: x.center)
+            sats_mutable_acts[sat_indx].sort(key=lambda x: x.center)
+            sats_mutable_dlnks[sat_indx].sort(key=lambda x: x.center)
 
-        return sats_acts,sats_dlnks,all_acts_windids,dmr_ids_by_act_windid,dv_by_act_windid,all_act_windids_by_obj,all_acts_by_windid,all_obs_windids,dmr_ids_by_obs_act_windid,dv_by_obs_act_windid,all_lnk_windids,dmr_ids_by_link_act_windid,dv_by_link_act_windid
+        return sats_mutable_acts,sats_mutable_dlnks,all_acts_windids,mutable_acts_windids,dmr_ids_by_act_windid,dv_by_act_windid,all_acts_by_windid,all_obs_windids,dmr_ids_by_obs_act_windid,dv_by_obs_act_windid,all_lnk_windids,dmr_ids_by_link_act_windid,dv_by_link_act_windid
                     
 
     def filter_routes( self,selected_routes,existing_routes):
@@ -327,12 +333,12 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         ##############################
 
         try:
-            (sats_acts,
-                sats_dlnks,
+            (sats_mutable_acts,
+                sats_mutable_dlnks,
                 all_acts_windids,
+                mutable_acts_windids,
                 dmr_ids_by_act_windid,
                 dv_by_act_windid,
-                all_act_windids_by_obj,
                 all_acts_by_windid,
                 all_obs_windids,
                 dmr_ids_by_obs_act_windid,
@@ -347,7 +353,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             )
 
             # verify that all acts found are within the planning window, otherwise we may end up with strange results
-            for sat_acts in sats_acts:
+            for sat_acts in sats_mutable_acts:
                 for act in sat_acts:
                     if act.start < self.planning_start_dt or act.end > self.planning_end_dt:
                         raise RuntimeWarning('Activity is out of planning window range (start %s, end %s): %s'%(self.planning_start_dt,self.planning_end_dt,act))
@@ -362,7 +368,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             
             #  add windows to dance card, silenty dropping any time steps that appear outside of the planning window bounds ( we don't need to enforce resource constraints on out-of-bounds activities)
             for sat_indx in range (self.num_sats): 
-                es_act_dancecards[sat_indx].add_winds_to_dancecard(sats_acts[sat_indx],drop_out_of_bounds=True)
+                es_act_dancecards[sat_indx].add_winds_to_dancecard(sats_mutable_acts[sat_indx],drop_out_of_bounds=True)
                 es_act_dancecards[sat_indx].add_winds_to_dancecard(ecl_winds[sat_indx],drop_out_of_bounds=True)
 
             # this is for data storage
@@ -384,8 +390,8 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         self.all_acts_windids = all_acts_windids
         self.obs_windids = all_obs_windids
         self.lnk_windids = all_lnk_windids
-        self.all_act_windids_by_obj = all_act_windids_by_obj
         self.all_acts_by_windid = all_acts_by_windid
+        self.mutable_acts_windids = mutable_acts_windids
 
         # these dmr subscripts probably should've been done using the unique IDs for the objects, rather than their arbitrary locations within a list. Live and learn, hélas...
 
@@ -394,7 +400,9 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         #  these are all the routes that have acts occurring before the fixed planning window end.  we assume that these routes are no longer as "malleable" as other routes -  they have an upper limit on their utilization based on their existing utilization. this is because if any of these activities has already been executed, the route is now constrained by the throughput used from that act
         model.fixed_dmr_ids = pe.Set(initialize= fixed_routes_ids)
         #  subscript for each activity a
-        model.act_windids = pe.Set(initialize= all_acts_windids)
+        model.all_act_windids = pe.Set(initialize= all_acts_windids)
+        #  subscript for each mutable activity a ( we can still change the activity's utilization)
+        model.mutable_act_windids = pe.Set(initialize= mutable_acts_windids)
         #  subscript for each satellite
         model.sat_indcs = pe.Set(initialize=  range ( self.num_sats))
 
@@ -442,7 +450,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         model.par_obs_capacity = pe.Param(model.obs_windids,initialize =dv_by_obs_act_windid)
         model.par_total_obs_dv = sum(dv_by_obs_act_windid.values())
         model.par_link_capacity = pe.Param(model.lnk_windids,initialize =dv_by_link_act_windid)
-        model.par_act_capacity = pe.Param(model.act_windids,initialize =dv_by_act_windid)
+        model.par_act_capacity = pe.Param(model.all_act_windids,initialize =dv_by_act_windid)
         #  data volume for each data multi-route
         model.par_dmr_dv = pe.Param(model.dmr_ids,initialize ={ dmr.ID: dmr.data_vol for dmr in routes_filt})
         #  data volume for each activity in each data multi-route
@@ -450,17 +458,17 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         #  stored data volume for each activity used by each data route. only store this for the activity if the activity was found to be within the planning window filter (hence, the act in self.all_act_windids_by_obj.keys() check)
         model.par_dmr_act_dv = pe.Param(
             model.dmr_ids,
-            model.act_windids,
-            initialize = { (dmr.ID,self.all_act_windids_by_obj[act]): 
-                dmr.data_vol_for_wind(act) for dmr in routes_filt for act in dmr.get_winds() if act in self.all_act_windids_by_obj.keys() 
+            model.all_act_windids,
+            initialize = { (dmr.ID,act.window_ID): 
+                dmr.data_vol_for_wind(act) for dmr in routes_filt for act in dmr.get_winds() if act.window_ID in mutable_acts_windids 
             }
         )
 
         # each of these is essentially a dictionary indexed by link or obs act indx, with  the value being a list of dmr indices that are included within that act
         # these are valid indices into model.dmr_ids
-        model.par_dmr_subscrs_by_link_act = pe.Param(model.lnk_windids,initialize =dmr_ids_by_link_act_windid)
+        # model.par_dmr_subscrs_by_link_act = pe.Param(model.lnk_windids,initialize =dmr_ids_by_link_act_windid)
         model.par_dmr_subscrs_by_obs_act = pe.Param(model.obs_windids,initialize =dmr_ids_by_obs_act_windid)
-        model.par_dmr_subscrs_by_act = pe.Param(model.act_windids,initialize =dmr_ids_by_act_windid)
+        model.par_dmr_subscrs_by_act = pe.Param(model.all_act_windids,initialize =dmr_ids_by_act_windid)
 
 
         if self.energy_unit == "Wh":
@@ -481,14 +489,14 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
 
         # activity utilization variable indicating how much of an activity's capacity is used [1]
-        model.var_activity_utilization  = pe.Var (model.act_windids, bounds =(0,1))
+        model.var_activity_utilization  = pe.Var (model.mutable_act_windids, bounds =(0,1))
         # dmr utilization variable indicating how much of a dmr's capacity is used [2]
         model.var_dmr_utilization  = pe.Var (model.dmr_ids, bounds =(0,1))
         #  indicator variables for whether or not dmrs [3] and activities [4] have been chosen
         model.var_dmr_indic  = pe.Var (model.dmr_ids, within = pe.Binary)
         # model.var_dmr_indic  = pe.Var (model.dmr_ids, bounds =(0,1))
-        model.var_act_indic  = pe.Var (model.act_windids, within = pe.Binary)
-        # model.var_act_indic  = pe.Var (model.act_windids, bounds =(0,1))
+        model.var_act_indic  = pe.Var (model.mutable_act_windids, within = pe.Binary)
+        # model.var_act_indic  = pe.Var (model.mutable_act_windids, bounds =(0,1))
 
         
         # satellite energy storage
@@ -531,18 +539,18 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
         # TODO: renumber  these with the final numbering
 
-        # note that the observations show up within model.act_windids as well, so we also constraint route scheduled DV by the real available DV from each observation
+        # note that the observations show up within model.all_act_windids as well, so we also constraint route scheduled DV by the real available DV from each observation
         def c1_rule( model,a):
             return (model.par_act_capacity[a]*model.var_activity_utilization[a] -
                         sum(model.par_dmr_act_dv[p,a]*model.var_dmr_utilization[p] 
                             for p in model.par_dmr_subscrs_by_act[a]) 
                     >= 0)
-        model.c1 =pe.Constraint ( model.act_windids,  rule=c1_rule)
+        model.c1 =pe.Constraint ( model.mutable_act_windids,  rule=c1_rule)
 
         # this constraint forces all activity indicators along a route to be high if that route is picked. From the other perspective, if an activity is not picked, then all route indicators through it must be low (not required, but the MILP branch and cut algorithm can take advantage of this to search through binary variables more efficiently)
         # it's not entirely clear to me though how helpful this constraint is - on a 30 sat model with 100 obs targets and 7 GS (1879 routes input to act sched) things seems to run slower by fractions of a second with this constaint (takes about 10 seconds to solve). Probably more helpful for larger models though...
         model.c1b  = pe.ConstraintList()
-        for a in model.act_windids:
+        for a in model.mutable_act_windids:
             for p in model.par_dmr_subscrs_by_act[a]:
                 model.c1b.add(model.var_act_indic[a] >= model.var_dmr_indic[p]) 
 
@@ -552,7 +560,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
         def c3_rule( model,a):
             return model.var_act_indic[a] >=  model.var_activity_utilization[a]
-        model.c3 =pe.Constraint ( model.act_windids,  rule=c3_rule)  
+        model.c3 =pe.Constraint ( model.mutable_act_windids,  rule=c3_rule)  
 
         def c3c_rule( model,p):
             return model.var_dmr_indic[p] >=  model.var_dmr_utilization[p]
@@ -569,7 +577,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             self.c4_5_binding_exprs_by_act) =  self.gen_intra_sat_act_overlap_constraints(
                 model.c4_5,
                 model.c5b,
-                sats_acts,
+                sats_mutable_acts,
                 self.get_act_model_objs,
                 constraint_violation_model_objs
             )
@@ -577,7 +585,8 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         # inter-satellite downlink overlap constraints [9],[10]
         model.c9_10  = pe.ConstraintList()
         self.c9_10_binding_exprs_by_act = self.gen_inter_sat_act_overlap_constraints(
-            model.c9_10,sats_dlnks,
+            model.c9_10,
+            sats_mutable_dlnks,
             self.get_act_model_objs,
             constraint_violation_model_objs
         )
@@ -612,11 +621,10 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                         for act in activities:
                             #  if this is a "standard activity" that we can choose to perform or not
                             if type(act) in self.standard_activities:
-                                act_windid = all_act_windids_by_obj[act]
                                 act_code = act.get_code(sat_indx)
                                 activity_delta_e += (
                                     model.par_sats_edot_by_mode[sat_indx][act_code] 
-                                    * model.var_activity_utilization[act_windid]
+                                    * model.var_activity_utilization[act.window_ID]
                                     * model.par_resource_delta_t
                                 )
 
@@ -672,6 +680,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
         #  observation latency score factor constraints [8]
         model.c8  = pe.ConstraintList()
+        #  note this is for all observation window IDs, not just mutable ones
         for o in model.obs_windids:
             dmrs_obs = model.par_dmr_subscrs_by_obs_act[o]
 
@@ -719,6 +728,8 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         rsrc_norm_f = len(decimated_tp_indcs) * len(model.sat_indcs)
 
         def obj_rule(model):
+            #  note the first two objectives are for all observations, not just mutable observations
+
             # obj [1]
             total_dv_term = self.obj_weights['obs_dv'] * 1/model.par_total_obs_dv * sum(model.par_dmr_dv[p]*model.var_dmr_utilization[p] for p in model.dmr_ids) 
 
@@ -749,6 +760,14 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         model.obj = pe.Objective( rule=obj_rule, sense=pe.maximize )
 
         self.model_constructed = True
+
+        # print(self.planning_start_dt)
+        # print(self.planning_end_dt)
+        # print([rt.get_obs().end for rt in  selected_routes])
+        # print('all minus mutable')
+        # print([self.all_acts_by_windid[a] for a in (set(all_acts_windids)-set(mutable_acts_windids))])
+        # from circinus_tools import debug_tools
+        # debug_tools.debug_breakpt()
 
     def print_sol_all(self):
         for v in self.model.component_objects(pe.Var, active=True):
@@ -825,19 +844,20 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         #  note that this code is slightly inefficient because it might duplicate windows across routes. that's fine though, because we're thorough in checking across all routes
         # note: dmr is for DataMultiRoute
         wind_sched_dv_check = {}
-        winds_in_planning_wind = set(self.all_act_windids_by_obj.keys())
         for dmr in scheduled_routes_flat:
             # wind may get set multiple times due to Windows appearing across routes, but that's not really a big deal
             for wind in dmr.get_winds():
-                #  only consider windows that were in the planning window
-                if not wind in winds_in_planning_wind:
-                    continue
 
-                act_indx = self.all_act_windids_by_obj[wind]
-                # wind_sched_dv_check[wind] = wind.data_vol * pe.value(self.model.var_act_indic[act_indx])
-                wind_sched_dv_check[wind] = wind.data_vol * pe.value(self.model.var_activity_utilization[act_indx])
-                #  initialize this while we're here
-                wind.scheduled_data_vol = 0
+                #  only update windows that are mutable
+                if wind.window_ID in self.mutable_acts_windids:
+                    # wind_sched_dv_check[wind] = wind.data_vol * pe.value(self.model.var_act_indic[act_indx])
+                    wind_sched_dv_check[wind] = wind.data_vol * pe.value(self.model.var_activity_utilization[wind.window_ID])
+                    #  initialize this while we're here
+                    wind.scheduled_data_vol = 0
+                else:
+                    #  if it's not a mutable window it should already have scheduled data volume assigned
+                    assert(wind.scheduled_data_vol != const.UNASSIGNED)
+                    wind_sched_dv_check[wind] = 0
 
             # similar to winds, set dr data vols to 0
             for dr in dmr.data_routes:
@@ -851,11 +871,11 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         #  add data volume for every route passing through every window
         for dmr in scheduled_routes_flat:
             for wind in dmr.get_winds():
-                #  only consider windows that were in the planning window
-                if not wind in winds_in_planning_wind:
-                    continue
-
-                wind.scheduled_data_vol += dmr.scheduled_dv_for_wind(wind)
+                #  only update windows that are mutable
+                if wind.window_ID in self.mutable_acts_windids:
+                    wind.scheduled_data_vol += dmr.scheduled_dv_for_wind(wind)
+                else:
+                    wind_sched_dv_check[wind] +=  dmr.scheduled_dv_for_wind(wind)
 
 
         # update the window beginning and end times based upon their amount of scheduled data volume
@@ -866,13 +886,20 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             dmr.validate()
 
             for wind in dmr.get_winds():
-                #  only consider windows that were in the planning window
-                if not wind in winds_in_planning_wind:
-                    continue
 
-                #  this check should be at least as big as the scheduled data volume as calculated from all of the route data volumes. (it's not constrained from above, so it could be bigger)
-                if wind_sched_dv_check[wind] < wind.scheduled_data_vol - self.dv_epsilon:
-                    raise RuntimeWarning('inconsistent activity scheduling results: activity window data volume determined from route dvs (%f) is greater than dv from var_act_indic (%f) [dmr: %s, wind: %s]'%(wind.scheduled_data_vol,wind_sched_dv_check[wind],dmr,wind))
+                if wind.window_ID in self.mutable_acts_windids:
+                    #  this check should be at least as big as the scheduled data volume as calculated from all of the route data volumes. (it's not constrained from above, so it could be bigger)
+                    if wind_sched_dv_check[wind] < wind.scheduled_data_vol - self.dv_epsilon:
+                        raise RuntimeWarning('inconsistent activity scheduling results, data volumes mismatch, mutable window')
+                else:
+                    previous_dv_utilization = sum([(self.utilization_by_existing_route_id[dmr.ID]+self.epsilon_fixed_utilization)*dmr.data_vol for dmr in scheduled_routes_flat if wind in dmr.get_winds()])
+                    # check if somehow data routes through fixed window have tried to grab more capacity than was scheduled for it
+                    if wind_sched_dv_check[wind] > previous_dv_utilization + self.dv_epsilon:
+                        raise RuntimeWarning('inconsistent activity scheduling results, data volumes mismatch, fixed window')
+
+                #  only update windows that are mutable
+                if not wind.window_ID in self.mutable_acts_windids:
+                    continue
 
                 if not wind in updated_winds:
                     # note that the line below seems like it may break the scheduled times for activities by specifying a minimum activity duration. however, this minimum activity duration is already accounted for in scheduling constraints
@@ -960,8 +987,6 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         def expression_is_binding(be):
             return pe.value(be) < 0.001  # i.e., basically zero
 
-        winds_in_planning_wind = set(self.all_act_windids_by_obj.keys())
-
         for dmr in all_routes:
 
             dmr_id = dmr.ID
@@ -983,7 +1008,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
                 for act in dmr.get_winds():
                     #  only consider windows that were in the planning window
-                    if not act in winds_in_planning_wind:
+                    if not act in self.mutable_acts_windids:
                         continue
 
                     #  check if window capacity is fully or very near fully utilized
