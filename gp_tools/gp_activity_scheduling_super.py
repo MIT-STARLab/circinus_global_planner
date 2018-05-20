@@ -58,7 +58,9 @@ class GPActivityScheduling():
         # this is the minimum obs dv that must be downlinked for an obs (data route/obs dlnk) in order for it to count it towards objective terms (other than total dv)
         self.min_obs_dv_dlnk_req =as_params['min_obs_dv_dlnk_req_Mb']
         #  the amount of extra utilization a fixed route is allowed in the model.
-        self.epsilon_fixed_utilization = 0.001
+        #  the "effectively zero" number.
+        self.dv_epsilon = as_params['dv_epsilon_Mb']
+        self.epsilon_fixed_utilization = as_params['epsilon_fixed_utilization']
         # this is the mimimum latency requirement for the highest latency score factor, 1.0. If multiple routes/dlnks for a single obs have latency less than this, they will both have sf 1.0
         self.min_latency_for_sf_1_mins =as_params['min_latency_for_sf_1_mins']
 
@@ -74,8 +76,6 @@ class GPActivityScheduling():
         self.planning_end_dlnk_dt  = gp_inst_planning_params['planning_end_dlnk_dt']
         self.planning_end_dt  = self.planning_end_dlnk_dt
 
-        #  the "effectively zero" number.
-        self.dv_epsilon = as_params['dv_epsilon_Mb']
         self.resource_margin_obj_num_timepoints = as_params['resource_margin_obj_num_timepoints']
 
         self.obj_weights =as_params['obj_weights']
@@ -251,7 +251,7 @@ class GPActivityScheduling():
 
                     # if there is enough transition time between the two activities, no constraint needs to be added
                     #  note that we are okay even if for some reason Act 2 starts before Act 1 ends, because time deltas return negative total seconds as well
-                    if (act2.start - act1.end).total_seconds() >= transition_time_req:
+                    if (act2.original_start - act1.original_end).total_seconds() >= transition_time_req:
                         #  don't need to do anything,  continue on to next activity pair
                         continue
 
@@ -320,7 +320,7 @@ class GPActivityScheduling():
 
                         # if there is enough transition time between the two activities, no constraint needs to be added
                         #  note that we are okay even if for some reason Act 2 starts before Act 1 ends, because time deltas return negative total seconds as well
-                        if (act2.start - act1.end).total_seconds() >= transition_time_req:
+                        if (act2.original_start - act1.original_end).total_seconds() >= transition_time_req:
                             #  don't need to do anything,  continue on to next activity pair
                             continue
 

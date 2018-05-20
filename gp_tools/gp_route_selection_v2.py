@@ -321,26 +321,38 @@ class GPDataRouteSelection():
 
         dlink_winds_flat_filtered = [[] for sat_indx in  range (num_sats)]
         xlink_winds_flat_filtered = [[[] for xsat_indx in  range ( num_sats)] for sat_indx in  range (num_sats)]
+        wind_ids_seen = set()
 
         for sat_indx in  range (num_sats):
             for xsat_indx in  range ( num_sats):
                 for wind in xlnk_winds[sat_indx][xsat_indx]:
+                    #  filter out any redundant windows created by a possible earlier copying somewhere
+                    if wind.window_ID in wind_ids_seen:
+                        continue
+
                     if wind.duration.total_seconds() < self.min_act_duration_s[type(wind)]:
                         continue
 
                     # min_end = min(end_dt_by_sat_indx[sat_indx],end_dt_by_sat_indx[xsat_indx])
-                    if  wind.start > start  and  wind.end  < xlnk_end_dt:
+                    if  wind.original_start >= start  and  wind.original_end  <= xlnk_end_dt:
                         xlink_winds_flat_filtered[sat_indx][xsat_indx]. append ( wind)
+                        wind_ids_seen.add(wind)
 
             for wind in dlnk_winds_flat[sat_indx]:
+                #  filter out any redundant windows created by a possible earlier copying somewhere
+                if wind.window_ID in wind_ids_seen:
+                    continue
+
                 if wind.duration.total_seconds() < self.min_act_duration_s[type(wind)]:
                     continue
 
-                if  wind.start > start  and  wind.end  < dlnk_end_dt:
+                if  wind.original_start >= start  and  wind.original_end  <= dlnk_end_dt:
                     dlink_winds_flat_filtered[sat_indx]. append ( wind)
+                    wind_ids_seen.add(wind)
                 # Consider case where the start overlaps with the window, but the center of the window is past the start so we can still get some data volume from the window.  we do this to allow down links that are overlapping with an observation to be considered for that observation -  in practice it turns out to be a large sacrifice to not allow such dumplings to execute ( dictation put dumplings instead of down links, but I'm just gonna leave that there :D WUBBA LUBBA DUB DUB)
-                elif trim_windows_at_start and (wind.start < start and wind.center > start):
+                elif trim_windows_at_start and (wind.original_start < start and wind.center > start and wind.original_end  <= dlnk_end_dt):
                     wind_copy = deepcopy(wind)
+                    wind_ids_seen.add(wind)
                     wind_copy.original_wind_ref = wind
                     wind_copy.modify_time(start,'start')  #  update start and end time. also updates data volume
                     dlink_winds_flat_filtered[sat_indx]. append ( wind_copy)
@@ -357,14 +369,14 @@ class GPDataRouteSelection():
         dr_uid = 0
 
         # if the obs window ends later than the time prescribed, then we can't find any routes!
-        if obs_wind.end > self.planning_end_obs_dt:
+        if obs_wind.original_end > self.planning_end_obs_dt:
             return []
-        if obs_wind.start < self.planning_start_dt:
+        if obs_wind.original_start < self.planning_start_dt:
             return []
 
         # print("ids: dlnk_winds_flat %d xlnk_winds %d"%(id(dlnk_winds_flat),id(xlnk_winds)))
 
-        start_dt = obs_wind.end
+        start_dt = obs_wind.original_end
         # planning_end_dlnk_dt should be > planning_end_obs,xlnk_dt, to allow the sats to reach into the future for dlnk "backhaul" - high latency, bulk DV delivery
         dlnk_end_dt = min(self.planning_end_dlnk_dt, start_dt + self.wind_filter_duration_dlnk)
         xlnk_end_dt = min(self.planning_end_xlnk_dt, start_dt + self.wind_filter_duration_xlnk)
@@ -373,7 +385,7 @@ class GPDataRouteSelection():
         # end_dt_by_sat_indx = {sat_indx: end_dt if sat_indx != obs_wind.sat_indx else end_obs_sat_dt for sat_indx in range (self.num_sats)}
         
 
-        dlnk_winds_flat_filt,xlnk_winds_filt =  self.filter_windows (dlnk_winds_flat,xlnk_winds, self.num_sats, obs_wind.end, dlnk_end_dt, xlnk_end_dt , trim_windows_at_start=True)
+        dlnk_winds_flat_filt,xlnk_winds_filt =  self.filter_windows (dlnk_winds_flat,xlnk_winds, self.num_sats, obs_wind.original_end, dlnk_end_dt, xlnk_end_dt , trim_windows_at_start=True)
 
         if verbose:
             print ('Running route selection for obs: %s'%(obs_wind))
@@ -477,7 +489,7 @@ class GPDataRouteSelection():
 
                     if type(act) == XlnkWindow:
                         #  if the cross-link ends in the time step leading up to the current time point, and sat_indx is a receiving satellite in the cross-link
-                        if time_within(tp_last_dt,tp_dt,act.end) and act.is_rx(sat_indx):
+                        if time_within(tp_last_dt,tp_dt,act.original_end) and act.is_rx(sat_indx):
                             xlnk_options.append(act)
                             # visited_act_set.add(act)
 
@@ -501,15 +513,15 @@ class GPDataRouteSelection():
                     #     import ipdb
                     #     ipdb.set_trace()
                     #  figure out which route record corresponded to the time right before this cross-link started. we can't assume it's only one time point in the past, because the cross-link could stretch across multiple timesteps
-                    tp_indx_pre_xlnk = time_getter_dc.get_tp_indx_pre_t(xlnk.start,in_units='datetime')
+                    tp_indx_pre_xlnk = time_getter_dc.get_tp_indx_pre_t(xlnk.original_start,in_units='datetime')
 
                     # rr_last_xlnk = rr_dancecards[sat_indx][tp_indx_pre_xlnk]
-                    rr_last_xlnk = get_best_rr(xlnk.start,tp_indx_pre_xlnk,sat_indx)
+                    rr_last_xlnk = get_best_rr(xlnk.original_start,tp_indx_pre_xlnk,sat_indx)
                     
                     #  get the route record for the corresponding crosslink partner satellite
                     xsat_indx=xlnk.get_xlnk_partner(sat_indx)
                     # rr_xsat = rr_dancecards[xsat_indx][tp_indx_pre_xlnk]
-                    rr_xsat = get_best_rr(xlnk.start,tp_indx_pre_xlnk,xsat_indx)
+                    rr_xsat = get_best_rr(xlnk.original_start,tp_indx_pre_xlnk,xsat_indx)
 
                     #  remove redundant calculations: if the other satellite has less data volume at this time point than we do, then we can't get any more data volume from them, and it's pointless to consider it
                     if rr_last_xlnk.dv > rr_xsat.dv:
@@ -570,7 +582,7 @@ class GPDataRouteSelection():
                     xlnk_wind = best_xlnk_cand[3]
                     #  the release time of this new route record is the end of the cross-link - i.e. this route record is valid for all t past the end of the cross-link
                     #  note that it may be possible that the "best" candidate cross-link (most dv moved) has a later release time than another candidate, and this causes some later cross-links to be ruled out because they start before the best (and end after the other candidate). We'll assume this is an acceptable error though. the time step for the dance cards should be made small enough that this is not a big deal.
-                    rr_new.release_time = xlnk_wind.end
+                    rr_new.release_time = xlnk_wind.original_end
 
                     # deconf_rt is a DeconflictedRoute namedtuple, from above
                     for deconf_rt in xlnk_candidate_rts:
@@ -603,10 +615,10 @@ class GPDataRouteSelection():
 
                     if type(act) == DlnkWindow:
 
-                        if time_within(tp_last_dt,tp_dt,act.start):
+                        if time_within(tp_last_dt,tp_dt,act.original_start):
 
                             #  figure out if we want to use the route record from the last timepoint, or if a cross-linked has delivered more data volume. grab the latter if valid
-                            rr_pre_dlnk = get_best_rr(act.start,tp_indx-1,sat_indx)
+                            rr_pre_dlnk = get_best_rr(act.original_start,tp_indx-1,sat_indx)
 
                             # todo: should check transition time between last xlnk in each of the routes and the start of the downlink - I'd add that check here, or maybe in the loop below
 
@@ -614,7 +626,7 @@ class GPDataRouteSelection():
                             if rr_pre_dlnk.dv > 0:
                                 # rr_dlnk = copy(rr_pre_dlnk)
                                 #  note: release time no longer matters because were not putting this route record back into the dance card.
-                                rr_dlnk = RouteRecord(dv=rr_pre_dlnk.dv,release_time=act.end,routes=[])
+                                rr_dlnk = RouteRecord(dv=rr_pre_dlnk.dv,release_time=act.original_end,routes=[])
                                 
                                 # available data volume is limited by how much we had at the last route record ( which could be as much as the observation data volume multiplied by the routable_obs_dv_multiplier factor)
                                 available_dv = rr_pre_dlnk.dv

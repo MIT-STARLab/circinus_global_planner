@@ -13,9 +13,6 @@ def wind_in_planning_window(obj,wind,start_time_override=None):
         return wind.start >= planning_start_dt and wind.end <= obj.gp_inst_planning_params['planning_end_dlnk_dt']
 
 def dr_in_planning_window(obj,dr,start_time_override = None):
-    # obs = dr.get_obs()
-    # dr_end = dr.get_dlnk().end
-# 
     # obs_in_window = wind_in_planning_window(obj,obs)
 
     for wind in dr.get_winds():

@@ -89,15 +89,15 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
         for sat_indx in  range (num_sats):
             for wind in obs_winds[sat_indx]:
-                if  wind.start >= self.planning_start_dt  and  wind.end  <= self.planning_end_obs_dt:
+                if  wind.original_start >= self.planning_start_dt  and  wind.original_end  <= self.planning_end_obs_dt:
                     obs_winds_filtered[sat_indx]. append ( wind)
 
             for wind in dlnk_winds_flat[sat_indx]:
-                if  wind.start >= self.planning_start_dt  and  wind.end  <= self.planning_end_dlnk_dt:
+                if  wind.original_start >= self.planning_start_dt  and  wind.original_end  <= self.planning_end_dlnk_dt:
                     dlink_winds_flat_filtered[sat_indx]. append ( wind)
 
             for wind in xlnk_winds_flat[sat_indx]:
-                if  wind.start >= self.planning_start_dt  and  wind.end  <= self.planning_end_xlnk_dt:
+                if  wind.original_start >= self.planning_start_dt  and  wind.original_end  <= self.planning_end_xlnk_dt:
                     xlink_winds_flat_filtered[sat_indx]. append ( wind)
 
         return obs_winds_filtered, dlink_winds_flat_filtered, xlink_winds_flat_filtered
@@ -393,7 +393,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
             # verify that all acts found are within the planning window, otherwise we may end up with strange results
             for sat_acts in sats_acts:
                 for act in sat_acts:
-                    if act.start < self.planning_start_dt or act.end > self.planning_end_dt:
+                    if act.original_start < self.planning_start_dt or act.original_end > self.planning_end_dt:
                         raise RuntimeWarning('Activity is out of planning window range (start %s, end %s): %s'%(self.planning_start_dt,self.planning_end_dt,act))
 
             self.all_acts_windids = all_acts_windids
@@ -428,8 +428,8 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
             es_act_dancecards = [Dancecard(self.planning_start_dt,self.planning_end_dt,self.resource_delta_t_s,item_init=None,mode='timestep') for sat_indx in range (self.num_sats)]
             
             for sat_indx in range (self.num_sats): 
-                es_act_dancecards[sat_indx].add_winds_to_dancecard(sats_acts[sat_indx])
-                es_act_dancecards[sat_indx].add_winds_to_dancecard(ecl_winds[sat_indx])
+                es_act_dancecards[sat_indx].add_winds_to_dancecard(sats_acts[sat_indx],drop_out_of_bounds=True)
+                es_act_dancecards[sat_indx].add_winds_to_dancecard(ecl_winds[sat_indx],drop_out_of_bounds=True)
 
 
         except IndexError:

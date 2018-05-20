@@ -114,7 +114,7 @@ class GlobalPlannerRunner:
         # gp_as.print_sol ()
         print_verbose('extract_routes',verbose)
         #  make a copy of the windows in the extracted routes so we don't mess with the original objects ( just to be extra careful)
-        routes = gp_as.extract_utilized_routes ( verbose  = False)
+        scheduled_routes,all_updated_routes = gp_as.extract_utilized_routes ( verbose  = False)
         energy_usage,data_usage = gp_as.extract_resource_usage(  decimation_factor =1)
         # look at reasons routes weren't scheduled
         extract_reasoning = False
@@ -123,7 +123,7 @@ class GlobalPlannerRunner:
 
         time_elapsed = t_b-t_a
 
-        return  routes, energy_usage, data_usage
+        return  scheduled_routes, all_updated_routes, energy_usage, data_usage
 
     def run_activity_scheduling_coupled( self, obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,verbose=False):
         gp_as = GPActivitySchedulingCoupled( self.params)
@@ -169,15 +169,21 @@ class GlobalPlannerRunner:
         all_stats =[]
         route_times_s =[]
 
+        wind_ids_seen = set()
         def filter_obs(obs_winds):
             obs_winds_filt = [[] for sat_indx in range( self.sat_params['num_sats'])]
 
             for sat_indx in range( self.sat_params['num_sats']):
                 for sat_obs_index,obs_wind in enumerate(obs_winds[sat_indx]):
+                    #  filter out any redundant windows created by a possible earlier copying somewhere
+                    if obs_wind.window_ID in wind_ids_seen:
+                        continue
+
                     # filter for observations that come between end of fixed planning time and end of planning window.  the fixed planning time is the time up to which we are saying no new activity windows are allowed to be scheduled.  before that only existing routes may have activity window scheduled.
                     # if obs_wind.start >= self.gp_inst_planning_params['planning_fixed_end_dt'] and obs_wind.end <= self.gp_inst_planning_params['planning_end_obs_dt']:
                     if gp_gen.wind_in_planning_window(self,obs_wind):
                         obs_winds_filt[sat_indx].append(obs_wind)
+                        wind_ids_seen.add(obs_wind)
             return obs_winds_filt
 
 
@@ -296,6 +302,7 @@ class GlobalPlannerRunner:
         #  go ahead and throw in the existing routes as well.  note that in the general case existing routes might be outside of the filter window.  this is okay because the algorithms below should not depend on data routes being within the filter times.  if route selection step two happens to not choose one or more of the existing routes, that's okay - we'll add them back in at activity scheduling.  however we do want to feed them into step two so that we don't choose new routes that are basically the equivalent of the existing routes just because we don't know that the existing routes exist.
         for rt in existing_routes:
             obs = rt.get_obs()
+            # note this comparison is based on window ID,  so if the obs window object is duplicated it should still work okay
             routes_by_obs_filt.setdefault(obs,[]).append(rt)
         existing_routes_set = set(existing_routes)
 
@@ -372,14 +379,17 @@ class GlobalPlannerRunner:
                 sel_routes_by_obs,ecl_winds,window_uid,stats_rs2_pre,stats_rs2_post,latest_dr_uid = pickle_helper.unpickle_rtsel_s2_stuff(self)
                 pas_a = time.time()
             else:
-                print_verbose('num_obs_calced',verbose)
-                print_verbose(len(route_times_s),verbose)
-                print_verbose('np.mean(route_times_s)',verbose)
-                print_verbose(np.mean(route_times_s),verbose)
-                print_verbose('np.max(route_times_s)',verbose)
-                print_verbose(np.max(route_times_s),verbose)
-                print_verbose('np.std(route_times_s)',verbose)
-                print_verbose(np.std(route_times_s),verbose)
+                rs_s1_found_obs= len(routes_by_obs.keys()) > 0
+                if rs_s1_found_obs:
+                    print_verbose('num_obs_calced',verbose)
+                    print_verbose(len(route_times_s),verbose)
+                    print_verbose('np.mean(route_times_s)',verbose)
+                    print_verbose(np.mean(route_times_s),verbose)
+                    print_verbose('np.max(route_times_s)',verbose)
+                    print_verbose(np.max(route_times_s),verbose)
+                    print_verbose('np.std(route_times_s)',verbose)
+                    print_verbose(np.std(route_times_s),verbose)
+
                 passthru = False
                 # passthru is what you use if you just want to feed ALL the data routes from S1 to activity scheduling
                 if passthru:
@@ -409,6 +419,11 @@ class GlobalPlannerRunner:
         return sel_routes_by_obs,ecl_winds,latest_dr_uid,window_uid,pas_a
 
     def run( self, existing_route_data, verbose=False):
+
+        print_verbose('planning_start_dt: %s'%(self.gp_inst_planning_params['planning_start_dt']),verbose)
+        print_verbose('planning_end_obs_dt: %s'%(self.gp_inst_planning_params['planning_end_obs_dt']),verbose)
+        print_verbose('planning_end_xlnk_dt: %s'%(self.gp_inst_planning_params['planning_end_xlnk_dt']),verbose)
+        print_verbose('planning_end_dlnk_dt: %s'%(self.gp_inst_planning_params['planning_end_dlnk_dt']),verbose)
 
         #################################
         #  parse inputs, if desired
@@ -482,11 +497,13 @@ class GlobalPlannerRunner:
         else:
             run_coupled_rs_as = self.as_params['run_coupled_rs_as']
 
-            if not run_coupled_rs_as:
-                found_routes = any([len(rts) >0 for rts in sel_routes_by_obs.values()])
+            found_routes = any([len(rts) >0 for rts in sel_routes_by_obs.values()])
+            if not run_coupled_rs_as and found_routes:
                 #  to protect against the weird case where we didn't find any routes ( shouldn't happen, unless we're at the very end of the simulation, or you're trying to break things)
-                if found_routes:
-                    scheduled_routes,energy_usage,data_usage = self.run_activity_scheduling(sel_routes_by_obs,existing_route_data,ecl_winds,verbose)
+                # if self.as_params['validate_unique_wind_objects']:  
+                #     other_helper.validate_unique_window_objects(self,sel_routes_by_obs,existing_route_data)
+
+                scheduled_routes,all_updated_routes,energy_usage,data_usage = self.run_activity_scheduling(sel_routes_by_obs,existing_route_data,ecl_winds,verbose)
 
             # run coupled route selection/act sched solver (slow, optimal)
             elif run_coupled_rs_as:
@@ -494,7 +511,7 @@ class GlobalPlannerRunner:
                 # we didn't run RS, so there are no "selected routes", just scheduled
                 sel_routes_by_obs = {}
             else:
-                scheduled_routes,energy_usage,data_usage = ([],None,None)
+                scheduled_routes,all_updated_routes,energy_usage,data_usage = ([],[],None,None)
                 print_verbose('No routes were found in route selection; not running activity selection',verbose)
 
         # if we are saving to file, do that
@@ -505,6 +522,7 @@ class GlobalPlannerRunner:
         pas_b = time.time()
         total_plan_and_sched_runtime = pas_b - pas_a
 
+        #  note that these calculations may be off when running the constellation simulation. don't rely on these for the constellation simulation.  they could be off because there might be duplicate/copy observation windows
         metrics_plot_inputs = output_helper.calc_activity_scheduling_results (self,obs_winds,dlnk_winds_flat,sel_routes_by_obs,scheduled_routes, energy_usage)
 
         print_verbose('total_plan_and_sched_runtime (warning: may include (un)pickling time and RS plot output)',verbose)
@@ -529,7 +547,7 @@ class GlobalPlannerRunner:
         viz_outputs= self.io_proc.make_sat_history_outputs (sched_obs_winds_flat, sched_xlnk_winds_flat, sched_dlnk_winds_flat, link_info_by_wind)
 
 
-        return scheduled_routes,viz_outputs,latest_dr_uid
+        return scheduled_routes,all_updated_routes,viz_outputs,latest_dr_uid
 
 
 class PipelineRunner:
@@ -630,13 +648,14 @@ class PipelineRunner:
 
         # get data related to existing routes, if they were provided
         existing_route_data = data.get('existing_route_data',{})
-        scheduled_routes,viz_outputs,latest_dr_uid = gp_runner.run (existing_route_data,verbose)
+        scheduled_routes,all_updated_routes,viz_outputs,latest_dr_uid = gp_runner.run (existing_route_data,verbose)
 
         output = {}
         output['version'] = OUTPUT_JSON_VER
         output['scenario_params'] = data['orbit_prop_inputs']['scenario_params']
         output['viz_data'] = viz_outputs
         output['scheduled_routes'] = scheduled_routes
+        output['all_updated_routes'] = all_updated_routes
         output['latest_dr_uid'] = latest_dr_uid
         output['update_time'] = datetime.utcnow().isoformat()
 

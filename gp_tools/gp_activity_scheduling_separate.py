@@ -21,6 +21,8 @@ from circinus_tools.scheduling.routing_objects import DataMultiRoute
 from .gp_activity_scheduling_super import  GPActivityScheduling
 from . import gp_general_tools as gp_gen
 
+from circinus_tools import debug_tools
+
 def print_verbose(string,verbose=False):
     if verbose:
         print(string)
@@ -140,12 +142,13 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                 act_is_mutable = True
 
                 # We have already filtered routes, but we also need to filter activities because there may be activities from existing routes that are outside of the planning window. We do not want to enforce constraints on the windows by treating them like their utilization can change;  however, we do want to include the acts for other calculations in the model
-                if act.start < self.planning_start_dt or act.end > self.planning_end_dt:
+                if act.original_start < self.planning_start_dt or act.original_end > self.planning_end_dt:
                     act_is_mutable = False
 
                 act_windid = act.window_ID
 
                 # if we haven't yet seen this activity, then add it to bookkeeping
+                #  note that this also filters out any activity object copies ( which is important for imposing activity scheduling constraints)
                 if not act_windid in all_acts_windids:
                     # use activity window ID as a unique id for window in the model
                     all_acts_windids.add(act_windid)
@@ -208,8 +211,8 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         existing_routes_before_planning_fixed_end = []
 
         def process_dmr(dmr,start_filt_dt,filter_opt):
-            dmr_start = dmr.get_obs().start
-            dmr_end = dmr.get_dlnk().end
+            dmr_start = dmr.start
+            dmr_end = dmr.end
 
             # check if all act windows in route are completely within the planning window. Pass if not.
             if filter_opt=='totally_within' and not gp_gen.dr_in_planning_window(self,dmr,start_time_override=start_filt_dt): #(dmr_start < start_filt_dt or dmr_end > self.planning_end_dt):
@@ -235,7 +238,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             added = process_dmr(dmr,self.planning_start_dt,"partially_within")
 
             # mark those  existing routes that start before the fixed planning window end.
-            dmr_start = dmr.get_obs().start
+            dmr_start = dmr.start
             if added and dmr_start <= self.planning_fixed_end_dt:
                 existing_routes_before_planning_fixed_end.append(dmr)
 
@@ -355,7 +358,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             # verify that all acts found are within the planning window, otherwise we may end up with strange results
             for sat_acts in sats_mutable_acts:
                 for act in sat_acts:
-                    if act.start < self.planning_start_dt or act.end > self.planning_end_dt:
+                    if act.original_start < self.planning_start_dt or act.original_end > self.planning_end_dt:
                         raise RuntimeWarning('Activity is out of planning window range (start %s, end %s): %s'%(self.planning_start_dt,self.planning_end_dt,act))
 
             # construct a set of dance cards for every satellite, 
@@ -367,9 +370,16 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             es_act_dancecards = [Dancecard(self.planning_start_dt,self.planning_end_dt,self.resource_delta_t_s,item_init=None,mode='timestep') for sat_indx in range (self.num_sats)]
             
             #  add windows to dance card, silenty dropping any time steps that appear outside of the planning window bounds ( we don't need to enforce resource constraints on out-of-bounds activities)
+            def wind_time_getter_orig(wind,time_opt):
+                if time_opt == 'start': return wind.original_start
+                if time_opt == 'end': return wind.original_end
+            def wind_time_getter_reg(wind,time_opt):
+                if time_opt == 'start': return wind.start
+                if time_opt == 'end': return wind.end
+
             for sat_indx in range (self.num_sats): 
-                es_act_dancecards[sat_indx].add_winds_to_dancecard(sats_mutable_acts[sat_indx],drop_out_of_bounds=True)
-                es_act_dancecards[sat_indx].add_winds_to_dancecard(ecl_winds[sat_indx],drop_out_of_bounds=True)
+                es_act_dancecards[sat_indx].add_winds_to_dancecard(sats_mutable_acts[sat_indx],wind_time_getter_orig,drop_out_of_bounds=True)
+                es_act_dancecards[sat_indx].add_winds_to_dancecard(ecl_winds[sat_indx],wind_time_getter_reg,drop_out_of_bounds=True)
 
             # this is for data storage
             # for each sat/timepoint, we store a list of all those data multi routes that are storing data on the sat at that timepoint
@@ -814,37 +824,37 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                     print (" %d %0.3f   %s"%(index, val, self.intra_sat_act_constr_violation_acts_list[index-1]))
 
     def extract_utilized_routes( self, verbose = False):
-        # scheduled_dv
-        scheduled_routes_flat = []
+        #  note: this should be the only place where scheduled data volume attributes are updated
+
+        # Keeps track of which routes were chosen to be executed
+        scheduled_routes = []
+        #  keeps track of all routes that were present in activity scheduling, both of those that ended up being chosen (scheduled), and those that ended up not being chosen
+        all_updated_routes = []
 
         if verbose:
             print ('utilized routes:')
 
-        # commenting out for now because I'm not sure this is actually useful, considering we already have to modify the windows below...
-        # def copy_choice(route):
-        #     if copy_routes:
-        #         # this will copy everything but the underlying activity windows. 
-        #         return copy(route)
-        #     else:
-        #         return route
 
         # figure out which dmrs were used, and add the scheduled data volume to each
         for p in self.model.dmr_ids:
+
+            route =  self.routes_by_dmr_id[p]
+            route.set_scheduled_dv_frac(pe.value(self.model.var_dmr_utilization[p]))  #* self.model.par_dmr_dv[p])
+            all_updated_routes. append (route)
+            
+            #  if it was actually scheduled; that is, the indicator is greater than zero
             if pe.value(self.model.var_dmr_indic[p]) >= 1.0 - self.binary_epsilon:
-                # scheduled_route =  copy_choice (self.routes_filt[p]) 
-                scheduled_route =  self.routes_by_dmr_id[p]
-                scheduled_route.set_scheduled_dv_frac(pe.value(self.model.var_dmr_utilization[p]))  #* self.model.par_dmr_dv[p])
-                scheduled_routes_flat. append (scheduled_route)
+                scheduled_routes. append (route)
 
                 if verbose:
-                    print(scheduled_route)
+                    print(route)
 
 
         # examine the schedulable data volume for every activity window, checking as we go that the data volume is sufficient for at least the route in which the window is found
         #  note that this code is slightly inefficient because it might duplicate windows across routes. that's fine though, because we're thorough in checking across all routes
         # note: dmr is for DataMultiRoute
         wind_sched_dv_check = {}
-        for dmr in scheduled_routes_flat:
+        for dmr in all_updated_routes:
             # wind may get set multiple times due to Windows appearing across routes, but that's not really a big deal
             for wind in dmr.get_winds():
 
@@ -859,6 +869,8 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                     assert(wind.scheduled_data_vol != const.UNASSIGNED)
                     wind_sched_dv_check[wind] = 0
 
+            #  update the underlying data routes for every data multi-route
+            #  todo:  should this be included in set_scheduled_dv_frac() call above?
             # similar to winds, set dr data vols to 0
             for dr in dmr.data_routes:
                 if not dr in self.existing_routes:
@@ -869,7 +881,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
         #  now we want to mark the real scheduled data volume for every window. We need to do this separately because the model.var_act_indic continuous variables only give an upper bound on the data volume for an activity. we only actually need to use as much data volume as the data routes want to push through the window
         #  add data volume for every route passing through every window
-        for dmr in scheduled_routes_flat:
+        for dmr in all_updated_routes:
             for wind in dmr.get_winds():
                 #  only update windows that are mutable
                 if wind.window_ID in self.mutable_acts_windids:
@@ -879,9 +891,9 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
 
         # update the window beginning and end times based upon their amount of scheduled data volume
-        # keep track of which ones we've updated, because we should only update once
+        # keep track of which windows we've updated, because we should only update once
         updated_winds = set()
-        for dmr in scheduled_routes_flat:
+        for dmr in all_updated_routes:
             # validate the data multi route (and in turn, the scheduled data vols of all the data routes under it)
             dmr.validate()
 
@@ -891,11 +903,20 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                     #  this check should be at least as big as the scheduled data volume as calculated from all of the route data volumes. (it's not constrained from above, so it could be bigger)
                     if wind_sched_dv_check[wind] < wind.scheduled_data_vol - self.dv_epsilon:
                         raise RuntimeWarning('inconsistent activity scheduling results, data volumes mismatch, mutable window')
+
+
+                # if the window is not mutable, then it only should be here because of an existing data route. in that case we know the previous utilization for the window.  check the current schedule datable volume for window against the previous utilization
                 else:
-                    previous_dv_utilization = sum([(self.utilization_by_existing_route_id[dmr.ID]+self.epsilon_fixed_utilization)*dmr.data_vol for dmr in scheduled_routes_flat if wind in dmr.get_winds()])
+                    previous_dv_utilization = sum(self.utilization_by_existing_route_id[dmr.ID]*dmr.data_vol for dmr in self.existing_routes if wind in dmr.get_winds())
+
                     # check if somehow data routes through fixed window have tried to grab more capacity than was scheduled for it
                     if wind_sched_dv_check[wind] > previous_dv_utilization + self.dv_epsilon:
-                        raise RuntimeWarning('inconsistent activity scheduling results, data volumes mismatch, fixed window')
+                        raise RuntimeWarning('inconsistent activity scheduling results, data volumes mismatch, fixed window. Previous dv scheduled: %f, current scheduled %f. Verify that epsilon_fixed_utilization (%f) is not too large relative to dv_epsilon (%f)'%(previous_dv_utilization,wind_sched_dv_check[wind],self.epsilon_fixed_utilization,self.dv_epsilon))
+
+                #  also check that we're not scheduling too much data volume from the window ( check this after we already verified data volume usage relative to previous utilization, so we see that error first -  helps to separate out that specific case)
+                if wind_sched_dv_check[wind] >= wind.data_vol + self.dv_epsilon:
+                    raise RuntimeWarning('too much data volume was scheduled for window %s'%(wind))
+
 
                 #  only update windows that are mutable
                 if not wind.window_ID in self.mutable_acts_windids:
@@ -906,7 +927,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                     wind.update_duration_from_scheduled_dv (min_duration_s=self.min_act_duration_s[type(wind)])
                     updated_winds.add(wind)
 
-        return scheduled_routes_flat
+        return scheduled_routes,all_updated_routes
 
     def extract_resource_usage( self, decimation_factor =1, verbose = False):
 
