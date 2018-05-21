@@ -329,7 +329,10 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             assert(type(dmr) == DataMultiRoute)
 
         fixed_routes_ids = [dmr.ID for dmr in existing_routes_fixed]
-        sum_fixed_route_utilization = sum(utilization_by_existing_route_id[rt_id] for rt_id in fixed_routes_ids)
+        existing_routes_ids = [dmr.ID for dmr in existing_routes]
+        sum_existing_route_utilization = sum(utilization_by_existing_route_id[rt_id] for rt_id in existing_routes_ids)
+        self.fixed_routes_ids = fixed_routes_ids
+        self.existing_routes_ids = existing_routes_ids
 
         ##############################
         #  Make indices/ subscripts
@@ -409,6 +412,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         model.dmr_ids = pe.Set(initialize= routes_by_dmr_id.keys())
         #  these are all the routes that have acts occurring before the fixed planning window end.  we assume that these routes are no longer as "malleable" as other routes -  they have an upper limit on their utilization based on their existing utilization. this is because if any of these activities has already been executed, the route is now constrained by the throughput used from that act
         model.fixed_dmr_ids = pe.Set(initialize= fixed_routes_ids)
+        model.existing_dmr_ids = pe.Set(initialize= existing_routes_ids)
         #  subscript for each activity a
         model.all_act_windids = pe.Set(initialize= all_acts_windids)
         #  subscript for each mutable activity a ( we can still change the activity's utilization)
@@ -504,10 +508,9 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         model.var_dmr_utilization  = pe.Var (model.dmr_ids, bounds =(0,1))
         #  indicator variables for whether or not dmrs [3] and activities [4] have been chosen
         model.var_dmr_indic  = pe.Var (model.dmr_ids, within = pe.Binary)
-        # model.var_dmr_indic  = pe.Var (model.dmr_ids, bounds =(0,1))
         model.var_act_indic  = pe.Var (model.mutable_act_windids, within = pe.Binary)
-        # model.var_act_indic  = pe.Var (model.mutable_act_windids, bounds =(0,1))
-
+        # a utilization number for existing routes that will be bounded by the input existing route utilization (can't get more  "existing route" reward for a route than the route's previous utilization) [8]
+        model.var_existing_dmr_utilization_reward  = pe.Var (model.existing_dmr_ids, bounds =(0,1))
         
         # satellite energy storage
         model.var_sats_estore  = pe.Var (model.sat_indcs,  model.es_timepoint_indcs,  within = pe.NonNegativeReals)
@@ -718,7 +721,15 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             # less than constraint because equality should be achievable (if we're only using existing routes that have all previously been scheduled and deconflicted together - which is the case for current version of GP), but want to allow route to lessen its utilization if a more valuable route is available. 
             #  add in an epsilon at the end, because it may be that the utilization number was precisely chosen to meet the minimum data volume requirement -  don't want to not make the minimum data volume requirement this time because of round off error
             model.c11.add( model.var_dmr_utilization[p] <= utilization_by_existing_route_id[p] + self.epsilon_fixed_utilization) 
-            
+        
+        # constrain utilization reward of existing routes by the input utilization numbers
+        model.c12  = pe.ConstraintList()
+        for p in model.existing_dmr_ids:
+            # constrain the reward utilization (used in obj function) by the input utilization for this existing route
+            model.c12.add( model.var_existing_dmr_utilization_reward[p] <= utilization_by_existing_route_id[p] ) 
+            # also constrain by the current utilization in the optimization
+            model.c12.add( model.var_existing_dmr_utilization_reward[p] <= model.var_dmr_utilization[p] ) 
+
         print_verbose('make obj',verbose)
 
 
@@ -750,7 +761,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             energy_margin_term = self.obj_weights['energy_storage'] * 1/rsrc_norm_f * sum(model.var_sats_estore[sat_indx,tp_indx]/model.par_sats_estore_max[sat_indx] for tp_indx in decimated_tp_indcs for sat_indx in model.sat_indcs)
 
             # obj [6]
-            existing_routes_term = self.obj_weights['existing_routes'] * 1/sum_fixed_route_utilization * sum(model.var_dmr_utilization[p] for p in model.fixed_dmr_ids) if len(model.fixed_dmr_ids) > 0 else 0
+            existing_routes_term = self.obj_weights['existing_routes'] * 1/sum_existing_route_utilization * sum(model.var_existing_dmr_utilization_reward[p] for p in model.existing_dmr_ids) if len(model.existing_dmr_ids) > 0 else 0
 
             if len(min_var_inter_sat_act_constr_violation_list) > 0:
                 inter_sat_act_constr_violations_term = self.obj_weights['inter_sat_act_constr_violations'] * 1/sum(min_var_inter_sat_act_constr_violation_list) * sum(model.var_inter_sat_act_constr_violations[indx] for indx in range(1,len(model.var_inter_sat_act_constr_violations)+1))
@@ -837,7 +848,6 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
         # figure out which dmrs were used, and add the scheduled data volume to each
         for p in self.model.dmr_ids:
-
             route =  self.routes_by_dmr_id[p]
             route.set_scheduled_dv_frac(pe.value(self.model.var_dmr_utilization[p]))  #* self.model.par_dmr_dv[p])
             all_updated_routes. append (route)
