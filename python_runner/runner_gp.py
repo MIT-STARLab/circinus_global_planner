@@ -763,6 +763,7 @@ if __name__ == "__main__":
     with open('gp_outputs.json','w') as f:
         # todo: can't currently jsonify routing objects
         del output['scheduled_routes']
+        del output['all_updated_routes']
         json.dump(output ,f)
 
     print('run time: %f'%(b-a))
