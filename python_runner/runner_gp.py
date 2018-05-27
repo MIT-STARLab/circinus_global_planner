@@ -221,6 +221,7 @@ class GlobalPlannerRunner:
 
             p = mp.Pool(self.rs_general_params['num_parallel_workers'])
             obs_outputs_list = p.map(gp_rs_exec.ParallelRSWorkerWrapper(gprsv2.GPDataRouteSelection,self.params,dlnk_winds_flat,xlnk_winds,num_obs, verbose=verbose), all_obs_inputs)
+            p.terminate()
 
             #  unpack all of the outputs from the parallel runs list
             for output_indx,obs_output in  enumerate(obs_outputs_list):
