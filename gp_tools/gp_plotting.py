@@ -101,7 +101,7 @@ class GPPlotting():
         plot_params['fig_name'] = fig_name
 
         plot_params['time_units'] = self.time_units
-        plot_params['sat_id_order'] = self.sat_id_order
+        plot_params['agent_id_order'] = self.sat_id_order
         plot_params['plot_fig_extension'] = self.plot_fig_extension
 
         plot_params['plot_xlnks_choices'] = self.winds_plot_xlnks_choices
@@ -115,7 +115,7 @@ class GPPlotting():
         plot_params['xlnk_color_rollover'] = self.xlnk_color_rollover
         plot_params['xlnk_colors'] = self.xlnk_colors
 
-        pltl.plot_all_sats_acts(
+        pltl.plot_all_agents_acts(
             sats_ids_list,
             sats_obs_winds_choices,
             sats_obs_winds,
