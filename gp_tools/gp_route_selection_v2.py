@@ -29,17 +29,8 @@ from circinus_tools.scheduling.custom_window import   ObsWindow,  DlnkWindow, Xl
 from circinus_tools.scheduling.schedule_objects import Dancecard
 from circinus_tools.scheduling.routing_objects import DataRoute, DataMultiRoute
 
-DATE_STRING_FORMAT = 'short'
-# DATE_STRING_FORMAT = 'iso'
+from circinus_tools import debug_tools
 
-def short_date_string(dt):
-    return dt.strftime("%H:%M:%S")
-
-def date_string(dt):
-    if DATE_STRING_FORMAT == 'iso':
-        return dt.isoformat()
-    if DATE_STRING_FORMAT == 'short':
-        return  short_date_string(dt)
 
 class DeconflictedRoute():
     """docstring for RouteRecord"""
@@ -65,8 +56,11 @@ class RouteRecord():
         self.routes = routes
         self.release_time = release_time
 
+        self.output_date_str_format = 'short'
+
+
     def __repr__( self):
-        return 'RouteRecord(%s,%s,%s)'%( self.dv, date_string(self.release_time),self.routes)
+        return 'RouteRecord(%s,%s,%s)'%( self.dv, tt.date_string(self.release_time,self.output_date_str_format),self.routes)
 
     def get_deconflicted_routes(self,rr_other,routable_obs_dv_multiplier = 3, min_dv=0,verbose = False):
         """ determines which routes from other route record can be extended to self route record
@@ -298,8 +292,6 @@ class GPDataRouteSelection():
         
         #  the "effectively zero" number.
         self.dv_epsilon = as_params['dv_epsilon_Mb']
-        self.wind_filter_duration_xlnk =  timedelta (seconds =rs_general_params['wind_filter_duration_xlnk_s'])
-        self.wind_filter_duration_dlnk =  timedelta (seconds =rs_general_params['wind_filter_duration_dlnk_s'])
 
         self.latency_params = gp_params['gp_general_params']['other_params']['latency_calculation']
 
@@ -378,8 +370,8 @@ class GPDataRouteSelection():
 
         start_dt = obs_wind.original_end
         # planning_end_dlnk_dt should be > planning_end_obs,xlnk_dt, to allow the sats to reach into the future for dlnk "backhaul" - high latency, bulk DV delivery
-        dlnk_end_dt = min(self.planning_end_dlnk_dt, start_dt + self.wind_filter_duration_dlnk)
-        xlnk_end_dt = min(self.planning_end_xlnk_dt, start_dt + self.wind_filter_duration_xlnk)
+        dlnk_end_dt = self.planning_end_dlnk_dt
+        xlnk_end_dt = self.planning_end_xlnk_dt
 
         # crazy looking line, but it's easy... dictionary of end times by sat_indx - end_dt if not observing sat, else end_obs_sat_dt
         # end_dt_by_sat_indx = {sat_indx: end_dt if sat_indx != obs_wind.sat_indx else end_obs_sat_dt for sat_indx in range (self.num_sats)}

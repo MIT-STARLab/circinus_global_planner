@@ -39,6 +39,8 @@ import runner_gp_helper_pickle as pickle_helper
 import runner_gp_helper_other as other_helper
 import runner_gp_helper_output as output_helper
 
+from circinus_tools import debug_tools
+
 REPO_BASE = os.path.abspath(os.pardir)  # os.pardir aka '..'
 
 OUTPUT_JSON_VER = '0.2'
@@ -610,7 +612,7 @@ class PipelineRunner:
             raise NotImplementedError
 
         #  check that it's the right version
-        if not gp_general_params['version'] == "0.5":
+        if not gp_general_params['version'] == "0.6":
             raise NotImplementedError
 
         #  check that it's the right version

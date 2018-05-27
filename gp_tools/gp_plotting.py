@@ -69,6 +69,33 @@ class GPPlotting():
         self.sats_dmin_Gb = [ds_params['data_storage_Gbit']['d_min'][ds_params['storage_option']] for ds_params in self.data_storage_params]
         self.sats_dmax_Gb = [ds_params['data_storage_Gbit']['d_max'][ds_params['storage_option']] for ds_params in self.data_storage_params]
 
+    def get_label_getters(self):
+        def xlnk_label_getter(xlnk,sat_indx):
+            # dr_id = None
+            # if route_ids_by_wind:
+            #     dr_indcs = route_ids_by_wind.get(xlnk,None)
+            #     if not dr_indcs is None:
+            #         dr_id = dr_indcs[xlnk_route_index_to_use]
+
+            # other_sat_indx = xlnk.get_xlnk_partner(sat_indx)
+            # if not dr_id is None:
+            #     label_text = "%d,%d" %(dr_id.get_indx(),other_sat_indx)
+            #     label_text = "%s" %(dr_indcs)
+            # else:         
+            #     label_text = "%d" %(other_sat_indx)
+
+            # return label_text
+            rx_or_tx = 'rx' if xlnk.is_rx(sat_indx) else 'tx'
+            return "x%d,%s%d,dv %d/%d"%(xlnk.window_ID,rx_or_tx,xlnk.get_xlnk_partner(sat_indx),xlnk.scheduled_data_vol,xlnk.data_vol) 
+
+        def dlnk_label_getter(dlnk):
+            return "d%d,g%d,dv %d/%d"%(dlnk.window_ID,dlnk.gs_indx,dlnk.scheduled_data_vol,dlnk.data_vol) 
+
+        def obs_label_getter(obs):
+            return "o%d, dv %d/%d"%(obs.window_ID,obs.scheduled_data_vol,obs.data_vol)
+
+        return obs_label_getter,dlnk_label_getter,xlnk_label_getter
+
     def gp_plot_all_sats_acts(self,
         sats_ids_list,
         sats_obs_winds_choices,
@@ -114,6 +141,13 @@ class GPPlotting():
         plot_params['xlnk_route_index_to_use'] = self.route_index_to_use
         plot_params['xlnk_color_rollover'] = self.xlnk_color_rollover
         plot_params['xlnk_colors'] = self.xlnk_colors
+
+
+        obs_label_getter,dlnk_label_getter,xlnk_label_getter = self.get_label_getters()
+        plot_params['obs_label_getter_func'] = obs_label_getter
+        plot_params['dlnk_label_getter_func'] = dlnk_label_getter
+        # plot_params['xlnk_label_getter_func'] = xlnk_label_getter
+        plot_params['xlnk_label_getter_func'] = lambda xlnk,sat_indx: ''  # return empty label
 
         pltl.plot_all_agents_acts(
             sats_ids_list,
