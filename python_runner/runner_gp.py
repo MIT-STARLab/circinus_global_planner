@@ -282,9 +282,11 @@ class GlobalPlannerRunner:
         if verbose:
             print_verbose('total_rs_step1_runtime',verbose)
             print_verbose(time_elapsed,verbose)
-            print_verbose('runtime per rs iteration',verbose)
-            print_verbose('ave: %fs'%(np.mean(route_times_s)),verbose)
-            print_verbose('std: %fs'%(np.std(route_times_s)),verbose)
+            valid = len(route_times_s) > 0
+            if valid:
+                print_verbose('runtime per rs iteration',verbose)
+                print_verbose('ave: %fs'%(np.mean(route_times_s)),verbose)
+                print_verbose('std: %fs'%(np.std(route_times_s)),verbose)
 
         return routes_by_obs,all_stats,route_times_s,obs_indx, dr_uid
 
