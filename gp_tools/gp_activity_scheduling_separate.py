@@ -9,7 +9,6 @@ from math import ceil
 from collections import OrderedDict,Counter
 
 from pyomo import environ  as pe
-from pyomo import opt  as po
 
 import numpy as np
 
@@ -28,7 +27,7 @@ def print_verbose(string,verbose=False):
         print(string)
 
 class GPActivitySchedulingSeparate(GPActivityScheduling):
-    """docstring for GP activity scheduling"""
+    """Non-optimal GP activity scheduling, to be run after performing route selection"""
     
     def __init__(self,gp_params):
         """initializes based on parameters
@@ -127,9 +126,9 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         # these structures keep track of the subset of unique indices that correspond to observations and links. Also we keep track of what data routes correspond to an activity
         all_lnk_windids = set()
         all_obs_windids = set()
-        dv_by_link_act_windid = {}
-        dv_by_obs_act_windid = {}
-        dv_by_act_windid = {}
+        capacity_by_link_act_windid = {}
+        capacity_by_obs_act_windid = {}
+        capacity_by_act_windid = {}
 
         # now dmr structs
         # dmr is data multi-route
@@ -156,7 +155,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                     all_acts_by_windid[act_windid] = act
                     dmr_ids_by_act_windid[act_windid] = []
                     dmr_ids_by_act_windid[act_windid].append (dmr.ID)
-                    dv_by_act_windid[act_windid] = act.data_vol
+                    capacity_by_act_windid[act_windid] = act.data_vol
 
                     # also need to add it to the list and dictionary for observations
                     if type(act) == ObsWindow:
@@ -164,14 +163,14 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                         all_obs_windids.add(act_windid)
                         dmr_ids_by_obs_act_windid[act_windid] = []
                         dmr_ids_by_obs_act_windid[act_windid].append (dmr.ID)
-                        dv_by_obs_act_windid[act_windid] = act.data_vol
+                        capacity_by_obs_act_windid[act_windid] = act.data_vol
 
                     # also need to add it to the list and dictionary for links
                     if type(act) == DlnkWindow:
                         all_lnk_windids.add(act_windid)
                         dmr_ids_by_link_act_windid[act_windid] = []
                         dmr_ids_by_link_act_windid[act_windid].append (dmr.ID)
-                        dv_by_link_act_windid[act_windid] = act.data_vol
+                        capacity_by_link_act_windid[act_windid] = act.data_vol
                         if act_is_mutable: sats_mutable_acts[act.sat_indx].append(act)
                         # grab the dlnks for each sat too, while we're looping through
                         if act_is_mutable: sats_mutable_dlnks[act.sat_indx].append(act)
@@ -180,7 +179,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                         all_lnk_windids.add(act_windid)
                         dmr_ids_by_link_act_windid[act_windid] = []
                         dmr_ids_by_link_act_windid[act_windid].append (dmr.ID)
-                        dv_by_link_act_windid[act_windid] = act.data_vol
+                        capacity_by_link_act_windid[act_windid] = act.data_vol
                         if act_is_mutable: sats_mutable_acts[act.sat_indx].append(act)
                         if act_is_mutable: sats_mutable_acts[act.xsat_indx].append(act)
 
@@ -202,7 +201,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             sats_mutable_acts[sat_indx].sort(key=lambda x: x.center)
             sats_mutable_dlnks[sat_indx].sort(key=lambda x: x.center)
 
-        return sats_mutable_acts,sats_mutable_dlnks,all_acts_windids,mutable_acts_windids,dmr_ids_by_act_windid,dv_by_act_windid,all_acts_by_windid,all_obs_windids,dmr_ids_by_obs_act_windid,dv_by_obs_act_windid,all_lnk_windids,dmr_ids_by_link_act_windid,dv_by_link_act_windid
+        return sats_mutable_acts,sats_mutable_dlnks,all_acts_windids,mutable_acts_windids,dmr_ids_by_act_windid,capacity_by_act_windid,all_acts_by_windid,all_obs_windids,dmr_ids_by_obs_act_windid,capacity_by_obs_act_windid,all_lnk_windids,dmr_ids_by_link_act_windid,capacity_by_link_act_windid
                     
 
     def filter_routes( self,selected_routes,existing_routes):
@@ -344,14 +343,14 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                 all_acts_windids,
                 mutable_acts_windids,
                 dmr_ids_by_act_windid,
-                dv_by_act_windid,
+                capacity_by_act_windid,
                 all_acts_by_windid,
                 all_obs_windids,
                 dmr_ids_by_obs_act_windid,
-                dv_by_obs_act_windid,
+                capacity_by_obs_act_windid,
                 all_lnk_windids,
                 dmr_ids_by_link_act_windid,
-                dv_by_link_act_windid) =  self.get_activity_structs(routes_filt)
+                capacity_by_link_act_windid) =  self.get_activity_structs(routes_filt)
 
             latency_sf_by_dmr_id =  self.get_dmr_latency_score_factors(
                 routes_by_dmr_id,
@@ -461,10 +460,10 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         ##############################
 
         model.par_min_obs_dv_dlnk_req = pe.Param (initialize=self.min_obs_dv_dlnk_req)
-        model.par_obs_capacity = pe.Param(model.obs_windids,initialize =dv_by_obs_act_windid)
-        model.par_total_obs_dv = sum(dv_by_obs_act_windid.values())
-        model.par_link_capacity = pe.Param(model.lnk_windids,initialize =dv_by_link_act_windid)
-        model.par_act_capacity = pe.Param(model.all_act_windids,initialize =dv_by_act_windid)
+        model.par_obs_capacity = pe.Param(model.obs_windids,initialize =capacity_by_obs_act_windid)
+        model.par_total_obs_capacity = sum(capacity_by_obs_act_windid.values())
+        model.par_link_capacity = pe.Param(model.lnk_windids,initialize =capacity_by_link_act_windid)
+        model.par_act_capacity = pe.Param(model.all_act_windids,initialize =capacity_by_act_windid)
         #  data volume for each data multi-route
         model.par_dmr_dv = pe.Param(model.dmr_ids,initialize ={ dmr.ID: dmr.data_vol for dmr in routes_filt})
         #  data volume for each activity in each data multi-route
@@ -752,7 +751,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             #  note the first two objectives are for all observations, not just mutable observations
 
             # obj [1]
-            total_dv_term = self.obj_weights['obs_dv'] * 1/model.par_total_obs_dv * sum(model.par_dmr_dv[p]*model.var_dmr_utilization[p] for p in model.dmr_ids) 
+            total_dv_term = self.obj_weights['obs_dv'] * 1/model.par_total_obs_capacity * sum(model.par_dmr_dv[p]*model.var_dmr_utilization[p] for p in model.dmr_ids) 
 
             # obj [2]
             latency_term = self.obj_weights['route_latency'] * 1/len(model.obs_windids) * sum(model.var_latency_sf_obs[o] for o in model.obs_windids)

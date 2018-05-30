@@ -472,7 +472,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         ##############################
 
         model.par_min_obs_dv_dlnk_req = pe.Param (initialize=self.min_obs_dv_dlnk_req)
-        model.par_total_obs_dv = sum(capacity_by_act_windid[o] for o in all_obs_windids)
+        model.par_total_obs_capacity = sum(capacity_by_act_windid[o] for o in all_obs_windids)
         model.par_act_capacity = pe.Param(model.act_windids,initialize =capacity_by_act_windid)
 
         model.par_latency_sf_dlnk_obs = pe.Param(model.dlnk_obs_subscripts,initialize=latency_sf_by_dlnk_obs_windids)
@@ -790,7 +790,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         rsrc_norm_f = len(decimated_tp_indcs) * len(model.sat_indcs)
 
         def obj_rule(model):
-            total_dv_term = self.obj_weights['obs_dv'] * 1/model.par_total_obs_dv * sum(model.var_act_dv_utilization[o] for o in model.obs_windids) 
+            total_dv_term = self.obj_weights['obs_dv'] * 1/model.par_total_obs_capacity * sum(model.var_act_dv_utilization[o] for o in model.obs_windids) 
 
             latency_term = self.obj_weights['route_latency'] * 1/len(model.obs_windids) * sum(model.var_latency_sf_obs[o] for o in model.obs_windids)
             
