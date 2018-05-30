@@ -206,7 +206,9 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
         base_time_dt = gp_runner_inst.scenario_params['start_utc_dt'],
         plot_title = 'Scheduled Acts / RS Acts',
         plot_size_inches = (18,12),
-        plot_include_labels = gp_runner_inst.plot_params['plot_AS_include_labels'],
+        plot_include_obs_labels = gp_runner_inst.plot_params['plot_AS_include_obs_labels'],
+        plot_include_dlnk_labels = gp_runner_inst.plot_params['plot_AS_include_dlnk_labels'],
+        plot_include_xlnk_labels = gp_runner_inst.plot_params['plot_AS_include_xlnk_labels'],
         plot_original_times = False,
         show=  False,
         fig_name='plots/test_sched_windows.pdf'
@@ -228,7 +230,9 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
         base_time_dt = gp_runner_inst.scenario_params['start_utc_dt'],
         plot_title = 'All Acts',
         plot_size_inches = (18,12),
-        plot_include_labels = gp_runner_inst.plot_params['plot_AS_include_labels'],
+        plot_include_obs_labels = gp_runner_inst.plot_params['plot_AS_include_obs_labels'],
+        plot_include_dlnk_labels = gp_runner_inst.plot_params['plot_AS_include_dlnk_labels'],
+        plot_include_xlnk_labels = gp_runner_inst.plot_params['plot_AS_include_xlnk_labels'],
         plot_original_times = True,
         show=  False,
         fig_name='plots/test_all_windows.pdf'
@@ -251,7 +255,9 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
             base_time_dt = gp_runner_inst.scenario_params['start_utc_dt'],
             plot_title = 'RS Acts / All Acts',
             plot_size_inches = (18,12),
-            plot_include_labels = gp_runner_inst.plot_params['plot_RS_include_labels'],
+            plot_include_obs_labels = gp_runner_inst.plot_params['plot_RS_include_obs_labels'],
+            plot_include_dlnk_labels = gp_runner_inst.plot_params['plot_RS_include_dlnk_labels'],
+            plot_include_xlnk_labels = gp_runner_inst.plot_params['plot_RS_include_xlnk_labels'],
             plot_original_times = False,
             show=  False,
             fig_name='plots/test_rs_windows.pdf'

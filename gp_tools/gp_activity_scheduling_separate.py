@@ -211,8 +211,8 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         existing_routes_before_planning_fixed_end = []
 
         def process_dmr(dmr,start_filt_dt,filter_opt):
-            dmr_start = dmr.start
-            dmr_end = dmr.end
+            dmr_start = dmr.get_start(time_opt='original')
+            dmr_end = dmr.get_end(time_opt='original')
 
             # check if all act windows in route are completely within the planning window. Pass if not.
             if filter_opt=='totally_within' and not gp_gen.dr_in_planning_window(self,dmr,start_time_override=start_filt_dt): #(dmr_start < start_filt_dt or dmr_end > self.planning_end_dt):
@@ -238,7 +238,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             added = process_dmr(dmr,self.planning_start_dt,"partially_within")
 
             # mark those  existing routes that start before the fixed planning window end.
-            dmr_start = dmr.start
+            dmr_start = dmr.get_start(time_opt='original')
             if added and dmr_start <= self.planning_fixed_end_dt:
                 existing_routes_before_planning_fixed_end.append(dmr)
 

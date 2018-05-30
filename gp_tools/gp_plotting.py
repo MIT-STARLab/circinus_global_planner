@@ -110,7 +110,9 @@ class GPPlotting():
         base_time_dt,
         plot_title = 'Route Plot', 
         plot_size_inches = (12,12),
-        plot_include_labels = False,
+        plot_include_obs_labels = True,
+        plot_include_dlnk_labels = True,
+        plot_include_xlnk_labels = True,
         plot_original_times = False,
         show=False,
         fig_name='plots/xlnk_dlnk_plot.pdf'):
@@ -122,7 +124,6 @@ class GPPlotting():
         plot_params['base_time_dt'] = base_time_dt
         plot_params['plot_title'] = plot_title
         plot_params['plot_size_inches'] = plot_size_inches
-        plot_params['plot_include_labels'] = plot_include_labels
         plot_params['plot_original_times'] = plot_original_times
         plot_params['show'] = show
         plot_params['fig_name'] = fig_name
@@ -137,6 +138,9 @@ class GPPlotting():
         plot_params['plot_xlnks'] = self.winds_plot_xlnks
         plot_params['plot_dlnks'] = self.winds_plot_dlnks
         plot_params['plot_obs'] = self.winds_plot_obs
+        plot_params['plot_include_obs_labels'] = plot_include_obs_labels
+        plot_params['plot_include_dlnk_labels'] = plot_include_dlnk_labels
+        plot_params['plot_include_xlnk_labels'] = plot_include_xlnk_labels
 
         plot_params['xlnk_route_index_to_use'] = self.route_index_to_use
         plot_params['xlnk_color_rollover'] = self.xlnk_color_rollover
@@ -146,8 +150,7 @@ class GPPlotting():
         obs_label_getter,dlnk_label_getter,xlnk_label_getter = self.get_label_getters()
         plot_params['obs_label_getter_func'] = obs_label_getter
         plot_params['dlnk_label_getter_func'] = dlnk_label_getter
-        # plot_params['xlnk_label_getter_func'] = xlnk_label_getter
-        plot_params['xlnk_label_getter_func'] = lambda xlnk,sat_indx: ''  # return empty label
+        plot_params['xlnk_label_getter_func'] = xlnk_label_getter
 
         pltl.plot_all_agents_acts(
             sats_ids_list,
