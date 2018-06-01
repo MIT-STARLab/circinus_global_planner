@@ -102,13 +102,14 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
         return obs_winds_filtered, dlink_winds_flat_filtered, xlink_winds_flat_filtered
 
-    def get_act_model_objs(self,act):
+    @staticmethod
+    def get_act_model_objs(act,model):
 
         model_objs_act = {
             'act_object': act,
-            'var_dv_utilization': self.model.var_act_dv_utilization[act.window_ID],
-            'par_dv_capacity': self.model.par_act_capacity[act.window_ID],
-            'var_act_indic': self.model.var_act_indic[act.window_ID],
+            'var_dv_utilization': model.var_act_dv_utilization[act.window_ID],
+            'par_dv_capacity': model.par_act_capacity[act.window_ID],
+            'var_act_indic': model.var_act_indic[act.window_ID],
         }
 
         return model_objs_act
@@ -517,19 +518,10 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         model.intra_sat_act_constr_bounds  = pe.ConstraintList()
         model.inter_sat_act_constr_bounds  = pe.ConstraintList()
 
-        #  stores all of the lower bounds of the constraint violation variables, for use in normalization for objective function
-        min_var_intra_sat_act_constr_violation_list = [] 
-        min_var_inter_sat_act_constr_violation_list = [] 
-
-        constraint_violation_model_objs = {}
-        constraint_violation_model_objs['intra_sat_act_constr_violation_acts_list'] = []
-        constraint_violation_model_objs['inter_sat_act_constr_violation_acts_list'] = []
-        constraint_violation_model_objs['var_intra_sat_act_constr_violations'] = model.var_intra_sat_act_constr_violations
-        constraint_violation_model_objs['var_inter_sat_act_constr_violations'] = model.var_inter_sat_act_constr_violations
-        constraint_violation_model_objs['intra_sat_act_constr_bounds'] = model.intra_sat_act_constr_bounds
-        constraint_violation_model_objs['inter_sat_act_constr_bounds'] = model.inter_sat_act_constr_bounds
-        constraint_violation_model_objs['min_var_intra_sat_act_constr_violation_list'] = min_var_intra_sat_act_constr_violation_list 
-        constraint_violation_model_objs['min_var_inter_sat_act_constr_violation_list'] = min_var_inter_sat_act_constr_violation_list 
+        self.constraint_violation_model_objs['var_intra_sat_act_constr_violations'] = model.var_intra_sat_act_constr_violations
+        self.constraint_violation_model_objs['var_inter_sat_act_constr_violations'] = model.var_inter_sat_act_constr_violations
+        self.constraint_violation_model_objs['intra_sat_act_constr_bounds'] = model.intra_sat_act_constr_bounds
+        self.constraint_violation_model_objs['inter_sat_act_constr_bounds'] = model.inter_sat_act_constr_bounds
 
         ##############################
         #  Make constraints
@@ -676,17 +668,39 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
         print_verbose('make act overlap constraints',verbose)
 
+
+
         #  intra-satellite activity overlap constraints [10],[11],[12]
-        #  well, 12 is activity minimum time duration
-        model.c10_11  = pe.ConstraintList()
+        model.c10_11  = pe.ConstraintList() # this now contains all of the activity overlap constraints
+        # pass the model objects getter function so it can be called in place
+        self.gen_intra_sat_act_overlap_constraints(
+            model,
+            model.c10_11,
+            sats_acts,
+            self.num_sats,
+            self.get_act_model_objs
+        )
+
+        #  12 is activity minimum time duration
         model.c12  = pe.ConstraintList()
         # pass the model objects getter function so it can be called in place
-        self.gen_intra_sat_act_overlap_constraints(model.c10_11,model.c12,sats_acts,self.get_act_model_objs,constraint_violation_model_objs)
+        self.gen_sat_act_duration_constraints(
+            model,
+            model.c12,
+            sats_acts,
+            self.num_sats,
+            self.get_act_model_objs
+        )
 
-        # inter-satellite downlink overlap constraints [9],[10]
+        # inter-satellite downlink overlap constraints [14],[15]
         model.c14_15  = pe.ConstraintList()
-        # pass the model objects getter function so it can be called in place
-        self.gen_inter_sat_act_overlap_constraints(model.c14_15,sats_dlnks,self.get_act_model_objs,constraint_violation_model_objs)
+        self.gen_inter_sat_act_overlap_constraints(
+            model,
+            model.c14_15,
+            sats_dlnks,
+            self.num_sats,
+            self.get_act_model_objs
+        )
 
         #  energy constraints [13]
         # todo: maybe this ought to be moved to the super class, but i don't anticipate this code changing much any time soon, so i'll punt that.
@@ -796,13 +810,13 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
             
             energy_margin_term = self.obj_weights['energy_storage'] * 1/rsrc_norm_f * sum(model.var_sats_estore[sat_indx,tp_indx]/model.par_sats_estore_max[sat_indx] for tp_indx in decimated_tp_indcs for sat_indx in model.sat_indcs)
 
-            if len(min_var_inter_sat_act_constr_violation_list) > 0:
-                inter_sat_act_constr_violations_term = self.obj_weights['inter_sat_act_constr_violations'] * 1/sum(min_var_inter_sat_act_constr_violation_list) * sum(model.var_inter_sat_act_constr_violations[indx] for indx in range(1,len(model.var_inter_sat_act_constr_violations)+1))
+            if len(self.min_var_inter_sat_act_constr_violation_list) > 0:
+                inter_sat_act_constr_violations_term = self.obj_weights['inter_sat_act_constr_violations'] * 1/sum(self.min_var_inter_sat_act_constr_violation_list) * sum(model.var_inter_sat_act_constr_violations[indx] for indx in range(1,len(model.var_inter_sat_act_constr_violations)+1))
             else:
                 inter_sat_act_constr_violations_term = 0
 
-            if len(min_var_intra_sat_act_constr_violation_list) > 0:
-                intra_sat_act_constr_violations_term = self.obj_weights['intra_sat_act_constr_violations'] * 1/sum(min_var_intra_sat_act_constr_violation_list) * sum(model.var_intra_sat_act_constr_violations[indx] for indx in range(1,len(model.var_inter_sat_act_constr_violations)+1))
+            if len(self.min_var_intra_sat_act_constr_violation_list) > 0:
+                intra_sat_act_constr_violations_term = self.obj_weights['intra_sat_act_constr_violations'] * 1/sum(self.min_var_intra_sat_act_constr_violation_list) * sum(model.var_intra_sat_act_constr_violations[indx] for indx in range(1,len(model.var_inter_sat_act_constr_violations)+1))
             else:
                 intra_sat_act_constr_violations_term = 0
 

@@ -80,6 +80,9 @@ class GlobalPlannerRunner:
         self.io_proc =SchedIOProcessor(self.params)
         self.gp_plot =GPPlotting( self.params)
 
+        # this data route ID should be unique across all data routes (and the datamultiroutes encasing them).  this is important because data route IDs are used for indexing in many places, not just in the global planner.
+        self.initial_dr_uid = gp_params['gp_instance_params']['initial_gp_route_indx']
+
         # it's no good if the planning window (the activities to select) goes outside of the scenario window (the possible activities, eclipse windows)
         if self.gp_inst_planning_params['planning_start_dt'] < self.scenario_params['start_utc_dt']:
             raise RuntimeError("GP instance start time (%s) is less than scenario start time (%s)"%(self.gp_inst_planning_params['planning_start_dt'],self.scenario_params['start_utc']))
@@ -159,7 +162,7 @@ class GlobalPlannerRunner:
         return  routes, energy_usage, data_usage
 
 
-    def run_route_selection_v2_step1( self,obs_winds,dlnk_winds_flat,xlnk_winds,existing_route_data,verbose=False):
+    def run_route_selection_v2_step1( self,obs_winds,dlnk_winds_flat,xlnk_winds,existing_route_data,latest_dr_uid,verbose=False):
         # todo: it would be nice at some point to incorporate the use of existing routes into here.  but that's definitely for future work.
 
         print_verbose ('nominal route selection v2 step 1',verbose)
@@ -263,16 +266,13 @@ class GlobalPlannerRunner:
         t_b = time.time()
         time_elapsed = t_b-t_a
 
-        # this data route ID should be unique across all data routes (and the datamultiroutes encasing them).  this is important because data route IDs are used for indexing in many places, not just in the global planner.
-        #  get the last unique ID that was created by the global planner, or failing that set it to zero.
-        dr_uid = existing_route_data.get('latest_gp_route_uid',0)
 
         # explicitly validate routes
         for routes in routes_by_obs.values():
             for dr in routes:
                 #  set the data route ID now, because they were not set uniquely if we were running in parallel
-                dr.set_id(self.gp_agent_ID,dr_uid)
-                dr_uid += 1
+                dr.set_id(self.gp_agent_ID,latest_dr_uid)
+                latest_dr_uid += 1
 
                 # try:
                 dr.validate()
@@ -288,7 +288,7 @@ class GlobalPlannerRunner:
                 print_verbose('ave: %fs'%(np.mean(route_times_s)),verbose)
                 print_verbose('std: %fs'%(np.std(route_times_s)),verbose)
 
-        return routes_by_obs,all_stats,route_times_s,obs_indx, dr_uid
+        return routes_by_obs,all_stats,route_times_s,obs_indx, latest_dr_uid
 
 
 
@@ -334,7 +334,7 @@ class GlobalPlannerRunner:
 
         return selected_rts_by_obs,stats_rs2_pre,stats_rs2_post
 
-    def run_route_selection(self,obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,existing_route_data,window_uid,verbose=False):
+    def run_route_selection(self,obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,existing_route_data,window_uid,latest_dr_uid,verbose=False):
 
 
         #################################
@@ -343,7 +343,6 @@ class GlobalPlannerRunner:
 
         sel_routes_by_obs = None
         pas_a = None
-        latest_dr_uid = None
 
         # If we need output from step 1
         run_step_1 = not self.other_params['rs_s2_pickle_input'] and not self.other_params['as_pickle_input']
@@ -358,7 +357,7 @@ class GlobalPlannerRunner:
             #  otherwise run route selection step 1
             else:
                 print_verbose('Run route selection step 1',verbose)
-                routes_by_obs,all_stats,route_times_s, obs_indx, latest_dr_uid  =  self.run_route_selection_v2_step1(obs_winds,dlnk_winds_flat,xlnk_winds,existing_route_data,verbose=self.rs_v2_params['verbose_step1'])
+                routes_by_obs,all_stats,route_times_s, obs_indx, latest_dr_uid  =  self.run_route_selection_v2_step1(obs_winds,dlnk_winds_flat,xlnk_winds,existing_route_data,latest_dr_uid,verbose=self.rs_v2_params['verbose_step1'])
                 # routes_by_obs,all_stats,route_times_s, obs_indx, weights_tups  =  self.run_test_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
 
             #  pickle before step 2 because step 2 doesn't take that long
@@ -478,6 +477,8 @@ class GlobalPlannerRunner:
         #  route selection stage
         #################################
 
+        latest_dr_uid = self.initial_dr_uid
+
         # pas = planning and scheduling
         pas_a = time.time()
 
@@ -485,7 +486,7 @@ class GlobalPlannerRunner:
 
         pas_a_new = None
         if run_rs:
-            sel_routes_by_obs,ecl_winds,latest_dr_uid,window_uid,pas_a_new = self.run_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,existing_route_data,window_uid,verbose)
+            sel_routes_by_obs,ecl_winds,latest_dr_uid,window_uid,pas_a_new = self.run_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,existing_route_data,window_uid,latest_dr_uid,verbose)
 
         if pas_a_new:
             pas_a = pas_a_new

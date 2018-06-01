@@ -98,13 +98,16 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
         return stats
 
-    def get_act_model_objs(self,act):
+    @staticmethod
+    def get_act_model_objs(act,model):
+        """ get the pyomo model objects used for modeling activity utilization."""
+        # note: can be overridden in subclass - this function provides an example implementation
 
         model_objs_act = {
             'act_object': act,
-            'var_dv_utilization': self.model.var_activity_utilization[act.window_ID]*self.model.par_act_capacity[act.window_ID],
-            'par_dv_capacity': self.model.par_act_capacity[act.window_ID],
-            'var_act_indic': self.model.var_act_indic[act.window_ID],
+            'var_dv_utilization': model.var_activity_utilization[act.window_ID]*model.par_act_capacity[act.window_ID],
+            'par_dv_capacity': model.par_act_capacity[act.window_ID],
+            'var_act_indic': model.var_act_indic[act.window_ID],
         }
 
         return model_objs_act
@@ -529,19 +532,10 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         model.intra_sat_act_constr_bounds  = pe.ConstraintList()
         model.inter_sat_act_constr_bounds  = pe.ConstraintList()
 
-        #  stores all of the lower bounds of the constraint violation variables, for use in normalization for objective function
-        min_var_intra_sat_act_constr_violation_list = [] 
-        min_var_inter_sat_act_constr_violation_list = [] 
-
-        constraint_violation_model_objs = {}
-        constraint_violation_model_objs['intra_sat_act_constr_violation_acts_list'] = []
-        constraint_violation_model_objs['inter_sat_act_constr_violation_acts_list'] = []
-        constraint_violation_model_objs['var_intra_sat_act_constr_violations'] = model.var_intra_sat_act_constr_violations
-        constraint_violation_model_objs['var_inter_sat_act_constr_violations'] = model.var_inter_sat_act_constr_violations
-        constraint_violation_model_objs['intra_sat_act_constr_bounds'] = model.intra_sat_act_constr_bounds
-        constraint_violation_model_objs['inter_sat_act_constr_bounds'] = model.inter_sat_act_constr_bounds
-        constraint_violation_model_objs['min_var_intra_sat_act_constr_violation_list'] = min_var_intra_sat_act_constr_violation_list 
-        constraint_violation_model_objs['min_var_inter_sat_act_constr_violation_list'] = min_var_inter_sat_act_constr_violation_list 
+        self.constraint_violation_model_objs['var_intra_sat_act_constr_violations'] = model.var_intra_sat_act_constr_violations
+        self.constraint_violation_model_objs['var_inter_sat_act_constr_violations'] = model.var_inter_sat_act_constr_violations
+        self.constraint_violation_model_objs['intra_sat_act_constr_bounds'] = model.intra_sat_act_constr_bounds
+        self.constraint_violation_model_objs['inter_sat_act_constr_bounds'] = model.inter_sat_act_constr_bounds
 
         ##############################
         #  Make constraints
@@ -581,26 +575,35 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         print_verbose('make overlap constraints',verbose)
 
         #  intra-satellite activity overlap constraints [4],[5],[5b]
-        #  well, 5B is activity minimum time duration
-        model.c4_5  = pe.ConstraintList() # this now contains all of the activity overlap constraints
+        model.c4_5  = pe.ConstraintList()
+        # pass the model objects getter function so it can be called in place
+        self.c4_5_binding_exprs_by_act =  self.gen_intra_sat_act_overlap_constraints(
+            model,
+            model.c4_5,
+            sats_mutable_acts,
+            self.num_sats,
+            self.get_act_model_objs
+        )
+
+        #  5B is activity minimum time duration
         model.c5b  = pe.ConstraintList()
         # pass the model objects getter function so it can be called in place
-        (self.c5b_binding_exprs_by_act,
-            self.c4_5_binding_exprs_by_act) =  self.gen_intra_sat_act_overlap_constraints(
-                model.c4_5,
-                model.c5b,
-                sats_mutable_acts,
-                self.get_act_model_objs,
-                constraint_violation_model_objs
-            )
+        self.c5b_binding_exprs_by_act =  self.gen_sat_act_duration_constraints(
+            model,
+            model.c5b,
+            sats_mutable_acts,
+            self.num_sats,
+            self.get_act_model_objs
+        )
 
         # inter-satellite downlink overlap constraints [9],[10]
         model.c9_10  = pe.ConstraintList()
         self.c9_10_binding_exprs_by_act = self.gen_inter_sat_act_overlap_constraints(
+            model,
             model.c9_10,
             sats_mutable_dlnks,
-            self.get_act_model_objs,
-            constraint_violation_model_objs
+            self.num_sats,
+            self.get_act_model_objs
         )
 
         print_verbose('make energy, data constraints',verbose)
@@ -719,7 +722,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         for p in model.fixed_dmr_ids:
             # less than constraint because equality should be achievable (if we're only using existing routes that have all previously been scheduled and deconflicted together - which is the case for current version of GP), but want to allow route to lessen its utilization if a more valuable route is available. 
             #  add in an epsilon at the end, because it may be that the utilization number was precisely chosen to meet the minimum data volume requirement -  don't want to not make the minimum data volume requirement this time because of round off error
-            model.c11.add( model.var_dmr_utilization[p] <= utilization_by_existing_route_id[p] + self.epsilon_fixed_utilization) 
+            model.c11.add( model.var_dmr_utilization[p] <= utilization_by_existing_route_id[p] + self.fixed_utilization_epsilon) 
         
         # constrain utilization reward of existing routes by the input utilization numbers
         model.c12  = pe.ConstraintList()
@@ -762,13 +765,13 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             # obj [6]
             existing_routes_term = self.obj_weights['existing_routes'] * 1/sum_existing_route_utilization * sum(model.var_existing_dmr_utilization_reward[p] for p in model.existing_dmr_ids) if len(model.existing_dmr_ids) > 0 else 0
 
-            if len(min_var_inter_sat_act_constr_violation_list) > 0:
-                inter_sat_act_constr_violations_term = self.obj_weights['inter_sat_act_constr_violations'] * 1/sum(min_var_inter_sat_act_constr_violation_list) * sum(model.var_inter_sat_act_constr_violations[indx] for indx in range(1,len(model.var_inter_sat_act_constr_violations)+1))
+            if len(self.min_var_inter_sat_act_constr_violation_list) > 0:
+                inter_sat_act_constr_violations_term = self.obj_weights['inter_sat_act_constr_violations'] * 1/sum(self.min_var_inter_sat_act_constr_violation_list) * sum(model.var_inter_sat_act_constr_violations[indx] for indx in range(1,len(model.var_inter_sat_act_constr_violations)+1))
             else:
                 inter_sat_act_constr_violations_term = 0
 
-            if len(min_var_intra_sat_act_constr_violation_list) > 0:
-                intra_sat_act_constr_violations_term = self.obj_weights['intra_sat_act_constr_violations'] * 1/sum(min_var_intra_sat_act_constr_violation_list) * sum(model.var_intra_sat_act_constr_violations[indx] for indx in range(1,len(model.var_inter_sat_act_constr_violations)+1))
+            if len(self.min_var_intra_sat_act_constr_violation_list) > 0:
+                intra_sat_act_constr_violations_term = self.obj_weights['intra_sat_act_constr_violations'] * 1/sum(self.min_var_intra_sat_act_constr_violation_list) * sum(model.var_intra_sat_act_constr_violations[indx] for indx in range(1,len(model.var_inter_sat_act_constr_violations)+1))
             else:
                 intra_sat_act_constr_violations_term = 0
 
@@ -920,7 +923,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
                     # check if somehow data routes through fixed window have tried to grab more capacity than was scheduled for it
                     if wind_sched_dv_check[wind] > previous_dv_utilization + self.dv_epsilon:
-                        raise RuntimeWarning('inconsistent activity scheduling results, data volumes mismatch, fixed window. Previous dv scheduled: %f, current scheduled %f. Verify that epsilon_fixed_utilization (%f) is not too large relative to dv_epsilon (%f)'%(previous_dv_utilization,wind_sched_dv_check[wind],self.epsilon_fixed_utilization,self.dv_epsilon))
+                        raise RuntimeWarning('inconsistent activity scheduling results, data volumes mismatch, fixed window. Previous dv scheduled: %f, current scheduled %f. Verify that fixed_utilization_epsilon (%f) is not too large relative to dv_epsilon (%f)'%(previous_dv_utilization,wind_sched_dv_check[wind],self.fixed_utilization_epsilon,self.dv_epsilon))
 
                 #  also check that we're not scheduling too much data volume from the window ( check this after we already verified data volume usage relative to previous utilization, so we see that error first -  helps to separate out that specific case)
                 if wind_sched_dv_check[wind] >= wind.data_vol + self.dv_epsilon:
