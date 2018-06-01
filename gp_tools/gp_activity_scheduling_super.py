@@ -38,7 +38,7 @@ class GPActivityScheduling(AgentScheduling):
 
         self.scenario_timestep_s = scenario_params['timestep_s']
         
-        self.latency_params = gp_params['gp_general_params']['other_params']['latency_calculation']
+        self.latency_calculation_params = gp_params['gp_general_params']['other_params']['latency_calculation']
         self.solver_name =as_params['solver_name']
         self.solver_params =as_params['solver_params']
         self.num_sats=sat_params['num_sats']
@@ -52,7 +52,8 @@ class GPActivityScheduling(AgentScheduling):
         #  the "effectively zero" number.
         self.dv_epsilon = as_params['dv_epsilon_Mb']
         self.fixed_utilization_epsilon = as_params['fixed_utilization_epsilon']
-        # this is the mimimum latency requirement for the highest latency score factor, 1.0. If multiple routes/dlnks for a single obs have latency less than this, they will both have sf 1.0
+
+        # See docs for this in agent_scheduler superclass
         self.min_latency_for_sf_1_mins =as_params['min_latency_for_sf_1_mins']
 
         # notes on the planning window:

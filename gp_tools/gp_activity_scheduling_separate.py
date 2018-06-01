@@ -246,34 +246,6 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
         return routes_filt, existing_routes_before_planning_fixed_end
 
-    def get_dmr_latency_score_factors(self,routes_by_dmr_id,dmr_ids_by_obs_act_windid):
-
-        latency_sf_by_dmr_id = {}
-
-        # loop through all satellites and their downlinks
-        for obs,dmr_ids in dmr_ids_by_obs_act_windid.items():
-            latencies = []
-            for dmr_id in dmr_ids:
-                dmr = routes_by_dmr_id[dmr_id]
-
-                latencies.append(
-                    dmr.get_latency(
-                        'minutes',
-                        obs_option = self.latency_params['obs'], 
-                        dlnk_option = self.latency_params['dlnk']
-                    )
-                )
-
-             #  the shortest latency dmr (DataMultiRoute) for this observation has a score factor of 1.0, and the score factors for the other dmrs decrease as the inverse of increasing latency
-            min_lat = min(latencies)
-            min_lat = max(min_lat, self.min_latency_for_sf_1_mins)
-            for lat_indx, lat in enumerate(latencies):
-                dmr_id = dmr_ids[lat_indx]
-                lat = max(lat, self.min_latency_for_sf_1_mins)
-                latency_sf_by_dmr_id[dmr_id] = min_lat/lat
- 
-        return latency_sf_by_dmr_id
-
     def make_model ( self,selected_routes, existing_routes, utilization_by_existing_route_id, ecl_winds, verbose = True):
         # important assumption: all activity window IDs are unique!
 
@@ -355,10 +327,11 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                 dmr_ids_by_link_act_windid,
                 capacity_by_link_act_windid) =  self.get_activity_structs(routes_filt)
 
-            latency_sf_by_dmr_id =  self.get_dmr_latency_score_factors(
+            latency_sf_by_dmr_id =  self.get_route_latency_score_factors(
                 routes_by_dmr_id,
                 dmr_ids_by_obs_act_windid
             )
+
 
             # verify that all acts found are within the planning window, otherwise we may end up with strange results
             for sat_acts in sats_mutable_acts:
