@@ -381,8 +381,6 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         self.all_acts_by_windid = all_acts_by_windid
         self.mutable_acts_windids = mutable_acts_windids
 
-        # these dmr subscripts probably should've been done using the unique IDs for the objects, rather than their arbitrary locations within a list. Live and learn, hélas...
-
         #  subscript for each dmr (data multi route) p  (p index is a hold-over from when I called them paths)
         model.dmr_ids = pe.Set(initialize= routes_by_dmr_id.keys())
         #  these are all the routes that have acts occurring before the fixed planning window end.  we assume that these routes are no longer as "malleable" as other routes -  they have an upper limit on their utilization based on their existing utilization. this is because if any of these activities has already been executed, the route is now constrained by the throughput used from that act
