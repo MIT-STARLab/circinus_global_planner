@@ -11,6 +11,8 @@ from circinus_tools  import time_tools as tt
 from circinus_tools.scheduling.custom_window import   ObsWindow,  DlnkWindow, XlnkWindow
 from circinus_tools.scheduling.routing_objects import DataRoute, DataMultiRoute
 
+from circinus_tools import debug_tools
+
 class GPMetrics():
     """docstring for GPMetrics"""
 
@@ -330,7 +332,7 @@ class GPMetrics():
         f_valid_sched = len(f_lats_sched) > 0
 
         # from circinus_tools import debug_tools
-        # debug_tools.debug_breakpt()
+        debug_tools.debug_breakpt()
 
         #  note that if center times are not used  with both the observation and downlink for calculating latency, then the route selection and scheduled the numbers might differ. this is because the scheduled numbers reflect the updated start and end time for the Windows
         stats['ave_obs_initial_lat_rs'] = np.mean(i_lats_rs) if i_valid_rs else None

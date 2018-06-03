@@ -356,6 +356,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                 if time_opt == 'end': return wind.end
 
             for sat_indx in range (self.num_sats): 
+                # note that we want to use original start/end times here because start/end might have been changed on a previous global planner run, if this is running in the const simulation context.
                 es_act_dancecards[sat_indx].add_winds_to_dancecard(sats_mutable_acts[sat_indx],wind_time_getter_orig,drop_out_of_bounds=True)
                 es_act_dancecards[sat_indx].add_winds_to_dancecard(ecl_winds[sat_indx],wind_time_getter_reg,drop_out_of_bounds=True)
 
@@ -642,6 +643,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
 
         #  data storage constraints [7]
+        # note that these constraints are overly conservative, because the data storage intervals calculated for each route are based on the original start and end times of activities, not on the start and end times adjusted for the activity's utilization. Unfortunately that's a difficulty of how we discretized the decision making here...
         model.c7  = pe.ConstraintList()
         for sat_indx in range (self.num_sats): 
 

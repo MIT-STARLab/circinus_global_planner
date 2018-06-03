@@ -376,6 +376,8 @@ class GPDataRouteSelection():
         # crazy looking line, but it's easy... dictionary of end times by sat_indx - end_dt if not observing sat, else end_obs_sat_dt
         # end_dt_by_sat_indx = {sat_indx: end_dt if sat_indx != obs_wind.sat_indx else end_obs_sat_dt for sat_indx in range (self.num_sats)}
         
+        if obs_wind.window_ID == 53:
+            debug_tools.debug_breakpt()
 
         dlnk_winds_flat_filt,xlnk_winds_filt =  self.filter_windows (dlnk_winds_flat,xlnk_winds, self.num_sats, obs_wind.original_end, dlnk_end_dt, xlnk_end_dt , trim_windows_at_start=True)
 
@@ -601,12 +603,17 @@ class GPDataRouteSelection():
                 # go through all the activities active for this time step. pinch off any routes that can end at downlinks.
                 #  wanted to wait until after performing all cross-links to check this, because cross-links may have delivered some data volume before the downlink starts in the midst of this timestep
                 for act in acts:
+
+                    if obs_wind.window_ID == 53 and sat_indx == 3:
+                        debug_tools.debug_breakpt()
+
                     # if we have already considered this activity, keep going
                     # Technically this shouldn't be necessary, because a down/crosslink should only have a start/end time within one time step. but performing this type of check here should be more efficient than checking the start time again
                     if act in visited_act_set: continue
 
                     if type(act) == DlnkWindow:
 
+                        # this is broken here! - the original start usage
                         if time_within(tp_last_dt,tp_dt,act.original_start):
 
                             #  figure out if we want to use the route record from the last timepoint, or if a cross-linked has delivered more data volume. grab the latter if valid
