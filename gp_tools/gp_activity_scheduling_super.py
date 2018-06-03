@@ -90,8 +90,10 @@ class GPActivityScheduling(AgentScheduling):
         self.sats_edot_by_mode_W = []
         self.sats_emin_Wh = []
         self.sats_emax_Wh = []
+        self.sats_batt_charge_eff = []
+        self.sats_batt_discharge_eff = []
         for p_params in self.power_params:
-            sat_edot_by_mode,sat_batt_storage,power_units = io_tools.parse_power_consumption_params(p_params)
+            sat_edot_by_mode,sat_batt_storage,power_units,charge_eff,discharge_eff = io_tools.parse_power_consumption_params(p_params)
 
             if not power_units['power_consumption'] == 'W':
                 raise NotImplementedError
@@ -101,6 +103,8 @@ class GPActivityScheduling(AgentScheduling):
             self.sats_edot_by_mode_W.append (sat_edot_by_mode)
             self.sats_emin_Wh.append (sat_batt_storage['e_min'])
             self.sats_emax_Wh.append (sat_batt_storage['e_max'])
+            self.sats_batt_charge_eff.append (charge_eff)
+            self.sats_batt_discharge_eff.append (discharge_eff)
 
         self.min_act_duration_s = {
             ObsWindow: self.sat_activity_params['min_duration_s']['obs'],

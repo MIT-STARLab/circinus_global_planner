@@ -580,10 +580,15 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
         print_verbose('make energy, data constraints',verbose)
 
+
         #  energy constraints [6]
         # todo: maybe this ought to be moved to the super class, but i don't anticipate this code changing much any time soon, so i'll punt that.
         model.c6  = pe.ConstraintList()
         for sat_indx in range (self.num_sats): 
+
+            charge_eff = self.sats_batt_charge_eff[sat_indx]
+            discharge_eff = self.sats_batt_discharge_eff[sat_indx]
+            discharge_factor = 1/discharge_eff
 
             # tp_indx serves as an index into the satellite activity dance cards
             for tp_indx in model.es_timepoint_indcs:
@@ -626,19 +631,27 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                     #  base-level satellite energy usage (not including additional activities)
                     base_delta_e = model.par_sats_edot_by_mode[sat_indx]['base']*model.par_resource_delta_t
 
+
                     # maximum bound of energy at current time step based on last time step
+                    # assume 100% of energy can be delivered if we're not charging the battery
                     model.c6.add( model.var_sats_estore[sat_indx,tp_indx] <= 
                         model.var_sats_estore[sat_indx,tp_indx-1]
-                        + activity_delta_e
+                        + discharge_factor*activity_delta_e
                         + charging_delta_e
-                        + base_delta_e
+                        + discharge_factor*base_delta_e
+                    )
+
+                    # assume max recharge amount limited by charging efficiency.
+                    model.c6.add( model.var_sats_estore[sat_indx,tp_indx] <= 
+                        model.var_sats_estore[sat_indx,tp_indx-1]
+                        + charge_eff * charging_delta_e
                     )
 
                     # minimum bound of energy at current time step based on last time step
                     model.c6.add( model.var_sats_estore[sat_indx,tp_indx] >= 
                         model.var_sats_estore[sat_indx,tp_indx-1]
-                        + activity_delta_e
-                        + base_delta_e
+                        + discharge_factor * activity_delta_e
+                        + discharge_factor * base_delta_e
                     )
 
 
