@@ -503,8 +503,11 @@ class GlobalPlannerRunner:
         else:
             run_coupled_rs_as = self.as_params['run_coupled_rs_as']
 
-            found_routes = any([len(rts) >0 for rts in sel_routes_by_obs.values()])
-            if not run_coupled_rs_as and found_routes:
+            # make a func so it only gets called if needed
+            def found_routes(): 
+                return any([len(rts) >0 for rts in sel_routes_by_obs.values()])
+
+            if not run_coupled_rs_as and found_routes():
                 #  to protect against the weird case where we didn't find any routes ( shouldn't happen, unless we're at the very end of the simulation, or you're trying to break things)
                 # if self.as_params['validate_unique_wind_objects']:  
                 #     other_helper.validate_unique_window_objects(self,sel_routes_by_obs,existing_route_data)
@@ -514,6 +517,10 @@ class GlobalPlannerRunner:
             # run coupled route selection/act sched solver (slow, optimal)
             elif run_coupled_rs_as:
                 scheduled_routes,energy_usage,data_usage = self.run_activity_scheduling_coupled(obs_winds,dlnk_winds_flat,xlnk_winds_flat,ecl_winds,verbose)
+
+                #  this is not used at all in the coupled activity scheduling solution, because it currently can't be used in the constellation simulation ( not implemented)
+                all_updated_routes = []
+
                 # we didn't run RS, so there are no "selected routes", just scheduled
                 sel_routes_by_obs = {}
             else:

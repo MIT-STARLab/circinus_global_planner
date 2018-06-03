@@ -132,8 +132,8 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                         obs,
                         dlnk,
                         units='minutes',
-                        obs_option = self.latency_params['obs'], 
-                        dlnk_option = self.latency_params['dlnk']
+                        obs_option = self.latency_calculation_params['obs'], 
+                        dlnk_option = self.latency_calculation_params['dlnk']
                     )
 
             #  the shortest latency downlink for this observation has a score factor of 1.0, and the score factors for the other downlinks decrease as the inverse of increasing latency
@@ -634,7 +634,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
 
         def dlnk_lat_time_getter(dlnk):
-            return getattr(dlnk,self.latency_params['dlnk'])
+            return getattr(dlnk,self.latency_calculation_params['dlnk'])
 
         #  obs downlink indicator constraints [8]
         model.c8  = pe.ConstraintList()
@@ -1017,12 +1017,12 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         if verbose:
             print ('utilized routes:')
 
-        scheduled_routes_flat = []
+        scheduled_routes = []
 
         if self.num_obs_filt == 0:
             if verbose:
                 print('No observations found! No routes to extract')
-            return scheduled_routes_flat
+            return scheduled_routes
 
         # create the basic set of data routes from scheduled windows, dv usage
         data_routes,dr_uid = self.fabricate_routes()
@@ -1042,7 +1042,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
             scheduled_route = DataMultiRoute(ro_ID,[dr],dv_epsilon=self.dv_epsilon)
             # the dr within is fully utilized (1.0) 
             scheduled_route.set_scheduled_dv_frac(1.0)
-            scheduled_routes_flat.append(scheduled_route)
+            scheduled_routes.append(scheduled_route)
             if verbose:
                 print(scheduled_route)
                 
@@ -1055,7 +1055,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         #  note that this code is slightly inefficient because it might duplicate windows across routes. that's fine though, because we're thorough in checking across all routes
         # note: dmr is for DataMultiRoute
         wind_sched_dv_check = {}
-        for dmr in scheduled_routes_flat:
+        for dmr in scheduled_routes:
             # wind may get set multiple times due to Windows appearing across routes, but that's not really a big deal
             for wind in dmr.get_winds():
                 # var_act_dv_utilization is a lower bound on how much data volume was used by the window
@@ -1072,7 +1072,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
         #  now we want to mark the real scheduled data volume for every window. we only actually need to use as much data volume as the data routes want to push through the window
         #  add data volume for every route passing through every window
-        for dmr in scheduled_routes_flat:
+        for dmr in scheduled_routes:
             for wind in dmr.get_winds():
                 wind.scheduled_data_vol += dmr.scheduled_dv_for_wind(wind)
 
@@ -1080,7 +1080,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         # update the window beginning and end times based upon their amount of scheduled data volume
         # keep track of which ones we've updated, because we should only update once
         updated_winds = set()
-        for dmr in scheduled_routes_flat:
+        for dmr in scheduled_routes:
             for wind in dmr.get_winds():
                 #  this check should be at least as big as the scheduled data volume as calculated from all of the route data volumes. (it's not constrained from above, so it could be bigger)
                 if wind_sched_dv_check[wind] < wind.scheduled_data_vol - self.dv_epsilon:
@@ -1097,7 +1097,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
             else:
                 dmr.validate()
 
-        return scheduled_routes_flat
+        return scheduled_routes
 
     def extract_resource_usage( self, decimation_factor =1, verbose = False):
 
