@@ -732,6 +732,17 @@ if __name__ == "__main__":
 
     pr = PipelineRunner()
 
+    if sys.platform == 'win32':
+        # todo: this is probably not the right way to support windows users...
+        args.prop_inputs_file = args.prop_inputs_file.replace('/','\\')
+        args.data_rates_file = args.data_rates_file.replace('/','\\')
+        args.link_inputs_file = args.link_inputs_file.replace('/','\\')
+        args.gp_general_inputs_file = args.gp_general_inputs_file.replace('/','\\')
+        args.gp_inst_inputs_file = args.gp_inst_inputs_file.replace('/','\\')
+        args.rs_s1_pickle = args.rs_s1_pickle.replace('/','\\')
+        args.rs_s2_pickl = args.rs_s2_pickle.replace('/','\\')
+        args.as_pickle = args.as_pickle.replace('/','\\')
+
     # with open(os.path.join(REPO_BASE,'crux/config/examples/orbit_prop_inputs_ex.json'),'r') as f:
     with open(os.path.join(REPO_BASE, args.prop_inputs_file),'r') as f:
         orbit_prop_inputs = json.load(f)
@@ -747,16 +758,6 @@ if __name__ == "__main__":
 
     with open(os.path.join(REPO_BASE,args.gp_inst_inputs_file),'r') as f:
         gp_instance_params_inputs = json.load(f)
-
-    if sys.platform == 'win32':
-        orbit_prop_inputs.replace('/','\\')
-        data_rates_inputs.replace('/','\\')
-        orbit_link_inputs.replace('/','\\')
-        gp_general_params_inputs.replace('/','\\')
-        gp_instance_params_inputs.replace('/','\\')
-        args.rs_s1_pickle.replace('/','\\')
-        args.rs_s2_pickle.replace('/','\\')
-        args.as_pickle.replace('/','\\')
 
     data = {
         # "orbit_prop_data": orbit_prop_data,
