@@ -488,7 +488,7 @@ class GlobalPlannerRunner:
         if run_rs:
             sel_routes_by_obs,ecl_winds,latest_dr_uid,window_uid,pas_a_new = self.run_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,existing_route_data,window_uid,latest_dr_uid,verbose)
 
-        debug_tools.debug_breakpt()
+        # debug_tools.debug_breakpt()
 
 
         if pas_a_new:

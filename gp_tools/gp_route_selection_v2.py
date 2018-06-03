@@ -341,11 +341,20 @@ class GPDataRouteSelection():
                 if  wind.original_start >= start  and  wind.original_end  <= dlnk_end_dt:
                     dlink_winds_flat_filtered[sat_indx]. append ( wind)
                     wind_ids_seen.add(wind)
+
+                # todo: should clean up this code at some point - it's no longer needed
                 # Consider case where the start overlaps with the window, but the center of the window is past the start so we can still get some data volume from the window.  we do this to allow down links that are overlapping with an observation to be considered for that observation -  in practice it turns out to be a large sacrifice to not allow such dumplings to execute ( dictation put dumplings instead of down links, but I'm just gonna leave that there :D WUBBA LUBBA DUB DUB)
-                elif trim_windows_at_start and (wind.original_start < start and wind.center > start and wind.original_end  <= dlnk_end_dt):
+                # elif trim_windows_at_start and (wind.original_start < start and wind.center > start and wind.original_end  <= dlnk_end_dt):
+                #     wind_copy = deepcopy(wind)
+                #     wind_ids_seen.add(wind)
+                #     wind_copy.original_wind_ref = wind
+                #     wind_copy.modify_time(start,'start')  #  update start and end time. also updates data volume
+                #     dlink_winds_flat_filtered[sat_indx]. append ( wind_copy)
+
+                # Consider case where the start overlaps with the window, but the center of the window is past the start so we can still get some data volume from the window.  we do this to allow down links that are overlapping with an observation to be considered for that observation -  in practice it turns out to be a large sacrifice to not allow such dumplings to execute ( dictation put dumplings instead of down links, but I'm just gonna leave that there :D WUBBA LUBBA DUB DUB)
+                elif wind.original_start < start and wind.center > start and wind.original_end  <= dlnk_end_dt:
                     wind_copy = deepcopy(wind)
                     wind_ids_seen.add(wind)
-                    wind_copy.original_wind_ref = wind
                     wind_copy.modify_time(start,'start')  #  update start and end time. also updates data volume
                     dlink_winds_flat_filtered[sat_indx]. append ( wind_copy)
 
@@ -376,8 +385,8 @@ class GPDataRouteSelection():
         # crazy looking line, but it's easy... dictionary of end times by sat_indx - end_dt if not observing sat, else end_obs_sat_dt
         # end_dt_by_sat_indx = {sat_indx: end_dt if sat_indx != obs_wind.sat_indx else end_obs_sat_dt for sat_indx in range (self.num_sats)}
         
-        if obs_wind.window_ID == 53:
-            debug_tools.debug_breakpt()
+        # if obs_wind.window_ID == 53:
+        #     debug_tools.debug_breakpt()
 
         dlnk_winds_flat_filt,xlnk_winds_filt =  self.filter_windows (dlnk_winds_flat,xlnk_winds, self.num_sats, obs_wind.original_end, dlnk_end_dt, xlnk_end_dt , trim_windows_at_start=True)
 
@@ -604,8 +613,6 @@ class GPDataRouteSelection():
                 #  wanted to wait until after performing all cross-links to check this, because cross-links may have delivered some data volume before the downlink starts in the midst of this timestep
                 for act in acts:
 
-                    if obs_wind.window_ID == 53 and sat_indx == 3:
-                        debug_tools.debug_breakpt()
 
                     # if we have already considered this activity, keep going
                     # Technically this shouldn't be necessary, because a down/crosslink should only have a start/end time within one time step. but performing this type of check here should be more efficient than checking the start time again
@@ -613,54 +620,64 @@ class GPDataRouteSelection():
 
                     if type(act) == DlnkWindow:
 
-                        # this is broken here! - the original start usage
-                        if time_within(tp_last_dt,tp_dt,act.original_start):
 
-                            #  figure out if we want to use the route record from the last timepoint, or if a cross-linked has delivered more data volume. grab the latter if valid
-                            rr_pre_dlnk = get_best_rr(act.original_start,tp_indx-1,sat_indx)
+                        # don't consider a dlnk if its center time doesn't fall within or after this timestep (assumption: center time of the activity must be within the final time window of execution)
+                        if not act.center > tp_last_dt:
+                            continue
 
-                            # todo: should check transition time between last xlnk in each of the routes and the start of the downlink - I'd add that check here, or maybe in the loop below
+                        # we have found a dlnk in this timestep, but in order to use it, we need it to START in this timestep. So if it doesn't already, update its start time so it will. We need to make a deepcopy of the window so this change doesn't step on the toes of other routes
+                        dlnk = act # save before copying
+                        # deal with case where downlink actually started before this timestep
+                        if act.start < tp_last_dt:
+                            dlnk = deepcopy(act)
+                            new_start = tp_last_dt 
+                            dlnk.modify_time(new_start,'start')  #  update start and end time. also updates data volume
 
-                            #  if the route record actually shows some data volume arriving at this satellite, AND we have a downlink, then we have found an optimal route to the downlink. Create a final route record and save for later.
-                            if rr_pre_dlnk.dv > 0:
-                                # rr_dlnk = copy(rr_pre_dlnk)
-                                #  note: release time no longer matters because were not putting this route record back into the dance card.
-                                rr_dlnk = RouteRecord(dv=rr_pre_dlnk.dv,release_time=act.original_end,routes=[])
-                                
-                                # available data volume is limited by how much we had at the last route record ( which could be as much as the observation data volume multiplied by the routable_obs_dv_multiplier factor)
-                                available_dv = rr_pre_dlnk.dv
+                        #  figure out if we want to use the route record from the last timepoint, or if a cross-link has delivered more data volume. grab the latter if valid
+                        rr_pre_dlnk = get_best_rr(dlnk.start,tp_indx-1,sat_indx)
 
-                                #  now we need to update the routes within the route record to include the downlink window
-                                for dr in rr_pre_dlnk.routes:
-                                    #  for each route, we will only allocate as much data volume as is deliverable -  the minimum of:
-                                    # - the data volume that we found for the route ( which is constrained by all of the cross-link capacities in the route)
-                                    # - the available data volume from this route record
-                                    # - the observation data volume
-                                    # - the downlink data volume
-                                    # note that it is not necessary in activity scheduling for a data route to conform to all of these limits, because capacity constraints are checked for all of the windows within all the routes. nonetheless, it's good practice to only allocate as much data volume as is really present to every route
-                                    dv_slice = min(dr.data_vol,available_dv,dr.get_obs().data_vol,act.data_vol)
+                        # todo: should check transition time between last xlnk in each of the routes and the start of the downlink - I'd add that check here, or maybe in the loop below
 
-                                    new_dr = copy(dr)
-                                    new_dr.data_vol = dv_slice
-                                    new_dr.set_id(self.gp_agent_ID,dr_uid)
-                                    new_dr.append_wind_to_route(act,window_start_sat_indx=sat_indx)
-                                    new_dr.fix_window_copies()
-                                    rr_dlnk.routes.append(new_dr)
+                        #  if the route record actually shows some data volume arriving at this satellite, AND we have a downlink, then we have found an optimal route to the downlink. Create a final route record and save for later.
+                        if rr_pre_dlnk.dv > 0:
+                            # rr_dlnk = copy(rr_pre_dlnk)
+                            #  note: release time no longer matters because were not putting this route record back into the dance card.
+                            rr_dlnk = RouteRecord(dv=rr_pre_dlnk.dv,release_time=dlnk.end,routes=[])
+                            
+                            # available data volume is limited by how much we had at the last route record ( which could be as much as the observation data volume multiplied by the routable_obs_dv_multiplier factor)
+                            available_dv = rr_pre_dlnk.dv
 
-                                    dr_uid +=1
-                                    available_dv -= dv_slice
+                            #  now we need to update the routes within the route record to include the downlink window
+                            for dr in rr_pre_dlnk.routes:
+                                #  for each route, we will only allocate as much data volume as is deliverable -  the minimum of:
+                                # - the data volume that we found for the route ( which is constrained by all of the cross-link capacities in the route)
+                                # - the available data volume from this route record
+                                # - the bservation data volume
+                                # - the downlink data volume
+                                # note that it is not necessary in activity scheduling for a data route to conform to all of these limits, because capacity constraints are checked for all of the windows within all the routes. nonetheless, it's good practice to only allocate as much data volume as is really present to every route
+                                dv_slice = min(dr.data_vol,available_dv,dr.get_obs().data_vol,dlnk.data_vol)
 
-                                    #  we run out of available data volume so no more routes can be grabbed
-                                    if available_dv < self.dv_epsilon:
-                                        break
+                                new_dr = copy(dr)
+                                new_dr.data_vol = dv_slice
+                                new_dr.set_id(self.gp_agent_ID,dr_uid)
+                                new_dr.append_wind_to_route(dlnk,window_start_sat_indx=sat_indx)
+                                new_dr.fix_window_copies()
+                                rr_dlnk.routes.append(new_dr)
 
-                                #  sanity check:  make sure that data volume for the route record greater than or equal to the sum of the data volumes for all of the routes
-                                assert(rr_dlnk.dv + self.dv_epsilon >= sum(dr.data_vol for dr in rr_dlnk.routes))
+                                dr_uid +=1
+                                available_dv -= dv_slice
 
-                                rr_dlnk.dv = sum(dr.data_vol for dr in rr_dlnk.routes)
+                                #  we run out of available data volume so no more routes can be grabbed
+                                if available_dv < self.dv_epsilon:
+                                    break
 
-                                final_route_records.append(rr_dlnk)
-                                visited_act_set.add(act)
+                            #  sanity check:  make sure that data volume for the route record greater than or equal to the sum of the data volumes for all of the routes
+                            assert(rr_dlnk.dv + self.dv_epsilon >= sum(dr.data_vol for dr in rr_dlnk.routes))
+
+                            rr_dlnk.dv = sum(dr.data_vol for dr in rr_dlnk.routes)
+
+                            final_route_records.append(rr_dlnk)
+                            visited_act_set.add(dlnk)
 
 
         self.final_route_records = final_route_records

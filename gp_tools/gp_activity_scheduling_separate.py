@@ -158,7 +158,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                     all_acts_by_windid[act_windid] = act
                     dmr_ids_by_act_windid[act_windid] = []
                     dmr_ids_by_act_windid[act_windid].append (dmr.ID)
-                    capacity_by_act_windid[act_windid] = act.data_vol
+                    capacity_by_act_windid[act_windid] = act.original_data_vol
 
                     # also need to add it to the list and dictionary for observations
                     if type(act) == ObsWindow:
@@ -166,14 +166,14 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                         all_obs_windids.add(act_windid)
                         dmr_ids_by_obs_act_windid[act_windid] = []
                         dmr_ids_by_obs_act_windid[act_windid].append (dmr.ID)
-                        capacity_by_obs_act_windid[act_windid] = act.data_vol
+                        capacity_by_obs_act_windid[act_windid] = act.original_data_vol
 
                     # also need to add it to the list and dictionary for links
                     if type(act) == DlnkWindow:
                         all_lnk_windids.add(act_windid)
                         dmr_ids_by_link_act_windid[act_windid] = []
                         dmr_ids_by_link_act_windid[act_windid].append (dmr.ID)
-                        capacity_by_link_act_windid[act_windid] = act.data_vol
+                        capacity_by_link_act_windid[act_windid] = act.original_data_vol
                         if act_is_mutable: sats_mutable_acts[act.sat_indx].append(act)
                         # grab the dlnks for each sat too, while we're looping through
                         if act_is_mutable: sats_mutable_dlnks[act.sat_indx].append(act)
@@ -182,7 +182,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                         all_lnk_windids.add(act_windid)
                         dmr_ids_by_link_act_windid[act_windid] = []
                         dmr_ids_by_link_act_windid[act_windid].append (dmr.ID)
-                        capacity_by_link_act_windid[act_windid] = act.data_vol
+                        capacity_by_link_act_windid[act_windid] = act.original_data_vol
                         if act_is_mutable: sats_mutable_acts[act.sat_indx].append(act)
                         if act_is_mutable: sats_mutable_acts[act.xsat_indx].append(act)
 
@@ -846,7 +846,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                 #  only update windows that are mutable
                 if wind.window_ID in self.mutable_acts_windids:
                     # wind_sched_dv_check[wind] = wind.data_vol * pe.value(self.model.var_act_indic[act_indx])
-                    wind_sched_dv_check[wind] = wind.data_vol * pe.value(self.model.var_activity_utilization[wind.window_ID])
+                    wind_sched_dv_check[wind] = wind.original_data_vol * pe.value(self.model.var_activity_utilization[wind.window_ID])
                     #  initialize this while we're here
                     wind.scheduled_data_vol = 0
                 else:
@@ -899,7 +899,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                         raise RuntimeWarning('inconsistent activity scheduling results, data volumes mismatch, fixed window. Previous dv scheduled: %f, current scheduled %f. Verify that fixed_utilization_epsilon (%f) is not too large relative to dv_epsilon (%f)'%(previous_dv_utilization,wind_sched_dv_check[wind],self.fixed_utilization_epsilon,self.dv_epsilon))
 
                 #  also check that we're not scheduling too much data volume from the window ( check this after we already verified data volume usage relative to previous utilization, so we see that error first -  helps to separate out that specific case)
-                if wind_sched_dv_check[wind] >= wind.data_vol + self.dv_epsilon:
+                if wind_sched_dv_check[wind] >= wind.original_data_vol + self.dv_epsilon:
                     raise RuntimeWarning('too much data volume was scheduled for window %s'%(wind))
 
 
@@ -1018,7 +1018,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                         continue
 
                     #  check if window capacity is fully or very near fully utilized
-                    if act.scheduled_data_vol >= act.data_vol - self.dv_epsilon:
+                    if act.scheduled_data_vol >= act.original_data_vol - self.dv_epsilon:
                         if type(act) == ObsWindow:
                             reasons_by_route[dmr].add('b')
                         if type(act) == DlnkWindow:
