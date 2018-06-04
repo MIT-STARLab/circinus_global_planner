@@ -673,7 +673,7 @@ class PipelineRunner:
         output['scheduled_routes'] = scheduled_routes
         output['all_updated_routes'] = all_updated_routes
         output['latest_dr_uid'] = latest_dr_uid
-        output['update_time'] = datetime.utcnow().isoformat()
+        output['update_wall_clock_utc'] = datetime.utcnow().isoformat()
 
         return output
 
