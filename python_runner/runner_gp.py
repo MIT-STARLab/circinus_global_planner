@@ -26,6 +26,7 @@ from circinus_tools  import time_tools as tt
 from circinus_tools  import io_tools
 from circinus_tools.scheduling.routing_objects import DataMultiRoute
 from circinus_tools.scheduling.io_processing import SchedIOProcessor
+from circinus_tools.scheduling.formulation.schedulers import NotSolvableError
 from gp_tools.gp_plotting import GPPlotting
 import gp_tools.gp_route_selection_v1 as gprsv1
 import gp_tools.gp_route_selection_v2 as gprsv2
@@ -141,7 +142,11 @@ class GlobalPlannerRunner:
         stats =gp_as.get_stats (verbose = verbose)
         print_verbose('solve activity scheduling (coupled)',verbose)
         t_a = time.time()
-        gp_as.solve ()
+        try:
+            gp_as.solve ()
+        except NotSolvableError:
+            raise RuntimeError("Couldn't solve the GP. The current problem instance is likely overly constraints, and that's likely due to insufficient energy availability to allow a satellite to even remain idle for the whole planning period.")
+
         t_b = time.time()
         # gp_as.print_sol ()
 
