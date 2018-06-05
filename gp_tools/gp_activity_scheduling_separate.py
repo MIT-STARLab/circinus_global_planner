@@ -905,7 +905,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
                 # if the window is not mutable, then it only should be here because of an existing data route. in that case we know the previous utilization for the window.  check the current schedule datable volume for window against the previous utilization
                 else:
-                    previous_dv_utilization = sum(self.utilization_by_existing_route_id[dmr.ID]*dmr.data_vol for dmr in self.existing_routes if wind in dmr.get_winds())
+                    previous_dv_utilization = sum(self.utilization_by_existing_route_id[dmr.ID]*dmr.data_vol_for_wind(wind) for dmr in self.existing_routes if wind in dmr.get_winds())
 
                     # check if somehow data routes through fixed window have tried to grab more capacity than was scheduled for it
                     if wind_sched_dv_check[wind] > previous_dv_utilization + self.dv_epsilon:

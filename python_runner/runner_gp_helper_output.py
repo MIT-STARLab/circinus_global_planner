@@ -157,7 +157,7 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
     cum_dv_by_wind = {}
     #  routes and calculate naïve scheduled data volumes for every window
     for obs,rts in sel_routes_by_obs_copy.items():
-        obs.scheduled_data_vol = min(sum(dmr.data_vol for dmr in rts),obs.data_vol)
+        obs.scheduled_data_vol = min(sum(dmr.data_vol_for_wind(obs) for dmr in rts),obs.data_vol)
 
         for dmr in rts:
             for dr in dmr.scheduled_dv_by_dr.keys():
@@ -165,7 +165,7 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
 
             for wind in dmr.get_winds():
                 cum_dv_by_wind.setdefault(wind,0)
-                cum_dv_by_wind[wind] += dmr.data_vol
+                cum_dv_by_wind[wind] += dmr.data_vol_for_wind(wind)
                 wind.scheduled_data_vol = min(cum_dv_by_wind[wind],wind.data_vol)
                 
     #  go back through and update durations from scheduled data volumes
