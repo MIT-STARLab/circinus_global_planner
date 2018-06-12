@@ -33,7 +33,7 @@ from circinus_tools import debug_tools
 
 
 class DeconflictedRoute():
-    """docstring for RouteRecord"""
+    """docstring for DeconflictedRoute"""
     def __init__(self,dr,available_dv):
         self.dr = dr
         self.available_dv = available_dv
@@ -499,11 +499,6 @@ class GPDataRouteSelection():
                 ################
                 #  determine for every cross-link option how much data volume the cross-link can deliver to  satellite sat_indx.
 
-                # if sat_indx == 23:
-                #     import ipdb
-                #     ipdb.set_trace()
-
-
                 #  each xlnk_candidate is a single xlnk window. For each of these candidates, there's a set of de-conflicted routes that move up to xlnk.data_vol amount of data volume through that xlnk window
                 xlnk_candidates = []
                 best_dv_seen = 0
@@ -589,7 +584,7 @@ class GPDataRouteSelection():
 
                     # deconf_rt is a DeconflictedRoute namedtuple, from above
                     for deconf_rt in xlnk_candidate_rts:
-                        #  again, make a copy because the existing data routes need to be left as is for future consideration and the algorithm
+                        #  again, make a copy because the existing data routes need to be left as is for future consideration in the algorithm
                         new_dr = copy(deconf_rt.dr)
                         #  the available data volume is simply that of the de-conflicted route, because we already made sure above that the sum of the available data volume from all de-conflicted routes is less than or equal to the throughput of the cross-link, and none of that data volume conflicts  with data volume already present in rr_new
                         new_dr.data_vol = deconf_rt.available_dv

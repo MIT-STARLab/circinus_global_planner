@@ -483,15 +483,17 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         #  indicator variables for whether or not dmrs [3] and activities [4] have been chosen
         model.var_dmr_indic  = pe.Var (model.dmr_ids, within = pe.Binary)
         model.var_act_indic  = pe.Var (model.mutable_act_windids, within = pe.Binary)
+
         # a utilization number for existing routes that will be bounded by the input existing route utilization (can't get more  "existing route" reward for a route than the route's previous utilization) [8]
         model.var_existing_dmr_utilization_reward  = pe.Var (model.existing_dmr_ids, bounds =(0,1))
         
-        # satellite energy storage
+        # satellite energy storage [5]
         model.var_sats_estore  = pe.Var (model.sat_indcs,  model.es_timepoint_indcs,  within = pe.NonNegativeReals)
 
-        # satellite data storage (data buffers)
+        # satellite data storage (data buffers) [6]
         model.var_sats_dstore  = pe.Var (model.sat_indcs,  model.ds_timepoint_indcs,  within = pe.NonNegativeReals)
 
+        # Reward factor for latency for a given observation [7]
         model.var_latency_sf_obs = pe.Var (model.obs_windids,  bounds = (0,1.0))
         
         allow_act_timing_constr_violations = False
@@ -540,6 +542,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             return model.var_act_indic[a] >=  model.var_activity_utilization[a]
         model.c3 =pe.Constraint ( model.mutable_act_windids,  rule=c3_rule)  
 
+        # todo: this probably should not be enforced...
         def c3c_rule( model,p):
             return model.var_dmr_indic[p] >=  model.var_dmr_utilization[p]
         model.c3c =pe.Constraint ( model.dmr_ids,  rule=c3c_rule)
