@@ -735,7 +735,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                             #  if this is a "standard activity" that we can choose to perform or not
                             if type(act) in self.standard_activities:
                                 act_windid = all_act_windids_by_obj[act]
-                                act_code = act.get_code(sat_indx)
+                                act_code = act.get_e_dot_codename(sat_indx)
                                 activity_delta_e += (
                                     model.par_sats_edot_by_mode[sat_indx][act_code] 
                                     * model.var_act_dv_utilization[act_windid]/model.par_act_capacity[act_windid]
@@ -1098,7 +1098,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
                 if not wind in updated_winds:
                     # note that the line below seems like it may break the scheduled times for activities by specifying a minimum activity duration. however, this minimum activity duration is already accounted for in scheduling constraints
-                    wind.update_duration_from_scheduled_dv (min_duration_s=self.min_act_duration_s[type(wind)])
+                    wind.update_duration_from_scheduled_dv (min_duration_s=self.act_timing_helper.get_act_min_duration(wind))
                     updated_winds.add(wind)
 
             # validate the data multi route (and in turn, the scheduled data vols of all the data routes under it)

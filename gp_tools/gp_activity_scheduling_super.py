@@ -15,6 +15,7 @@ from circinus_tools.scheduling.schedule_objects import Dancecard
 from circinus_tools.scheduling.routing_objects import DataMultiRoute
 from circinus_tools.sat_state_tools import propagate_sat_ES
 from circinus_tools.scheduling.formulation.agent_scheduler import AgentScheduling
+from circinus_tools.activity_bespoke_handling import ActivityTimingHelper
 
 class GPActivityScheduling(AgentScheduling):
     """Superclass for GP activity scheduling"""
@@ -32,6 +33,7 @@ class GPActivityScheduling(AgentScheduling):
         sat_params = gp_params['orbit_prop_params']['sat_params']
         as_params = gp_params['gp_general_params']['activity_scheduling_params']
         gp_inst_planning_params = gp_params['gp_instance_params']['planning_params']
+        orbit_params = gp_params['orbit_prop_params']['orbit_params']
 
         self.gp_inst_planning_params = gp_inst_planning_params
         self.gp_agent_ID = gp_params['gp_instance_params']['gp_agent_ID']
@@ -77,7 +79,7 @@ class GPActivityScheduling(AgentScheduling):
         self.power_params = sat_params['power_params_sorted']
         self.data_storage_params = sat_params['data_storage_params_sorted']
         self.sats_state = gp_params['gp_instance_params']['sats_state_sorted']
-        self.sat_activity_params = sat_params['activity_params']
+        # self.sat_activity_params = sat_params['activity_params']
 
 
         self.sats_dmin_Mb = [1000*ds_params['data_storage_Gbit']['d_min'][ds_params['storage_option']] for ds_params in self.data_storage_params]
@@ -106,11 +108,7 @@ class GPActivityScheduling(AgentScheduling):
             self.sats_batt_charge_eff.append (charge_eff)
             self.sats_batt_discharge_eff.append (discharge_eff)
 
-        self.min_act_duration_s = {
-            ObsWindow: self.sat_activity_params['min_duration_s']['obs'],
-            DlnkWindow: self.sat_activity_params['min_duration_s']['dlnk'],
-            XlnkWindow: self.sat_activity_params['min_duration_s']['xlnk']
-        }
+        self.act_timing_helper = ActivityTimingHelper(sat_params['activity_params'],orbit_params['sat_ids_by_orbit_name'],sat_params['sat_id_order'],gp_params['orbit_prop_params']['version'])
 
         # this is now less useful than I thought
         self.standard_activities = [ObsWindow,DlnkWindow,XlnkWindow]

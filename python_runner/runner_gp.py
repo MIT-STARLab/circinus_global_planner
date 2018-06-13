@@ -66,7 +66,7 @@ class GlobalPlannerRunner:
         self.scenario_params = self.params['orbit_prop_params']['scenario_params']
         self.sat_params = self.params['orbit_prop_params']['sat_params']
         self.obs_params = self.params['orbit_prop_params']['obs_params']
-        self.sat_orbit_params = self.params['orbit_prop_params']['sat_orbit_params']
+        self.sat_orbit_params = self.params['orbit_prop_params']['orbit_params']
         self.obs_params = self.params['orbit_prop_params']['obs_params']
         self.pickle_params = self.params['gp_general_params']['pickle_params']
         self.other_params = self.params['gp_other_params']
@@ -601,7 +601,7 @@ class PipelineRunner:
         if data['rs_s1_pickle'] and data['rs_s2_pickle']:
             raise Exception('Should only specify 1 input pickle for route selection')
 
-        if orbit_prop_inputs['version'] == "0.6":
+        if orbit_prop_inputs['version'] == "0.7":
             # do some useful transformations while preserving the structure of the inputs ( important for avoiding namespace clashes)
             orbit_prop_inputs['scenario_params']['start_utc_dt'] = tt.iso_string_to_dt ( orbit_prop_inputs['scenario_params']['start_utc'])
             orbit_prop_inputs['scenario_params']['end_utc_dt'] = tt.iso_string_to_dt ( orbit_prop_inputs['scenario_params']['end_utc'])

@@ -28,6 +28,7 @@ from circinus_tools  import time_tools as tt
 from circinus_tools.scheduling.custom_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
 from circinus_tools.scheduling.schedule_objects import Dancecard
 from circinus_tools.scheduling.routing_objects import DataRoute, DataMultiRoute
+from circinus_tools.activity_bespoke_handling import ActivityTimingHelper
 
 from circinus_tools import debug_tools
 
@@ -91,7 +92,7 @@ class RouteRecord():
         if latest_dr_end is not None and end_new_dr < latest_dr_end:
             self._routes.sort(key=lambda dr:dr.get_end().original_end)
 
-    def no_transition_conflict(self,act,sat_indx):
+    def no_transition_conflict(self,act,sat_indx,act_timing_helper):
         act_start = act.original_start
         act_center = act.center
 
@@ -102,12 +103,15 @@ class RouteRecord():
             dr_end_act = dr.get_end()
 
             # todo: update this!
-            transition_time_req = timedelta(minutes=2)
-            if type(dr_end_act) == XlnkWindow and type(act) == XlnkWindow:
-                if dr_end_act.sat_indx == act.sat_indx and dr_end_act.xsat_indx == act.xsat_indx:
-                    transition_time_req = timedelta(seconds = 0)
+            # transition_time_req = timedelta(minutes=2)
+            # if type(dr_end_act) == XlnkWindow and type(act) == XlnkWindow:
+            #     if dr_end_act.sat_indx == act.sat_indx and dr_end_act.xsat_indx == act.xsat_indx:
+            #         transition_time_req = timedelta(seconds = 0)
 
-            if act_center - dr_end_act.center < transition_time_req:
+            transition_time_req = act_timing_helper.get_transition_time_req(dr_end_act,act,sat_indx,sat_indx)
+
+            # todo: update code here
+            if (act_center - dr_end_act.center).total_seconds() < transition_time_req:
                 return False
 
         return True
@@ -309,6 +313,8 @@ class GPDataRouteSelection():
         gp_general_other_params = gp_params['gp_general_params']['other_params']
         link_params = gp_params['orbit_link_params']['general_link_params']
         gp_inst_planning_params = gp_params['gp_instance_params']['planning_params']
+        orbit_params = gp_params['orbit_prop_params']['orbit_params']
+
 
         self.gp_agent_ID = gp_params['gp_instance_params']['gp_agent_ID']
 
@@ -343,12 +349,7 @@ class GPDataRouteSelection():
 
         self.final_route_records = None
 
-        sat_activity_params = sat_params['activity_params']
-        self.min_act_duration_s = {
-            ObsWindow: sat_activity_params['min_duration_s']['obs'],
-            DlnkWindow: sat_activity_params['min_duration_s']['dlnk'],
-            XlnkWindow: sat_activity_params['min_duration_s']['xlnk']
-        }
+        self.act_timing_helper = ActivityTimingHelper(sat_params['activity_params'],orbit_params['sat_ids_by_orbit_name'],sat_params['sat_id_order'],gp_params['orbit_prop_params']['version'])
 
         # specifies how much data volume from a given obs is allowed to be selected for routing to other satellites. Want this to be greater than one so that routes account for more than just the exact amount of the obs dv, so that there's more choice in routes to ground 
         self.routable_obs_dv_multiplier = 8
@@ -368,7 +369,7 @@ class GPDataRouteSelection():
                     if wind.window_ID in wind_ids_seen:
                         continue
 
-                    if wind.duration.total_seconds() < self.min_act_duration_s[type(wind)]:
+                    if wind.duration.total_seconds() < self.act_timing_helper.get_act_min_duration(wind):
                         continue
 
                     # min_end = min(end_dt_by_sat_indx[sat_indx],end_dt_by_sat_indx[xsat_indx])
@@ -381,7 +382,7 @@ class GPDataRouteSelection():
                 if wind.window_ID in wind_ids_seen:
                     continue
 
-                if wind.duration.total_seconds() < self.min_act_duration_s[type(wind)]:
+                if wind.duration.total_seconds() < self.act_timing_helper.get_act_min_duration(wind):
                     continue
 
                 if  wind.original_start >= start  and  wind.original_end  <= dlnk_end_dt:
@@ -407,7 +408,7 @@ class GPDataRouteSelection():
         return dlink_winds_flat_filtered, xlink_winds_flat_filtered
 
     @staticmethod
-    def get_best_rr(rr_dancecards,act,tp_indx,sat_indx):
+    def get_best_rr(rr_dancecards,act,tp_indx,sat_indx,act_timing_helper):
             """  todo: update this description return the best, valid route record before the start of an activity. The start of an activity ("act") can happen anywhere between two time points. we want to check the second time point to see if there was an activity that ended before act and updated the route record. if not, use the first time point, because any route record on that time point should definitely have ended before act. the use of this function is a means to get around the fact that two cross-links which overlap a single timestep but are temporally consistent ( the second starts after the first ends) are modeled with the first cross-link ending on the time point after this time step, in the second cross-link starting on the time point before this time step"""
             if tp_indx == 0:
                 raise RuntimeError('Should not be called with tp_indx = 0')
@@ -423,7 +424,7 @@ class GPDataRouteSelection():
 
                 # use activity center time here so we know that at least some of the activity is executable after the route record candidate
                 # TODO: this right here needs update
-                if act.center >= rr_candidate.release_time and rr_candidate.no_transition_conflict(act,sat_indx):
+                if act.center >= rr_candidate.release_time and rr_candidate.no_transition_conflict(act,sat_indx,act_timing_helper):
                     return rr_candidate
 
 
@@ -569,16 +570,11 @@ class GPDataRouteSelection():
                     #     debug_tools.debug_breakpt()
 
                     # add one to the tp_indx, because we also want to consider any route record with a release time between the timepoints at tp_indx_pre_xlnk and tp_indx_pre_xlnk+1 (because the release could be not-exactly-on-a-tp-indx)
-                    rr_last_xlnk = self.get_best_rr(rr_dancecards,xlnk,tp_indx_pre_xlnk+1,sat_indx)
+                    rr_last_xlnk = self.get_best_rr(rr_dancecards,xlnk,tp_indx_pre_xlnk+1,sat_indx,self.act_timing_helper)
                     
                     #  get the route record for the corresponding crosslink partner satellite
                     xsat_indx=xlnk.get_xlnk_partner(sat_indx)
-                    rr_xsat = self.get_best_rr(rr_dancecards,xlnk,tp_indx_pre_xlnk+1,xsat_indx)
-
-                    # if xlnk.original_start - obs_wind.original_end > timedelta(minutes=2):
-                        # if obs_wind.window_ID == 39:
-                            # if xsat_indx == obs_wind.sat_indx:
-                                # debug_tools.debug_breakpt()
+                    rr_xsat = self.get_best_rr(rr_dancecards,xlnk,tp_indx_pre_xlnk+1,xsat_indx,self.act_timing_helper)
 
                     if rr_last_xlnk is None or rr_xsat is None:
                         # this shouldn't occur very often at all - the only case I can think of is if rr_xsat is right after the observation on the obs sat, and xlnk overlaps with that obs
@@ -692,7 +688,7 @@ class GPDataRouteSelection():
                             dlnk.modify_time(new_start,'start')  #  update start and end time. also updates data volume
 
                         #  figure out if we want to use the route record from the last timepoint, or if a cross-link has delivered more data volume. grab the latter if valid
-                        rr_pre_dlnk = self.get_best_rr(rr_dancecards,dlnk,tp_indx,sat_indx)
+                        rr_pre_dlnk = self.get_best_rr(rr_dancecards,dlnk,tp_indx,sat_indx,self.act_timing_helper)
 
                         # couldn't find any routes valid for this dlnk to send down
                         if rr_pre_dlnk is None:

@@ -222,7 +222,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             # check if at least one act window in route is partially within the planning window. Pass if not.
             elif filter_opt=='partially_within' and (dmr_end < start_filt_dt or dmr_start > self.planning_end_dt):
                 pass
-            elif dmr.get_dlnk().duration.total_seconds() < self.min_act_duration_s[DlnkWindow]:
+            elif dmr.get_dlnk().duration.total_seconds() < self.act_timing_helper.get_act_min_duration(dmr.get_dlnk()):
                 print('discarding too short dlnk window')
                 pass
             else:
@@ -616,7 +616,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                         for act in activities:
                             #  if this is a "standard activity" that we can choose to perform or not
                             if type(act) in self.standard_activities:
-                                act_code = act.get_code(sat_indx)
+                                act_code = act.get_e_dot_codename(sat_indx)
                                 activity_delta_e += (
                                     model.par_sats_edot_by_mode[sat_indx][act_code] 
                                     * model.var_activity_utilization[act.window_ID]
@@ -927,7 +927,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
                 if not wind in updated_winds:
                     # note that the line below seems like it may break the scheduled times for activities by specifying a minimum activity duration. however, this minimum activity duration is already accounted for in scheduling constraints
-                    wind.update_duration_from_scheduled_dv (min_duration_s=self.min_act_duration_s[type(wind)])
+                    wind.update_duration_from_scheduled_dv (min_duration_s=self.act_timing_helper.get_act_min_duration(wind))
                     updated_winds.add(wind)
 
         return scheduled_routes,all_updated_routes
