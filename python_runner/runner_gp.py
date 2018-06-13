@@ -415,6 +415,9 @@ class GlobalPlannerRunner:
         else:
             print_verbose('Skipping route selection step two stuff',verbose)
 
+        # debug_tools.debug_breakpt()
+
+
         #################################
         # route selection output stage
         #################################

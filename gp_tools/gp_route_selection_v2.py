@@ -28,6 +28,7 @@ from circinus_tools  import time_tools as tt
 from circinus_tools.scheduling.custom_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
 from circinus_tools.scheduling.schedule_objects import Dancecard
 from circinus_tools.scheduling.routing_objects import DataRoute, DataMultiRoute
+from circinus_tools.scheduling.base_window import get_pairwise_overlap_max_dv
 from circinus_tools.activity_bespoke_handling import ActivityTimingHelper
 
 from circinus_tools import debug_tools
@@ -92,29 +93,32 @@ class RouteRecord():
         if latest_dr_end is not None and end_new_dr < latest_dr_end:
             self._routes.sort(key=lambda dr:dr.get_end().original_end)
 
-    def no_transition_conflict(self,act,sat_indx,act_timing_helper):
+    def get_act_dv_availability(self,act,sat_indx,act_timing_helper):
         act_start = act.original_start
         act_center = act.center
 
-
         # look through routes in reverse order of end time
         # self._routes needs to be sorted so that returning False without looking through whole list is still accurate.
-        for dr in reversed(self._routes):
-            dr_end_act = dr.get_end()
+        # for dr in reversed(self._routes):
 
-            # todo: update this!
-            # transition_time_req = timedelta(minutes=2)
-            # if type(dr_end_act) == XlnkWindow and type(act) == XlnkWindow:
-            #     if dr_end_act.sat_indx == act.sat_indx and dr_end_act.xsat_indx == act.xsat_indx:
-            #         transition_time_req = timedelta(seconds = 0)
+        dv_avail = act.data_vol
+
+        for dr in self._routes:
+            # todo: assess if this code takes way too long because it checks every dr in self._routes
+
+            dr_end_act = dr.get_end()
 
             transition_time_req = act_timing_helper.get_transition_time_req(dr_end_act,act,sat_indx,sat_indx)
 
-            # todo: update code here
-            if (act_center - dr_end_act.center).total_seconds() < transition_time_req:
-                return False
+            # don't calculate overlapped dv if there's sufficient transition time
+            if (act_start - dr_end_act.original_end).total_seconds() >= transition_time_req:
+                continue
 
-        return True
+            dv_avail_with_dr = get_pairwise_overlap_max_dv(dr_end_act, act, transition_time_req)
+
+            dv_avail = min(dv_avail,dv_avail_with_dr)
+
+        return dv_avail
 
     def get_dv_deconflicted_routes(self,rr_other,routable_obs_dv_multiplier = 3, min_dv=0,verbose = False):
         """ determines which routes from other route record are able to be extended to the calling route record, from a data volume availability standpoint.
@@ -180,7 +184,7 @@ class RouteRecord():
                         if not dr_2_indx in dr_2_indcs_drop:
                             dr_2_indcs_drop.append(dr_2_indx)
 
-            #  now that we've stored which data routes from rr_other use which Windows, let's make another pass and see if there are data volume conflicts between the routes
+            #  now that we've sorted out which data routes from rr_other use which Windows, let's make another pass and see if there are data volume conflicts between the routes
             for windex, (wind,dr_2_indcs) in  enumerate (other_rts_by_wind.items()):
                 num_rts_possible_wind = floor(avail_dv_by_wind[wind]/min_dv)
                 if num_rts_possible_wind < len(dr_2_indcs):
@@ -225,7 +229,8 @@ class RouteRecord():
                     #  negative one because the sense of linprog is minimization
                     cost.append(-1)
                     #  bound on minimum data volume, no upper bound, that's handled by the constraints
-                    bounds.append((min_dv,None))
+                    dr_2_dv = rr_other._routes[dr_2_indx].data_vol
+                    bounds.append((min_dv,dr_2_dv))
 
             #  construct constraints from every window included on selectable routes
             for windex, (wind,dr_2_indcs) in  enumerate (other_rts_by_wind.items()):
@@ -408,27 +413,30 @@ class GPDataRouteSelection():
         return dlink_winds_flat_filtered, xlink_winds_flat_filtered
 
     @staticmethod
-    def get_best_rr(rr_dancecards,act,tp_indx,sat_indx,act_timing_helper):
-            """  todo: update this description return the best, valid route record before the start of an activity. The start of an activity ("act") can happen anywhere between two time points. we want to check the second time point to see if there was an activity that ended before act and updated the route record. if not, use the first time point, because any route record on that time point should definitely have ended before act. the use of this function is a means to get around the fact that two cross-links which overlap a single timestep but are temporally consistent ( the second starts after the first ends) are modeled with the first cross-link ending on the time point after this time step, in the second cross-link starting on the time point before this time step"""
-            if tp_indx == 0:
-                raise RuntimeError('Should not be called with tp_indx = 0')
+    def get_best_rr(rr_dancecards,act,tp_indx,sat_indx,min_route_dv,act_timing_helper):
+        """  todo: update this description return the best, valid route record before the start of an activity. The start of an activity ("act") can happen anywhere between two time points. we want to check the second time point to see if there was an activity that ended before act and updated the route record. if not, use the first time point, because any route record on that time point should definitely have ended before act. the use of this function is a means to get around the fact that two cross-links which overlap a single timestep but are temporally consistent ( the second starts after the first ends) are modeled with the first cross-link ending on the time point after this time step, in the second cross-link starting on the time point before this time step"""
+        if tp_indx == 0:
+            raise RuntimeError('Should not be called with tp_indx = 0')
 
-            rr_candidate = None
-            # search backward through the route records for sat_indx to find the one that is the best candidate for act
-            while tp_indx >= 0:
-                rr_candidate = rr_dancecards[sat_indx][tp_indx]
-                tp_indx -= 1
+        rr_candidate = None
+        # search backward through the route records for sat_indx to find the one that is the best candidate for act
+        while tp_indx >= 0:
+            rr_candidate = rr_dancecards[sat_indx][tp_indx]
+            tp_indx -= 1
 
-                if rr_candidate is None:
-                    continue
+            if rr_candidate is None:
+                continue
 
-                # use activity center time here so we know that at least some of the activity is executable after the route record candidate
-                # TODO: this right here needs update
-                if act.center >= rr_candidate.release_time and rr_candidate.no_transition_conflict(act,sat_indx,act_timing_helper):
-                    return rr_candidate
+            # use activity center time here so we know that at least some of the activity is executable after the route record candidate
+            # TODO: this right here needs update
+            if act.center >= rr_candidate.release_time:
+                routable_dv = rr_candidate.get_act_dv_availability(act,sat_indx,act_timing_helper)
 
+                # if we've found a route record that allows us to accept incoming data volume from act, go ahead and return that candidate
+                if routable_dv > min_route_dv:
+                    return rr_candidate,routable_dv
 
-            return None
+        return None,0
 
     def run_step1 ( self,obs_wind,dlnk_winds_flat,xlnk_winds, verbose = False):
         #  note that a potential source of slowness in the code below is the creation of new RouteRecord objects for every sat at every time step 
@@ -563,6 +571,7 @@ class GPDataRouteSelection():
                         continue
 
 
+
                     #  figure out which route record corresponded to the time right before this cross-link started. we can't assume it's only one time point in the past, because the cross-link could stretch across multiple timesteps
                     tp_indx_pre_xlnk = time_getter_dc.get_tp_indx_pre_t(xlnk.original_start,in_units='datetime')
 
@@ -570,39 +579,43 @@ class GPDataRouteSelection():
                     #     debug_tools.debug_breakpt()
 
                     # add one to the tp_indx, because we also want to consider any route record with a release time between the timepoints at tp_indx_pre_xlnk and tp_indx_pre_xlnk+1 (because the release could be not-exactly-on-a-tp-indx)
-                    rr_last_xlnk = self.get_best_rr(rr_dancecards,xlnk,tp_indx_pre_xlnk+1,sat_indx,self.act_timing_helper)
+                    rr_last_sat,avail_dv_sat = self.get_best_rr(rr_dancecards,xlnk,tp_indx_pre_xlnk+1,sat_indx,self.min_rs_route_dv,self.act_timing_helper)
                     
                     #  get the route record for the corresponding crosslink partner satellite
                     xsat_indx=xlnk.get_xlnk_partner(sat_indx)
-                    rr_xsat = self.get_best_rr(rr_dancecards,xlnk,tp_indx_pre_xlnk+1,xsat_indx,self.act_timing_helper)
+                    rr_last_xsat,avail_dv_xsat = self.get_best_rr(rr_dancecards,xlnk,tp_indx_pre_xlnk+1,xsat_indx,self.min_rs_route_dv,self.act_timing_helper)
 
-                    if rr_last_xlnk is None or rr_xsat is None:
-                        # this shouldn't occur very often at all - the only case I can think of is if rr_xsat is right after the observation on the obs sat, and xlnk overlaps with that obs
+
+                    avail_dv_for_xlnk = min(avail_dv_sat,avail_dv_xsat)
+
+
+                    if rr_last_sat is None or rr_last_xsat is None or avail_dv_for_xlnk < self.min_rs_route_dv:
+                        # this shouldn't occur very often at all - the only case I can think of is if rr_last_xsat is right after the observation on the obs sat, and xlnk overlaps with that obs
                         continue
 
                     #  remove redundant calculations: if the other satellite has less data volume at this time point than we do, then we can't get any more data volume from them, and it's pointless to consider it
-                    if rr_last_xlnk.dv > rr_xsat.dv:
+                    if rr_last_sat.dv > rr_last_xsat.dv:
                         continue
 
                     #  need to figure out what data on the other satellite is data that we have not yet received on sat_indx. this returns a set of de-conflicted routes that all send valid, non-duplicated data to sat_indx
-                    deconf_rts = rr_last_xlnk.get_dv_deconflicted_routes(rr_xsat,min_dv=self.min_rs_route_dv,routable_obs_dv_multiplier=self.routable_obs_dv_multiplier,verbose= False)
+                    # note that this deconfliction does not currently look at transition times across routes, and so has some slop...
+                    deconf_rts = rr_last_sat.get_dv_deconflicted_routes(rr_last_xsat,min_dv=self.min_rs_route_dv,routable_obs_dv_multiplier=self.routable_obs_dv_multiplier,verbose= False)
 
-                    #todo: hmm, do we also want to consider other direction, where rr_sat is incumbent and rr_last_xlnk are the routes to deconflict?
+                    #todo: hmm, do we also want to consider other direction, where rr_sat is incumbent and rr_last_sat are the routes to deconflict?
 
                     #  now we need to figure out how many of these routes we can use, based upon the available crosslink bandwidth
-                    xlnk_dv = xlnk.data_vol
                     xlnk_candidate_rts = []
                     # Cumulative data volume used on the crosslink by the route candidates. must be less than the available crosslink data volume
                     x_cum_dv = 0
                     # deconf_rt is a DeconflictedRoute namedtuple, from above
                     for deconf_rt in deconf_rts:
                         # if we're less than the total crosslink data volume
-                        if x_cum_dv + deconf_rt.available_dv <= xlnk_dv:
+                        if x_cum_dv + deconf_rt.available_dv <= avail_dv_for_xlnk:
                             xlnk_candidate_rts.append(deconf_rt)
                             x_cum_dv += deconf_rt.available_dv
                         # also handle the case where we don't have enough available data volume to fulfill all of the potential for route, but we can still grab enough data volume for that route ( greater than specified minimum) to use it
                         else:
-                            available_dv = xlnk_dv - x_cum_dv 
+                            available_dv = avail_dv_for_xlnk - x_cum_dv 
                             #  check if greater than specified minimum
                             if available_dv >= self.min_rs_route_dv:
                                 deconf_rt.available_dv = available_dv
@@ -611,10 +624,10 @@ class GPDataRouteSelection():
 
 
                     #  make a new candidate entry with a record of the new data volume that we'll have if we choose that candidate.  also bring along some other relevant objects for bookkeeping
-                    new_dv = rr_last_xlnk.dv + x_cum_dv
+                    new_dv = rr_last_sat.dv + x_cum_dv
                     best_dv_seen = max(best_dv_seen,x_cum_dv)
                     # XLNK_CANDIDATES:       0         1            2                3
-                    xlnk_candidates.append((new_dv,rr_last_xlnk,xlnk_candidate_rts,xlnk))
+                    xlnk_candidates.append((new_dv,rr_last_sat,xlnk_candidate_rts,xlnk))
 
 
                 found_candidates = len(xlnk_candidates) > 0
@@ -688,10 +701,10 @@ class GPDataRouteSelection():
                             dlnk.modify_time(new_start,'start')  #  update start and end time. also updates data volume
 
                         #  figure out if we want to use the route record from the last timepoint, or if a cross-link has delivered more data volume. grab the latter if valid
-                        rr_pre_dlnk = self.get_best_rr(rr_dancecards,dlnk,tp_indx,sat_indx,self.act_timing_helper)
+                        rr_pre_dlnk,avail_dv_for_dlnk = self.get_best_rr(rr_dancecards,dlnk,tp_indx,sat_indx,self.min_rs_route_dv,self.act_timing_helper)
 
                         # couldn't find any routes valid for this dlnk to send down
-                        if rr_pre_dlnk is None:
+                        if rr_pre_dlnk is None or avail_dv_for_dlnk < self.min_rs_route_dv:
                             continue
 
                         # todo: should check transition time between last xlnk in each of the routes and the start of the downlink - I'd add that check here, or maybe in the loop below
@@ -713,7 +726,7 @@ class GPDataRouteSelection():
                                 # - the bservation data volume
                                 # - the downlink data volume
                                 # note that it is not necessary in activity scheduling for a data route to conform to all of these limits, because capacity constraints are checked for all of the windows within all the routes. nonetheless, it's good practice to only allocate as much data volume as is really present to every route
-                                dv_slice = min(dr.data_vol,available_dv,dr.get_obs().data_vol,dlnk.data_vol)
+                                dv_slice = min(dr.data_vol,available_dv,dr.get_obs().data_vol,avail_dv_for_dlnk)
 
                                 new_dr = copy(dr)
                                 new_dr.data_vol = dv_slice
