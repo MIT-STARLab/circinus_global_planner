@@ -81,6 +81,7 @@ class GlobalPlannerRunner:
         self.io_proc =SchedIOProcessor(self.params)
         self.gp_plot =GPPlotting( self.params)
 
+        self.sat_id_order = self.sat_params['sat_id_order']
         # this data route ID should be unique across all data routes (and the datamultiroutes encasing them).  this is important because data route IDs are used for indexing in many places, not just in the global planner.
         self.initial_dr_uid = gp_params['gp_instance_params']['initial_gp_route_indx']
 
@@ -630,13 +631,14 @@ class PipelineRunner:
             orbit_prop_inputs['gs_params']['gs_id_order'] = gs_id_order
 
             orbit_prop_inputs['sat_params']['power_params_sorted'] = io_tools.sort_input_params_by_sat_IDs(orbit_prop_inputs['sat_params']['power_params'],sat_id_order)
+            orbit_prop_inputs['sat_params']['power_params_by_sat_id'], all_sat_ids1 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['power_params'],output_format='dict')
             orbit_prop_inputs['sat_params']['data_storage_params_sorted'] = io_tools.sort_input_params_by_sat_IDs(orbit_prop_inputs['sat_params']['data_storage_params'],sat_id_order)
             orbit_prop_inputs['sat_params']['sats_state_sorted'] = io_tools.sort_input_params_by_sat_IDs(orbit_prop_inputs['sat_params']['initial_state'],sat_id_order)
         else:
             raise NotImplementedError
 
         #  check that it's the right version
-        if not gp_general_params['version'] == "0.6":
+        if not gp_general_params['version'] == "0.7":
             raise NotImplementedError
 
         #  check that it's the right version
