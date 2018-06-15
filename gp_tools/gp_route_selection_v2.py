@@ -755,7 +755,7 @@ class GPDataRouteSelection():
 
         all_routes = [dr for rr in final_route_records for dr in rr]
         for dr in all_routes:
-            dr.validate()
+            dr.validate(self.act_timing_helper)
 
         return all_routes
 

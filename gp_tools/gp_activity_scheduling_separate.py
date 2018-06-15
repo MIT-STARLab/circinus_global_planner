@@ -898,7 +898,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         updated_winds = set()
         for dmr in all_updated_routes:
             # validate the data multi route (and in turn, the scheduled data vols of all the data routes under it)
-            dmr.validate()
+            dmr.validate(self.act_timing_helper)
 
             for wind in dmr.get_winds():
 

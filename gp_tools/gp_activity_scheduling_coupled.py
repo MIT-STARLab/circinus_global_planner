@@ -1015,7 +1015,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
         # only validate based on center time for now
         for dr in found_routes:
-            dr.validate(time_option='center')
+            dr.validate(self.act_timing_helper,time_option='center')
             # print(str(dr))
 
         return found_routes, dr_uid
@@ -1103,9 +1103,9 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
             # validate the data multi route (and in turn, the scheduled data vols of all the data routes under it)
             if self.allow_act_timing_constr_violations:
-                dmr.validate(time_option='center') # this is bad to use in general, allows window overlaps to occur
+                dmr.validate(self.act_timing_helper,time_option='center') # this is bad to use in general, allows window overlaps to occur
             else:
-                dmr.validate()
+                dmr.validate(self.act_timing_helper,)
 
         return scheduled_routes
 

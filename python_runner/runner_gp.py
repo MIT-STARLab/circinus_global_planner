@@ -27,6 +27,7 @@ from circinus_tools  import io_tools
 from circinus_tools.scheduling.routing_objects import DataMultiRoute
 from circinus_tools.scheduling.io_processing import SchedIOProcessor
 from circinus_tools.scheduling.formulation.schedulers import NotSolvableError
+from circinus_tools.activity_bespoke_handling import ActivityTimingHelper
 from gp_tools.gp_plotting import GPPlotting
 import gp_tools.gp_route_selection_v1 as gprsv1
 import gp_tools.gp_route_selection_v2 as gprsv2
@@ -95,8 +96,7 @@ class GlobalPlannerRunner:
         if self.gp_inst_planning_params['planning_end_dlnk_dt'] > self.scenario_params['end_utc_dt']:
             raise RuntimeError("GP instance dlnk end time (%s) is greater than scenario end time (%s)"%(self.gp_inst_planning_params['planning_end_dlnk_dt'],self.scenario_params['end_utc']))
 
-    
-
+        self.act_timing_helper = ActivityTimingHelper(self.sat_params['activity_params'],self.sat_orbit_params['sat_ids_by_orbit_name'],self.sat_params['sat_id_order'],gp_params['orbit_prop_params']['version'])
 
 
     def run_activity_scheduling( self, routes_by_obs,existing_route_data,ecl_winds,verbose=False):
@@ -281,7 +281,7 @@ class GlobalPlannerRunner:
                 latest_dr_uid += 1
 
                 # try:
-                dr.validate()
+                dr.validate(self.act_timing_helper)
                 # except:
                 #     raise Exception("Couldn't handle dr %s for obs %s (indices %s)"%(dr,dr.get_obs(),indices_by_obs[dr.get_obs()]))
 
@@ -336,7 +336,7 @@ class GlobalPlannerRunner:
 
         for rts in selected_rts_by_obs.values():
             for dmr in rts:
-                dmr.validate()
+                dmr.validate(self.act_timing_helper)
 
         return selected_rts_by_obs,stats_rs2_pre,stats_rs2_post
 
