@@ -605,7 +605,7 @@ class PipelineRunner:
         if data['rs_s1_pickle'] and data['rs_s2_pickle']:
             raise Exception('Should only specify 1 input pickle for route selection')
 
-        if orbit_prop_inputs['version'] == "0.7":
+        if orbit_prop_inputs['version'] == "0.8":
             # do some useful transformations while preserving the structure of the inputs ( important for avoiding namespace clashes)
             orbit_prop_inputs['scenario_params']['start_utc_dt'] = tt.iso_string_to_dt ( orbit_prop_inputs['scenario_params']['start_utc'])
             orbit_prop_inputs['scenario_params']['end_utc_dt'] = tt.iso_string_to_dt ( orbit_prop_inputs['scenario_params']['end_utc'])
@@ -617,14 +617,13 @@ class PipelineRunner:
             orbit_prop_inputs['sat_params']['data_storage_params'], all_sat_ids2 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['data_storage_params'])
             orbit_prop_inputs['sat_params']['initial_state'], all_sat_ids3 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['initial_state'])
 
-            #  check if  we saw the same list of satellite IDs from each unpacking. if not that's a red flag that the inputs could be wrongly specified
-            if all_sat_ids1 != all_sat_ids2 or all_sat_ids1 != all_sat_ids3:
-                raise Exception('Saw differing sat ID orders')
-
             #  grab the list for satellite ID order.  if it's "default", we will create it and save it for future use here
             sat_id_order=orbit_prop_inputs['sat_params']['sat_id_order']
             #  make the satellite ID order. if the input ID order is default, then will assume that the order is the same as all of the IDs found in the power parameters
-            sat_id_order = io_tools.make_and_validate_sat_id_order(sat_id_order,orbit_prop_inputs['sat_params']['num_sats'],all_sat_ids1)
+            sat_id_order = io_tools.make_and_validate_sat_id_order(sat_id_order,orbit_prop_inputs['sat_params']['sat_id_prefix'],orbit_prop_inputs['sat_params']['num_sats'],all_sat_ids1)
+            io_tools.validate_ids(validator=sat_id_order,validatee=all_sat_ids1)
+            io_tools.validate_ids(validator=sat_id_order,validatee=all_sat_ids2)
+            io_tools.validate_ids(validator=sat_id_order,validatee=all_sat_ids3)
             orbit_prop_inputs['sat_params']['sat_id_order'] = sat_id_order
 
             gs_id_order = io_tools.make_and_validate_gs_id_order(orbit_prop_inputs['gs_params'])
