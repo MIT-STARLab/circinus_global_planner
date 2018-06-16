@@ -549,7 +549,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
         print_verbose('make overlap constraints',verbose)
 
-        #  intra-satellite activity overlap constraints [4],[5],[5b]
+        #  intra-satellite activity overlap constraints [4],[5]
         model.c4_5  = pe.ConstraintList()
         # pass the model objects getter function so it can be called in place
         self.c4_5_binding_exprs_by_act =  self.gen_intra_sat_act_overlap_constraints(

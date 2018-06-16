@@ -499,15 +499,16 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         # v_(a,o), variables [2]
         model.var_lnk_obs_dv_utilization  = pe.Var (model.lnk_obs_subscripts,  within = pe.NonNegativeReals)
         # v_(s,o,t), variables [3]
+        #  this is the data volume from an observation, available to be used by an activity on satellite s at time t (the activity can occur at time t - time bound inclusive, not exclusive)
         model.var_sat_obs_time_dv  = pe.Var (model.sat_obs_time_subscripts,  within = pe.NonNegativeReals)
+        # f_o, variables [4]
+        model.var_latency_sf_obs = pe.Var (model.obs_windids,  bounds = (0,1.0))
+        # I_(d,o), variables [5]
+        model.var_dlnk_obs_indic  = pe.Var (model.dlnk_obs_subscripts, within = pe.Binary)
         # I_a, variables [6]
         model.var_act_indic  = pe.Var (model.act_windids, within = pe.Binary)
         # satellite energy storage, e_(s,t), variables [7]
         model.var_sats_estore  = pe.Var (model.sat_indcs,  model.es_timepoint_indcs,  within = pe.NonNegativeReals)
-        # I_(d,o), variables [5]
-        model.var_dlnk_obs_indic  = pe.Var (model.dlnk_obs_subscripts, within = pe.Binary)
-        # f_o, variables [4]
-        model.var_latency_sf_obs = pe.Var (model.obs_windids,  bounds = (0,1.0))
         
         if self.allow_act_timing_constr_violations:
             print('allow_act_timing_constr_violations is True')
@@ -540,15 +541,15 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
             return model.var_act_indic[a] >=  model.var_act_dv_utilization[a]/model.par_act_capacity[a]
         model.c17 =pe.Constraint ( model.act_windids,  rule=c17_rule) 
 
-        def c1b_rule( model,a):
-            return model.var_act_dv_utilization[a] >= sum(model.var_lnk_obs_dv_utilization[a,o] for o in obs_windids_by_lnk_windid[a])
+        def c1b_rule( model,l):
+            return model.var_act_dv_utilization[l] >= sum(model.var_lnk_obs_dv_utilization[l,o] for o in obs_windids_by_lnk_windid[l])
         model.c1b =pe.Constraint ( model.lnk_windids,  rule=c1b_rule)
 
         # c2
         model.c2  = pe.ConstraintList()
-        for a in model.lnk_windids:
-            for o in obs_windids_by_lnk_windid[a]:
-                model.c2.add(model.var_lnk_obs_dv_utilization[a,o] <= model.var_act_dv_utilization[o])
+        for l in model.lnk_windids:
+            for o in obs_windids_by_lnk_windid[l]:
+                model.c2.add(model.var_lnk_obs_dv_utilization[l,o] <= model.var_act_dv_utilization[o])
 
 
         def c4_rule( model,o):
@@ -579,7 +580,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                         dv_sum += model.var_act_dv_utilization[o]
 
                     # all of the acts that occur on s after obs (t_o) and before t
-                    # note the inequalities here. First inequality - don't count the obs. Second: want v_(s,o,t) to be constrained by what happened previously. If this were an inequality, would say "the dv available at the time of an xlnk/dlnk is limited by dv contributions of all previous xlnks and the dv contribution of THIS XLNK. That's unbounded, could generate infinite dv"
+                    # note the inequalities here. First inequality - don't count the obs. Second: want v_(s,o,t) to be constrained by what happened previously. If this were an inequality, would say "the dv available at the time of an xlnk/dlnk is limited by dv contributions of all previous xlnks and the dv contribution of THIS XLNK." That's unbounded, could generate infinite dv
                     sat_acts_slice = [act for act in sats_acts[s] if (
                         (type(act) == DlnkWindow or type(act) == XlnkWindow) and
                         (act.center > t_o and act.center < t)
@@ -617,6 +618,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
             for lnk in link_objs:
                 # verify lnk is actually a link act
+                # todo: is this meant to be debug? I forget. Should clarify that...
                 if not (type(lnk) == DlnkWindow or type(lnk) == XlnkWindow):
                     continue
 
@@ -630,6 +632,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
                 outgoing_dv_sum += model.var_lnk_obs_dv_utilization[lnk.window_ID,o]
 
+            # Note that this is saying that the sum of the data volume going out at time t is less than or equal to the data volume available at time t. that is not time t-1 - it's t. so v_{s,o,t} is data volume that can be used at time t. this is why we need the inequality in constraint 5.
             model.c6.add( outgoing_dv_sum <= model.var_sat_obs_time_dv[sat_obs_time_subscript])
 
 
