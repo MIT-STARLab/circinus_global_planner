@@ -119,7 +119,7 @@ def calc_activity_scheduling_results ( gp_runner_inst,obs_winds,dlnk_winds_flat,
     sats_tlm_update_hist = gp_netsim.get_all_sats_tlm_update_hist()
     aoi_sat_tlm_stats = mc.assess_aoi_sat_ttc_option(sats_cmd_update_hist,ttc_option='tlm',aoi_x_axis_units=time_units,verbose = True)
 
-    resource_margin_stats = mc.assess_resource_margin(energy_usage,verbose = True)
+    resource_margin_stats = mc.assess_energy_resource_margin(energy_usage,verbose = True)
 
 
     plot_outputs = {}
