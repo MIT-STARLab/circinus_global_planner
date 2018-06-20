@@ -89,14 +89,23 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
         for sat_indx in  range (num_sats):
             for wind in obs_winds[sat_indx]:
+                if wind.duration.total_seconds() < self.act_timing_helper.get_act_min_duration(wind):
+                    continue
+
                 if  wind.original_start >= self.planning_start_dt  and  wind.original_end  <= self.planning_end_obs_dt:
                     obs_winds_filtered[sat_indx]. append ( wind)
 
             for wind in dlnk_winds_flat[sat_indx]:
+                if wind.duration.total_seconds() < self.act_timing_helper.get_act_min_duration(wind):
+                    continue
+
                 if  wind.original_start >= self.planning_start_dt  and  wind.original_end  <= self.planning_end_dlnk_dt:
                     dlink_winds_flat_filtered[sat_indx]. append ( wind)
 
             for wind in xlnk_winds_flat[sat_indx]:
+                if wind.duration.total_seconds() < self.act_timing_helper.get_act_min_duration(wind):
+                    continue
+
                 if  wind.original_start >= self.planning_start_dt  and  wind.original_end  <= self.planning_end_xlnk_dt:
                     xlink_winds_flat_filtered[sat_indx]. append ( wind)
 

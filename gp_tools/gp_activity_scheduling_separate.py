@@ -212,6 +212,11 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         routes_filt = []
         existing_routes_before_planning_fixed_end = []
 
+        def route_has_too_short_act(rt):
+            for wind in rt.get_winds():
+                if wind.duration.total_seconds() < self.act_timing_helper.get_act_min_duration(wind):
+                    return True
+
         def process_dmr(dmr,start_filt_dt,filter_opt):
             dmr_start = dmr.get_start(time_opt='original')
             dmr_end = dmr.get_end(time_opt='original')
@@ -222,8 +227,8 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             # check if at least one act window in route is partially within the planning window. Pass if not.
             elif filter_opt=='partially_within' and (dmr_end < start_filt_dt or dmr_start > self.planning_end_dt):
                 pass
-            elif dmr.get_dlnk().duration.total_seconds() < self.act_timing_helper.get_act_min_duration(dmr.get_dlnk()):
-                print('discarding too short dlnk window')
+            elif route_has_too_short_act(dmr):
+                # print('discarding too short dlnk window')
                 pass
             else:
                 routes_filt.append (dmr)
