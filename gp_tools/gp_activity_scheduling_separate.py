@@ -144,7 +144,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                 act_is_mutable = True
 
                 # We have already filtered routes, but we also need to filter activities because there may be activities from existing routes that are outside of the planning window. We do not want to enforce constraints on the windows by treating them like their utilization can change;  however, we do want to include the acts for other calculations in the model
-                if act.original_start < self.planning_start_dt or act.original_end > self.planning_end_dt:
+                if act.start < self.planning_start_dt or act.end > self.planning_end_dt:
                     act_is_mutable = False
 
                 act_windid = act.window_ID
@@ -341,7 +341,8 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             # verify that all acts found are within the planning window, otherwise we may end up with strange results
             for sat_acts in sats_mutable_acts:
                 for act in sat_acts:
-                    if act.original_start < self.planning_start_dt or act.original_end > self.planning_end_dt:
+                    # note that these should not be original start/end. It's possible for downlinks that have an original start before the planning window to get added, in route selection, if they can still deliver data volume for an obs. 
+                    if act.start < self.planning_start_dt or act.end > self.planning_end_dt:
                         raise RuntimeWarning('Activity is out of planning window range (start %s, end %s): %s'%(self.planning_start_dt,self.planning_end_dt,act))
 
             # construct a set of dance cards for every satellite, 

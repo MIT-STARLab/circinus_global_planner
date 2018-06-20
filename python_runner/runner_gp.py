@@ -198,7 +198,7 @@ class GlobalPlannerRunner:
                     if gp_gen.wind_in_planning_window(self,obs_wind):
                         obs_winds_filt[sat_indx].append(obs_wind)
                         wind_ids_seen.add(obs_wind)
-                        
+
             return obs_winds_filt
 
 
@@ -793,8 +793,8 @@ if __name__ == "__main__":
         "gp_instance_params_inputs": gp_instance_params_inputs,
         # "viz_params": viz_params,
         "data_rates_inputs": data_rates_inputs,
-        "rs_s1_pickle": args.rs_s1_pickle if args.rs_s1_pickle != '' else None,
-        "rs_s2_pickle": args.rs_s2_pickle if args.rs_s2_pickle != '' else None,
+        "rs_s1_pickle": os.path.join(REPO_BASE,args.rs_s1_pickle) if args.rs_s1_pickle != '' else None,
+        "rs_s2_pickle": os.path.join(REPO_BASE,args.rs_s2_pickle) if args.rs_s2_pickle != '' else None,
         "as_pickle": args.as_pickle if args.as_pickle != '' else None,
         "file_params":  {'new_pickle_file_name_pre': args.prop_inputs_file.split('/')[-1].split ('.')[0]}
     }
