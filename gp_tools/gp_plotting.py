@@ -152,6 +152,14 @@ class GPPlotting():
         plot_params['dlnk_label_getter_func'] = dlnk_label_getter
         plot_params['xlnk_label_getter_func'] = xlnk_label_getter
 
+
+        plot_params['obs_choices_legend_name'] = "O poss"
+        plot_params['obs_exe_legend_name'] = "O sched"
+        plot_params['dlnk_choices_legend_name'] = "D poss"
+        plot_params['dlnk_exe_legend_name'] = "D sched"
+        plot_params['xlnk_choices_legend_name'] = "X poss"
+        plot_params['xlnk_exe_legend_name'] = "X sched"
+
         pltl.plot_all_agents_acts(
             sats_ids_list,
             sats_obs_winds_choices,
