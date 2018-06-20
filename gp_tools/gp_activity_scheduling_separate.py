@@ -857,6 +857,8 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                     print(route)
 
 
+        scheduled_dv_by_wind = {}
+
         # examine the schedulable data volume for every activity window, checking as we go that the data volume is sufficient for at least the route in which the window is found
         #  note that this code is slightly inefficient because it might duplicate windows across routes. that's fine though, because we're thorough in checking across all routes
         # note: dmr is for DataMultiRoute
@@ -864,13 +866,14 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         for dmr in all_updated_routes:
             # wind may get set multiple times due to Windows appearing across routes, but that's not really a big deal
             for wind in dmr.get_winds():
+                scheduled_dv_by_wind[wind] = 0
 
                 #  only update windows that are mutable
                 if wind.window_ID in self.mutable_acts_windids:
                     # wind_sched_dv_check[wind] = wind.data_vol * pe.value(self.model.var_act_indic[act_indx])
                     wind_sched_dv_check[wind] = wind.original_data_vol * pe.value(self.model.var_activity_utilization[wind.window_ID])
                     #  initialize this while we're here
-                    wind.scheduled_data_vol = 0
+                    # wind.scheduled_data_vol = 0
                 else:
                     #  if it's not a mutable window it should already have scheduled data volume assigned
                     assert(wind.scheduled_data_vol != const.UNASSIGNED)
@@ -894,7 +897,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             for wind in dmr.get_winds():
                 #  only update windows that are mutable
                 if wind.window_ID in self.mutable_acts_windids:
-                    wind.scheduled_data_vol += dmr.scheduled_dv_for_wind(wind)
+                    scheduled_dv_by_wind[wind] += dmr.scheduled_dv_for_wind(wind)
                 else:
                     wind_sched_dv_check[wind] +=  dmr.scheduled_dv_for_wind(wind)
 
@@ -910,7 +913,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
                 if wind.window_ID in self.mutable_acts_windids:
                     #  this check should be at least as big as the scheduled data volume as calculated from all of the route data volumes. (it's not constrained from above, so it could be bigger)
-                    if wind_sched_dv_check[wind] < wind.scheduled_data_vol - self.dv_epsilon:
+                    if wind_sched_dv_check[wind] < scheduled_dv_by_wind[wind] - self.dv_epsilon:
                         raise RuntimeWarning('inconsistent activity scheduling results, data volumes mismatch, mutable window')
 
 
@@ -931,8 +934,10 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                 if not wind.window_ID in self.mutable_acts_windids:
                     continue
 
+                # if it hasn't been updated yet
                 if not wind in updated_winds:
                     # note that the line below seems like it may break the scheduled times for activities by specifying a minimum activity duration. however, this minimum activity duration is already accounted for in scheduling constraints
+                    wind.scheduled_data_vol = scheduled_dv_by_wind[wind]
                     wind.update_duration_from_scheduled_dv (min_duration_s=self.act_timing_helper.get_act_min_duration(wind))
                     updated_winds.add(wind)
 
