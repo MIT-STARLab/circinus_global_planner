@@ -516,6 +516,7 @@ class GlobalPlannerRunner:
 
         if self.other_params['as_pickle_input']:
             sel_routes_by_obs,ecl_winds,scheduled_routes,energy_usage,data_usage, window_uid,latest_dr_uid = pickle_helper.unpickle_actsc_stuff(self)
+            all_updated_routes = None
         else:
             run_coupled_rs_as = self.as_params['run_coupled_rs_as']
 
@@ -795,7 +796,7 @@ if __name__ == "__main__":
         "data_rates_inputs": data_rates_inputs,
         "rs_s1_pickle": os.path.join(REPO_BASE,args.rs_s1_pickle) if args.rs_s1_pickle != '' else None,
         "rs_s2_pickle": os.path.join(REPO_BASE,args.rs_s2_pickle) if args.rs_s2_pickle != '' else None,
-        "as_pickle": args.as_pickle if args.as_pickle != '' else None,
+        "as_pickle": os.path.join(REPO_BASE,args.as_pickle) if args.as_pickle != '' else None,
         "file_params":  {'new_pickle_file_name_pre': args.prop_inputs_file.split('/')[-1].split ('.')[0]}
     }
 

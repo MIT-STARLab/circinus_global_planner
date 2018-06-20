@@ -1,5 +1,5 @@
 #  plotting tools for global planner
-# 
+#
 # @author Kit Kennedy
 #
 # The code below is terrible, I know. I really let myself go here. Don't judge too hard.
@@ -36,7 +36,7 @@ class GPPlotting():
     """docstring for GP plotting"""
     def __init__(self,gp_params):
         """initializes based on parameters
-        
+
         initializes based on parameters
         :param gp_params: global namespace parameters created from input files (possibly with some small non-structural modifications to params). The name spaces here should trace up all the way to the input files.
         :type params: dict
@@ -81,18 +81,18 @@ class GPPlotting():
             # if not dr_id is None:
             #     label_text = "%d,%d" %(dr_id.get_indx(),other_sat_indx)
             #     label_text = "%s" %(dr_indcs)
-            # else:         
+            # else:
             #     label_text = "%d" %(other_sat_indx)
 
             # return label_text
             rx_or_tx = 'rx' if xlnk.is_rx(sat_indx) else 'tx'
-            return "x%d,%s%d,dv %d/%d"%(xlnk.window_ID,rx_or_tx,xlnk.get_xlnk_partner(sat_indx),xlnk.scheduled_data_vol,xlnk.data_vol) 
+            return "x%d,%s%d,dv %d/%d"%(xlnk.window_ID,rx_or_tx,xlnk.get_xlnk_partner(sat_indx),xlnk.scheduled_data_vol,xlnk.data_vol)
 
         def dlnk_label_getter(dlnk):
-            return "d%d,g%d,dv %d/%d"%(dlnk.window_ID,dlnk.gs_indx,dlnk.scheduled_data_vol,dlnk.data_vol) 
+            return "d%d,g%d,\ndv %d/%d"%(dlnk.window_ID,dlnk.gs_indx,dlnk.scheduled_data_vol,dlnk.data_vol)
 
         def obs_label_getter(obs):
-            return "o%d, dv %d/%d"%(obs.window_ID,obs.scheduled_data_vol,obs.data_vol)
+            return "o%d,\ndv %d/%d"%(obs.window_ID,obs.scheduled_data_vol,obs.data_vol)
 
         return obs_label_getter,dlnk_label_getter,xlnk_label_getter
 
@@ -101,14 +101,14 @@ class GPPlotting():
         sats_obs_winds_choices,
         sats_obs_winds,
         sats_dlnk_winds_choices,
-        sats_dlnk_winds, 
+        sats_dlnk_winds,
         sats_xlnk_winds_choices,
         sats_xlnk_winds,
         route_ids_by_wind,
         plot_start_dt,
         plot_end_dt,
         base_time_dt,
-        plot_title = 'Route Plot', 
+        plot_title = 'Route Plot',
         plot_size_inches = (12,12),
         plot_include_obs_labels = True,
         plot_include_dlnk_labels = True,
@@ -160,17 +160,23 @@ class GPPlotting():
         plot_params['xlnk_choices_legend_name'] = "X poss"
         plot_params['xlnk_exe_legend_name'] = "X sched"
 
+
+        plot_params['label_fontsize'] = 12
+        plot_params['label_horz_offset'] = 0
+        # plot_params['label_fontweight'] = 'bold'
+
+
         pltl.plot_all_agents_acts(
             sats_ids_list,
             sats_obs_winds_choices,
             sats_obs_winds,
             sats_dlnk_winds_choices,
-            sats_dlnk_winds, 
+            sats_dlnk_winds,
             sats_xlnk_winds_choices,
             sats_xlnk_winds,
             plot_params)
 
-    
+
     def plot_data_circles(
         self,
         sats_ids_list,
@@ -184,7 +190,7 @@ class GPPlotting():
         plot_start,
         plot_end,
         base_time,
-        plot_title = 'Route Data Plot', 
+        plot_title = 'Route Data Plot',
         plot_size_inches = (12,12),
         plot_include_labels = True,
         show=False,
@@ -198,7 +204,7 @@ class GPPlotting():
             time_divisor = 3600
         if self.time_units == 'minutes':
             time_divisor = 60
-        
+
         # time_to_end = (plot_end-plot_start).total_seconds()/time_divisor
         start_time = (plot_start-base_time).total_seconds()/time_divisor
         end_time = (plot_end-base_time).total_seconds()/time_divisor
@@ -236,7 +242,7 @@ class GPPlotting():
             #  get the index for this ID
             sat_indx = self.sat_id_order.index(str(sat_id))
 
-            # 
+            #
             axes = plt.subplot( num_sats,1,plot_indx+1)
             if plot_indx == np.floor(num_sats/2):
                 plt.ylabel('Satellite Index\n\n' + str(sat_indx))
@@ -268,7 +274,7 @@ class GPPlotting():
             xlnk_rotation_rollover = 4
             #  this is used to alternate the vertical position of labels
             xlnk_label_rotator = 0
-            
+
             #  this is used to alternate the vertical position of the  downlink rectangle
             dlnk_rectangle_rotator = 0
             dlnk_choices_rectangle_rotator = 0
@@ -407,13 +413,13 @@ class GPPlotting():
                                 for dr_id in dr_indcs:
                                     label_text += "%d,"%(dr_id.get_indx())
                                 label_text += ";"
-                            
+
                             #  add the ground station index to the label
                             label_text += "%d"%(gs_indx)
 
                             #   put label in desired vertical spot
                             left_horizontal_loc = dlnk_start + 0.15
-                            
+
                             if dlnk_label_rotator == 0:
                                 plt.text(left_horizontal_loc, 0.1, label_text , fontsize=10, color = 'k')
                             elif dlnk_label_rotator == 1:
@@ -481,7 +487,7 @@ class GPPlotting():
                             xlnk_color_indx = 0
 
                         xlnk_color = self.xlnk_colors[xlnk_color_indx]
-                        
+
                         # plot the task duration
                         radius =  dv_radius_scale(xlnk_wind.scheduled_data_vol)
                         x = Circle((middle, bottom_vert_loc), radius,alpha=1,fill=False,color=xlnk_color,hatch='///////')
@@ -498,7 +504,7 @@ class GPPlotting():
                             #  again, if we know route indices include them in label
                             if dr_id:
                                 label_text = "%d,%d" %(dr_id.get_indx(),other_sat_indx)
-                            else:                                
+                            else:
                                 label_text = "%d" %(other_sat_indx)
 
                             if xlnk_label_rotator == 0:
@@ -515,16 +521,16 @@ class GPPlotting():
 
         legend_objects = []
         legend_objects_labels = []
-        if d_w: 
+        if d_w:
             legend_objects.append(d_w)
             legend_objects_labels.append('D all')
-        if d: 
+        if d:
             legend_objects.append(d)
             legend_objects_labels.append('Dlnk')
-        if x_w: 
+        if x_w:
             legend_objects.append(x_w)
             legend_objects_labels.append('X all')
-        if x: 
+        if x:
             legend_objects.append(x)
             legend_objects_labels.append('Xlnk')
 
@@ -548,7 +554,7 @@ class GPPlotting():
         plot_start,
         plot_end,
         base_time,
-        plot_title = 'Energy Utilization', 
+        plot_title = 'Energy Utilization',
         plot_size_inches = (12,12),
         show=False,
         fig_name='plots/energy_plot.pdf'):
@@ -586,7 +592,7 @@ class GPPlotting():
         plot_start,
         plot_end,
         base_time,
-        plot_title = 'Data Utilization', 
+        plot_title = 'Data Utilization',
         plot_size_inches = (12,12),
         show=False,
         fig_name='plots/data_plot.pdf'):
@@ -624,7 +630,7 @@ class GPPlotting():
         plot_start,
         plot_end,
         base_time,
-        plot_title = 'Observation Target AoI', 
+        plot_title = 'Observation Target AoI',
         plot_size_inches = (12,12),
         show=False,
         fig_name='plots/obs_aoi_plot.pdf'):
@@ -659,7 +665,7 @@ class GPPlotting():
         plot_start,
         plot_end,
         base_time,
-        plot_title = 'Satellite TLM Downlink AoI', 
+        plot_title = 'Satellite TLM Downlink AoI',
         plot_size_inches = (12,12),
         show=False,
         fig_name='plots/sat_aoi_plot.pdf'):
@@ -694,7 +700,7 @@ class GPPlotting():
         plot_start,
         plot_end,
         base_time,
-        plot_title = 'Satellite CMD Uplink AoI', 
+        plot_title = 'Satellite CMD Uplink AoI',
         plot_size_inches = (12,12),
         show=False,
         fig_name='plots/sat_aoi_plot.pdf'):
@@ -745,7 +751,7 @@ class GPPlotting():
         # labels = ['{0} dv{1} la{2}'.format(i,tup[0],tup[2]) for i, tup in   enumerate(weights_tups)]
         indx = 0
         for label, x, y in zip(labels, all_ave_latencies, all_cum_dv):
-            
+
             if indx%2 ==0: pos = (30, 0)
             else: pos = (30, -20)
 
