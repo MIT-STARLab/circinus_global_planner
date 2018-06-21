@@ -876,7 +876,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                     # wind.scheduled_data_vol = 0
                 else:
                     #  if it's not a mutable window it should already have scheduled data volume assigned
-                    assert(wind.scheduled_data_vol != const.UNASSIGNED)
+                    # assert(wind.scheduled_data_vol != const.UNASSIGNED)
                     wind_sched_dv_check[wind] = 0
 
             #  update the underlying data routes for every data multi-route
