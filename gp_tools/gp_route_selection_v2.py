@@ -103,6 +103,8 @@ class RouteRecord():
 
         dv_avail = act.data_vol
 
+        reduce_dv_for_overlap = True
+
         for dr in self._routes:
             # todo: assess if this code takes way too long because it checks every dr in self._routes
 
@@ -113,10 +115,17 @@ class RouteRecord():
             # don't calculate overlapped dv if there's sufficient transition time
             if (act_start - dr_end_act.original_end).total_seconds() >= transition_time_req:
                 continue
+            elif (act.center - dr_end_act.center).total_seconds() < transition_time_req:
+                dv_avail = 0
+                continue
 
-            dv_avail_with_dr = get_pairwise_overlap_max_dv(dr_end_act, act, transition_time_req)
+            # if we want to actually reduce activity data volume (as marked in data route that will be created) to reflect overlap. Otherwise just return the activity dv.
+            # it's a good policy to reduce the dv avail to reflect the transition time (to not make routes seem more promising than they actually are), but can take a while to calculate
+            if reduce_dv_for_overlap:
+                dv_avail_with_dr = get_pairwise_overlap_max_dv(dr_end_act, act, transition_time_req)
 
-            dv_avail = min(dv_avail,dv_avail_with_dr)
+                dv_avail = min(dv_avail,dv_avail_with_dr)
+
 
         return dv_avail
 

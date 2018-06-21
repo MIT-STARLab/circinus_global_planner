@@ -89,10 +89,10 @@ class GPPlotting():
             return "x%d,%s%d,dv %d/%d"%(xlnk.window_ID,rx_or_tx,xlnk.get_xlnk_partner(sat_indx),xlnk.scheduled_data_vol,xlnk.data_vol)
 
         def dlnk_label_getter(dlnk):
-            return "d%d,g%d,\ndv %d/%d"%(dlnk.window_ID,dlnk.gs_indx,dlnk.scheduled_data_vol,dlnk.data_vol)
+            return "d%d,g%d,\ndv %d/%d Mb"%(dlnk.window_ID,dlnk.gs_indx,dlnk.scheduled_data_vol,dlnk.data_vol)
 
         def obs_label_getter(obs):
-            return "o%d,\ndv %d/%d"%(obs.window_ID,obs.scheduled_data_vol,obs.data_vol)
+            return "o%d,\ndv %d/%d Mb"%(obs.window_ID,obs.scheduled_data_vol,obs.data_vol)
 
         return obs_label_getter,dlnk_label_getter,xlnk_label_getter
 
