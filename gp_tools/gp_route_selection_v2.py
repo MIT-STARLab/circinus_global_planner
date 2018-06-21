@@ -825,7 +825,7 @@ class GPDataRouteSelection():
                 while len(rts_remaining) > 0:
                     next_dr,_ = self.best_route_dv_availability(rts_remaining,dv_avail_by_wind,check_availability)
 
-                    if next_dr in drs_taken:
+                    if next_dr in drs_taken or next_dr in existing_routes_set:
                         rts_remaining.remove(next_dr)
                         continue
 
