@@ -416,6 +416,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         model.all_act_windids = pe.Set(initialize= all_acts_windids)
         #  subscript for each mutable activity a ( we can still change the activity's utilization)
         model.planwind_acts_windids = pe.Set(initialize= planwind_acts_windids)
+        model.fixed_acts_windids = pe.Set(initialize= fixed_acts_windids)
         #  subscript for each satellite
         model.sat_indcs = pe.Set(initialize=  range ( self.num_sats))
 
