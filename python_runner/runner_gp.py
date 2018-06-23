@@ -195,7 +195,7 @@ class GlobalPlannerRunner:
 
                     # filter for observations that come between end of fixed planning time and end of planning window.  the fixed planning time is the time up to which we are saying no new activity windows are allowed to be scheduled.  before that only existing routes may have activity window scheduled.
                     # if obs_wind.start >= self.gp_inst_planning_params['planning_fixed_end_dt'] and obs_wind.end <= self.gp_inst_planning_params['planning_end_obs_dt']:
-                    if gp_gen.wind_in_planning_window(self,obs_wind):
+                    if gp_gen.wind_in_planning_window(self,obs_wind,plan_wind_opt='mutable'):
                         obs_winds_filt[sat_indx].append(obs_wind)
                         wind_ids_seen.add(obs_wind)
 

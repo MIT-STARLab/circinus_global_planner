@@ -371,6 +371,7 @@ class GPDataRouteSelection():
 
 
     def filter_windows(self,dlnk_winds_flat,xlnk_winds,num_sats,start,dlnk_end_dt,xlnk_end_dt,trim_windows_at_start=False):
+        # todo: this should be updated to use gp_general_tools
 
         dlink_winds_flat_filtered = [[] for sat_indx in  range (num_sats)]
         xlink_winds_flat_filtered = [[[] for xsat_indx in  range ( num_sats)] for sat_indx in  range (num_sats)]
@@ -456,11 +457,6 @@ class GPDataRouteSelection():
 
         dr_uid = 0
 
-        # if the obs window ends later than the time prescribed, then we can't find any routes!
-        if obs_wind.original_end > self.planning_end_obs_dt:
-            return []
-        if obs_wind.original_start < self.planning_start_dt:
-            return []
 
         # print("ids: dlnk_winds_flat %d xlnk_winds %d"%(id(dlnk_winds_flat),id(xlnk_winds)))
 

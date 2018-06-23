@@ -19,6 +19,7 @@ from circinus_tools  import  constants as const
 from circinus_tools.scheduling.custom_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
 from circinus_tools.scheduling.schedule_objects import Dancecard
 from circinus_tools.scheduling.routing_objects import DataRoute,DataMultiRoute,RoutingObjectID
+from . import gp_general_tools as gp_gen
 
 def print_verbose(string,verbose=False):
     if verbose:
@@ -92,21 +93,21 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                 if wind.duration.total_seconds() < self.act_timing_helper.get_act_min_duration(wind):
                     continue
 
-                if  wind.original_start >= self.planning_start_dt  and  wind.original_end  <= self.planning_end_obs_dt:
+                if gp_gen.wind_in_planning_window(self,act,plan_wind_opt='whole'):
                     obs_winds_filtered[sat_indx]. append ( wind)
 
             for wind in dlnk_winds_flat[sat_indx]:
                 if wind.duration.total_seconds() < self.act_timing_helper.get_act_min_duration(wind):
                     continue
 
-                if  wind.original_start >= self.planning_start_dt  and  wind.original_end  <= self.planning_end_dlnk_dt:
+                if gp_gen.wind_in_planning_window(self,act,plan_wind_opt='whole'):
                     dlink_winds_flat_filtered[sat_indx]. append ( wind)
 
             for wind in xlnk_winds_flat[sat_indx]:
                 if wind.duration.total_seconds() < self.act_timing_helper.get_act_min_duration(wind):
                     continue
 
-                if  wind.original_start >= self.planning_start_dt  and  wind.original_end  <= self.planning_end_xlnk_dt:
+                if gp_gen.wind_in_planning_window(self,act,plan_wind_opt='whole'):
                     xlink_winds_flat_filtered[sat_indx]. append ( wind)
 
         return obs_winds_filtered, dlink_winds_flat_filtered, xlink_winds_flat_filtered
@@ -924,8 +925,8 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
         for o in self.model.obs_windids:
 
             # if not enough dv from this obs, then don't construct routes for it
-            if not (pe.value(self.model.var_act_dv_utilization[o]) > self.min_obs_dv_dlnk_req):
-                continue
+            # if not (pe.value(self.model.var_act_dv_utilization[o]) > self.min_obs_dv_dlnk_req):
+            #     continue
 
             remaining_obs_dv = pe.value(self.model.var_act_dv_utilization[o])
 

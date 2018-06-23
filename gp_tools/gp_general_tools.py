@@ -1,22 +1,30 @@
 from circinus_tools.scheduling.custom_window import   ObsWindow,  DlnkWindow, XlnkWindow
 
-def wind_in_planning_window(obj,wind,start_time_override=None):
-    planning_start_dt = obj.gp_inst_planning_params['planning_start_dt']
-    if start_time_override is not None:
-        planning_start_dt == start_time_override
+PLAN_WIND_OPTIONS = ['whole','fixed']
+
+def wind_in_planning_window(obj,wind,plan_wind_opt='whole'):
+
+    # anywhere in planning window from planning_start_dt to appropriate plan wind end
+    if plan_wind_opt == 'whole':
+        start_filt_dt = obj.gp_inst_planning_params['planning_start_dt']
+    # anywhere in mutable planning window, from planning_fixed_end to appropriate plan wind end
+    elif plan_wind_opt == 'mutable':
+        start_filt_dt = obj.gp_inst_planning_params['planning_fixed_end_dt']
+    else:
+        raise RuntimeWarning('plan window option %s not in implemented options %s'%(plan_wind_opt,PLAN_WIND_OPTIONS))
 
     if type(wind) == ObsWindow:
-        return wind.start >= planning_start_dt and wind.end <= obj.gp_inst_planning_params['planning_end_obs_dt']    
+        return wind.start >= start_filt_dt and wind.end <= obj.gp_inst_planning_params['planning_end_obs_dt']    
     if type(wind) == XlnkWindow:    
-        return wind.start >= planning_start_dt and wind.end <= obj.gp_inst_planning_params['planning_end_xlnk_dt']
+        return wind.start >= start_filt_dt and wind.end <= obj.gp_inst_planning_params['planning_end_xlnk_dt']
     if type(wind) == DlnkWindow:    
-        return wind.start >= planning_start_dt and wind.end <= obj.gp_inst_planning_params['planning_end_dlnk_dt']
+        return wind.start >= start_filt_dt and wind.end <= obj.gp_inst_planning_params['planning_end_dlnk_dt']
 
-def dr_in_planning_window(obj,dr,start_time_override = None):
+def dr_in_planning_window(obj,dr,plan_wind_opt='whole'):
     # obs_in_window = wind_in_planning_window(obj,obs)
 
     for wind in dr.get_winds():
-        if not wind_in_planning_window(obj,wind,start_time_override):
+        if not wind_in_planning_window(obj,wind,plan_wind_opt):
             return False
 
     # # note: dlnk planning end time should always be greater than for obs, xlnk!
