@@ -406,6 +406,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         self.all_acts_by_windid = all_acts_by_windid
         self.mutable_acts_windids = mutable_acts_windids
         self.planwind_acts_windids = planwind_acts_windids
+        self.fixed_wind_utilization_by_wind_id = fixed_wind_utilization_by_wind_id
 
         #  subscript for each dmr (data multi route) p  (p index is a hold-over from when I called them paths)
         model.dmr_ids = pe.Set(initialize= routes_by_dmr_id.keys())
@@ -416,6 +417,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         model.all_act_windids = pe.Set(initialize= all_acts_windids)
         #  subscript for each mutable activity a ( we can still change the activity's utilization)
         model.planwind_acts_windids = pe.Set(initialize= planwind_acts_windids)
+        model.fixed_acts_windids = pe.Set(initialize= fixed_acts_windids)
         #  subscript for each satellite
         model.sat_indcs = pe.Set(initialize=  range ( self.num_sats))
 
@@ -568,14 +570,14 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             return model.var_act_indic[a] >=  model.var_activity_utilization[a]
         model.c3 =pe.Constraint ( model.planwind_acts_windids,  rule=c3_rule)  
 
-        # todo: this probably should not be enforced...
+        
         # def c3c_rule( model,p):
         #     return model.var_dmr_indic[p] >=  model.var_dmr_utilization[p]
         # model.c3c =pe.Constraint ( model.dmr_ids,  rule=c3c_rule)
 
-
+        # we call this fixed, but it's really just enforcing that act wind utilization can't increase. Kinda sloppy, but should be alright.
         def c3d_rule( model,a):
-            return model.par_fixed_wind_utilization_by_wind_id[a] ==  model.var_activity_utilization[a]
+            return model.var_activity_utilization[a] <= model.par_fixed_wind_utilization_by_wind_id[a] + self.route_utilization_epsilon
         model.c3d =pe.Constraint ( fixed_acts_windids,  rule=c3d_rule)  
 
         print_verbose('make overlap constraints',verbose)
