@@ -466,6 +466,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         model.par_act_capacity = pe.Param(model.all_act_windids,initialize =capacity_by_act_windid)
         #  data volume for each data multi-route
         model.par_dmr_dv = pe.Param(model.dmr_ids,initialize ={ dmr.ID: dmr.data_vol for dmr in routes_filt})
+        model.par_fixed_wind_utilization_by_wind_id = pe.Param(model.fixed_acts_windids,initialize ={ wind_id: util for wind_id,util in fixed_wind_utilization_by_wind_id.items()})
         #  data volume for each activity in each data multi-route
 
         #  stored data volume for each activity used by each data route. only store this for the activity if the activity was found to be within the planning window filter (hence, the act in self.all_act_windids_by_obj.keys() check)
@@ -575,7 +576,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
         # debug_tools.debug_breakpt()
         def c3d_rule( model,a):
-            return fixed_wind_utilization_by_wind_id[a] ==  model.var_activity_utilization[a]
+            return model.par_fixed_wind_utilization_by_wind_id[a] ==  model.var_activity_utilization[a]
         model.c3d =pe.Constraint ( fixed_acts_windids,  rule=c3d_rule)  
 
         print_verbose('make overlap constraints',verbose)
