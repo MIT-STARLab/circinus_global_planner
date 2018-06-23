@@ -232,7 +232,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             if filter_opt=='totally_within' and not gp_gen.dr_in_planning_window(self,dmr,plan_wind_opt): 
                 pass
             # check if at least one act window in route is partially within the planning window. Pass if not.
-            elif filter_opt=='partially_within' and (dmr_end < start_filt_dt or dmr_start > self.planning_end_dt):
+            elif filter_opt=='partially_within' and (dmr_end < self.planning_start_dt or dmr_start > self.planning_end_dt):
                 pass
             elif route_has_too_short_act(dmr):
                 # print('discarding too short dlnk window')
@@ -474,7 +474,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
             model.dmr_ids,
             model.all_act_windids,
             initialize = { (dmr.ID,act.window_ID): 
-                dmr.data_vol_for_wind(act) for dmr in routes_filt for act in dmr.get_winds() if act.window_ID in mutable_acts_windids 
+                dmr.data_vol_for_wind(act) for dmr in routes_filt for act in dmr.get_winds() if act.window_ID in all_acts_windids 
             }
         )
 
@@ -574,7 +574,6 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         # model.c3c =pe.Constraint ( model.dmr_ids,  rule=c3c_rule)
 
 
-        # debug_tools.debug_breakpt()
         def c3d_rule( model,a):
             return model.par_fixed_wind_utilization_by_wind_id[a] ==  model.var_activity_utilization[a]
         model.c3d =pe.Constraint ( fixed_acts_windids,  rule=c3d_rule)  
