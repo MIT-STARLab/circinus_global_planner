@@ -368,6 +368,8 @@ class GPDataRouteSelection():
         # specifies how much data volume from a given obs is allowed to be selected for routing to other satellites. Want this to be greater than one so that routes account for more than just the exact amount of the obs dv, so that there's more choice in routes to ground 
         self.routable_obs_dv_multiplier = 8
 
+        self.max_num_dlnks_allowed_after_planning_end_xlnk = gp_inst_planning_params['max_num_dlnks_allowed_after_planning_end_xlnk']
+
 
 
     def filter_windows(self,dlnk_winds_flat,xlnk_winds,num_sats,start,dlnk_end_dt,xlnk_end_dt,trim_windows_at_start=False):
@@ -521,6 +523,10 @@ class GPDataRouteSelection():
         #  the seconds value of the very first time point
         tp_dt = time_getter_dc.get_tp_from_tp_indx(0,out_units='datetime')
 
+
+        num_dlnks_found_after_planning_end_xlnk_by_sat_indx = [0 for sat_indx in range(self.num_sats)]        
+        after_planning_end_xlnk = False
+
         #  the main loop for the dynamic programming algorithm
         # note: have to get the generator again
         for tp_indx in time_getter_dc.get_tp_indcs ():
@@ -537,6 +543,9 @@ class GPDataRouteSelection():
             tp_last_dt = tp_dt
             tp_dt = time_getter_dc.get_tp_from_tp_indx(tp_indx,out_units='datetime')
 
+            # if after xlnk planning end
+            if tp_dt > self.planning_end_xlnk_dt:
+                after_planning_end_xlnk = True
 
             for sat_indx in range (self.num_sats):
                 #  if we reach the end of time for this sat index, go to next satellite (i.e. were only looking for down links from observing sat at this point)
@@ -697,6 +706,12 @@ class GPDataRouteSelection():
                         if not act.center > tp_last_dt:
                             continue
 
+                        # check if we've already reached our quota for num allowed dlnks after the xlnks (if enforced)
+                        if self.max_num_dlnks_allowed_after_planning_end_xlnk is not None:
+                            if (after_planning_end_xlnk and 
+                                num_dlnks_found_after_planning_end_xlnk_by_sat_indx[sat_indx] > self.max_num_dlnks_allowed_after_planning_end_xlnk):
+                                continue
+
                         # we have found a dlnk in this timestep, but in order to use it, we need it to START in this timestep. So if it doesn't already, update its start time so it will. We need to make a deepcopy of the window so this change doesn't step on the toes of other routes
                         dlnk = act # save before copying
                         # deal with case where downlink actually started before this timestep
@@ -754,6 +769,10 @@ class GPDataRouteSelection():
 
                             final_route_records.append(rr_dlnk)
                             visited_act_set.add(dlnk)
+
+                            # mark as being after end of xlnk planning time, if applicable
+                            if after_planning_end_xlnk:
+                                num_dlnks_found_after_planning_end_xlnk_by_sat_indx[sat_indx] += 1
 
 
         self.final_route_records = final_route_records

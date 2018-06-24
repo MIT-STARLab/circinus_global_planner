@@ -646,7 +646,7 @@ class PipelineRunner:
             raise NotImplementedError
 
         #  check that it's the right version
-        if gp_instance_params['version'] == "0.6":
+        if gp_instance_params['version'] == "0.7":
 
             gp_instance_params['planning_params']['planning_start_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_start'])
             gp_instance_params['planning_params']['planning_fixed_end_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_fixed_end'])
