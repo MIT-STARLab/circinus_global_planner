@@ -297,6 +297,10 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         print_verbose('considering %d routes'%(len(routes_filt)),verbose)
         print_verbose('Fraction of existing routes included at RS step two: %d/%d'%(len(existing_routes_selected),len(existing_routes)),verbose)
 
+        # guard against the case where a utilization number has gone negative due to numerical bounciness
+        for rtid, util in utilization_by_existing_route_id.items():
+            utilization_by_existing_route_id[rtid] = max(util,0)
+
         self.routes_filt = routes_filt
         self.existing_routes = existing_routes
         self.utilization_by_existing_route_id = utilization_by_existing_route_id
@@ -952,9 +956,11 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                     if wind_sched_dv_check[wind] > previous_dv_utilization + self.dv_epsilon:
                         raise RuntimeWarning('inconsistent activity scheduling results, data volumes mismatch, fixed window. Previous dv scheduled: %f, current scheduled %f. Verify that fixed_utilization_epsilon (%f) is not too large relative to dv_epsilon (%f)'%(previous_dv_utilization,wind_sched_dv_check[wind],self.fixed_utilization_epsilon,self.dv_epsilon))
 
-                #  also check that we're not scheduling too much data volume from the window ( check this after we already verified data volume usage relative to previous utilization, so we see that error first -  helps to separate out that specific case)
-                if wind_sched_dv_check[wind] >= wind.original_data_vol + self.dv_epsilon:
-                    raise RuntimeWarning('too much data volume was scheduled for window %s'%(wind))
+                # only check for acts in planning window
+                if wind.window_ID in self.planwind_acts_windids:
+                    #  also check that we're not scheduling too much data volume from the window ( check this after we already verified data volume usage relative to previous utilization, so we see that error first -  helps to separate out that specific case)
+                    if wind_sched_dv_check[wind] >= wind.original_data_vol + self.dv_epsilon:
+                        raise RuntimeWarning('too much data volume was scheduled for window %s'%(wind))
 
 
                 #  only update windows that are mutable

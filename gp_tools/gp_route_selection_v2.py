@@ -826,7 +826,7 @@ class GPDataRouteSelection():
             if curr_dr in existing_routes_set:
                 # ensure type correctness, and that it has sufficient data volume
                 assert(type(curr_dr)==DataMultiRoute)
-                assert(curr_dr.data_vol >= self.min_obs_dv_dlnk_req)
+                assert(curr_dr.data_vol >= self.min_obs_dv_dlnk_req - self.dv_epsilon)
                 dmr = curr_dr
             #  create a new data multi-route encapsulating the data route. use the existing route's ID -  it won't need it anymore.
             else:    
