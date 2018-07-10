@@ -427,11 +427,14 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
         fig_name='plots/test_tlm_aoi_plot.pdf'
     )
 
+    plot_x_range = (0,120)
+
     # plot obs latency histogram
     pltl.plot_histogram(
         data=metrics_plot_inputs['initial_lat_by_obs_sched'].values(),
         num_bins = 40,
         plot_type = 'histogram',
+        plot_x_range= plot_x_range,
         x_title='Latency (mins)',
         y_title='Number of observations',
         plot_title = 'Histogram of initial latency by obs - scheduled (min dv %.1f Mb)'%(gp_runner_inst.as_params['min_obs_dv_dlnk_req_Mb']), 
@@ -446,6 +449,7 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
         data=metrics_plot_inputs['initial_lat_by_obs_sched'].values(),
         num_bins = 40,
         plot_type = 'cdf',
+        plot_x_range= plot_x_range,
         x_title='Latency (mins)',
         y_title='Number of observations',
         plot_title = 'Histogram of initial latency by obs - scheduled (min dv %.1f Mb)'%(gp_runner_inst.as_params['min_obs_dv_dlnk_req_Mb']), 
@@ -460,6 +464,7 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
         data=metrics_plot_inputs['initial_lat_by_obs_rs'].values(),
         num_bins = 40,
         plot_type = 'histogram',
+        plot_x_range= plot_x_range,
         x_title='Latency (mins)',
         y_title='Number of observations',
         plot_title = 'Histogram of initial latency by obs - RS output (min dv %.1f Mb)'%(gp_runner_inst.as_params['min_obs_dv_dlnk_req_Mb']), 
@@ -474,6 +479,7 @@ def  plot_activity_scheduling_results ( gp_runner_inst,all_possible_winds,sel_ro
         data=metrics_plot_inputs['initial_lat_by_obs_rs'].values(),
         num_bins = 40,
         plot_type = 'cdf',
+        plot_x_range= plot_x_range,
         x_title='Latency (mins)',
         y_title='Number of observations',
         plot_title = 'Histogram of initial latency by obs - RS output (min dv %.1f Mb)'%(gp_runner_inst.as_params['min_obs_dv_dlnk_req_Mb']), 
