@@ -767,7 +767,7 @@ if __name__ == "__main__":
         args.gp_general_inputs_file = args.gp_general_inputs_file.replace('/','\\')
         args.gp_inst_inputs_file = args.gp_inst_inputs_file.replace('/','\\')
         args.rs_s1_pickle = args.rs_s1_pickle.replace('/','\\')
-        args.rs_s2_pickl = args.rs_s2_pickle.replace('/','\\')
+        args.rs_s2_pickle = args.rs_s2_pickle.replace('/','\\')
         args.as_pickle = args.as_pickle.replace('/','\\')
 
     # with open(os.path.join(REPO_BASE,'crux/config/examples/orbit_prop_inputs_ex.json'),'r') as f:
@@ -785,6 +785,13 @@ if __name__ == "__main__":
 
     with open(os.path.join(REPO_BASE,args.gp_inst_inputs_file),'r') as f:
         gp_instance_params_inputs = json.load(f)
+
+    if not args.rs_s1_pickle == '':
+        args.rs_s1_pickle = os.path.join(REPO_BASE,args.rs_s1_pickle)
+    if not args.rs_s2_pickle == '':
+        args.rs_s2_pickle = os.path.join(REPO_BASE,args.rs_s2_pickle)
+    if not args.as_pickle == '':
+        args.as_pickle = os.path.join(REPO_BASE,args.as_pickle)
 
     data = {
         # "orbit_prop_data": orbit_prop_data,
