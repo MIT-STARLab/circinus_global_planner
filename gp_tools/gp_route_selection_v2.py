@@ -462,7 +462,7 @@ class GPDataRouteSelection():
 
         # print("ids: dlnk_winds_flat %d xlnk_winds %d"%(id(dlnk_winds_flat),id(xlnk_winds)))
 
-        start_dt = obs_wind.original_end
+        start_dt = obs_wind.center
         # planning_end_dlnk_dt should be > planning_end_obs,xlnk_dt, to allow the sats to reach into the future for dlnk "backhaul" - high latency, bulk DV delivery
         dlnk_end_dt = self.planning_end_dlnk_dt
         xlnk_end_dt = self.planning_end_xlnk_dt
@@ -470,10 +470,11 @@ class GPDataRouteSelection():
         # crazy looking line, but it's easy... dictionary of end times by sat_indx - end_dt if not observing sat, else end_obs_sat_dt
         # end_dt_by_sat_indx = {sat_indx: end_dt if sat_indx != obs_wind.sat_indx else end_obs_sat_dt for sat_indx in range (self.num_sats)}
         
-        # if obs_wind.window_ID == 53:
-        #     debug_tools.debug_breakpt()
 
-        dlnk_winds_flat_filt,xlnk_winds_filt =  self.filter_windows (dlnk_winds_flat,xlnk_winds, self.num_sats, obs_wind.original_end, dlnk_end_dt, xlnk_end_dt , trim_windows_at_start=True)
+        dlnk_winds_flat_filt,xlnk_winds_filt =  self.filter_windows (dlnk_winds_flat,xlnk_winds, self.num_sats, start_dt, dlnk_end_dt, xlnk_end_dt , trim_windows_at_start=True)
+
+        # if obs_wind.window_ID == 43:
+        #     debug_tools.debug_breakpt()
 
         if verbose:
             print ('Running route selection for obs: %s'%(obs_wind))
@@ -667,7 +668,7 @@ class GPDataRouteSelection():
                     xlnk_wind = best_xlnk_cand[3]
                     #  the release time of this new route record is the end of the cross-link - i.e. this route record is valid for all t past the end of the cross-link
                     #  note that it may be possible that the "best" candidate cross-link (most dv moved) has a later release time than another candidate, and this causes some later cross-links to be ruled out because they start before the best (and end after the other candidate). We'll assume this is an acceptable error though. the time step for the dance cards should be made small enough that this is not a big deal.
-                    rr_new.release_time = xlnk_wind.original_end
+                    rr_new.release_time = xlnk_wind.center
 
                     # deconf_rt is a DeconflictedRoute namedtuple, from above
                     for deconf_rt in xlnk_candidate_rts:
@@ -723,6 +724,10 @@ class GPDataRouteSelection():
                         #  figure out if we want to use the route record from the last timepoint, or if a cross-link has delivered more data volume. grab the latter if valid
                         rr_pre_dlnk,avail_dv_for_dlnk = self.get_best_rr(rr_dancecards,dlnk,tp_indx,sat_indx,self.min_rs_route_dv,self.act_timing_helper)
 
+                        # if obs_wind.window_ID == 43:
+                        #     if dlnk.window_ID == 81:
+                        #         debug_tools.debug_breakpt()
+
                         # couldn't find any routes valid for this dlnk to send down
                         if rr_pre_dlnk is None or avail_dv_for_dlnk < self.min_rs_route_dv:
                             continue
@@ -733,7 +738,7 @@ class GPDataRouteSelection():
                         if rr_pre_dlnk.dv > 0:
                             # rr_dlnk = copy(rr_pre_dlnk)
                             #  note: release time no longer matters because were not putting this route record back into the dance card.
-                            rr_dlnk = RouteRecord(dv=rr_pre_dlnk.dv,release_time=dlnk.end,routes=[])
+                            rr_dlnk = RouteRecord(dv=rr_pre_dlnk.dv,release_time=dlnk.center,routes=[])
                             
                             # available data volume is limited by how much we had at the last route record ( which could be as much as the observation data volume multiplied by the routable_obs_dv_multiplier factor)
                             available_dv = rr_pre_dlnk.dv
@@ -779,7 +784,7 @@ class GPDataRouteSelection():
 
         all_routes = [dr for rr in final_route_records for dr in rr]
         for dr in all_routes:
-            dr.validate(self.act_timing_helper)
+            dr.validate(self.act_timing_helper,time_option='center')
 
         return all_routes
 

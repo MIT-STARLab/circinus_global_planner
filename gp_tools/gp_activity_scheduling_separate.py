@@ -934,8 +934,6 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
 
 
         # update the window beginning and end times based upon their amount of scheduled data volume
-        # keep track of which windows we've updated, because we should only update once
-        updated_winds = set()
         for dmr in all_updated_routes:
             # validate the data multi route (and in turn, the scheduled data vols of all the data routes under it)
             dmr.validate(self.act_timing_helper)
@@ -967,12 +965,9 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                 if not wind.window_ID in self.mutable_acts_windids:
                     continue
 
-                # if it hasn't been updated yet
-                if not wind in updated_winds:
-                    # note that the line below seems like it may break the scheduled times for activities by specifying a minimum activity duration. however, this minimum activity duration is already accounted for in scheduling constraints
-                    wind.scheduled_data_vol = scheduled_dv_by_wind[wind]
-                    wind.update_duration_from_scheduled_dv (min_duration_s=self.act_timing_helper.get_act_min_duration(wind))
-                    updated_winds.add(wind)
+                # note that the line below seems like it may break the scheduled times for activities by specifying a minimum activity duration. however, this minimum activity duration is already accounted for in scheduling constraints
+                wind.scheduled_data_vol = scheduled_dv_by_wind[wind]
+                wind.update_duration_from_scheduled_dv (min_duration_s=self.act_timing_helper.get_act_min_duration(wind))
 
 
         return scheduled_routes,all_updated_routes
