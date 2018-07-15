@@ -54,11 +54,22 @@ def get_metrics_params(gp_runner_inst_params):
         metrics_params['sats_emin_Wh'].append(sat_batt_storage['e_min'])
         metrics_params['sats_emax_Wh'].append(sat_batt_storage['e_max'])
 
+
+    metrics_params['sats_dmin_Gb'] = []
+    metrics_params['sats_dmax_Gb'] = []        
+    for d_params in sat_params['data_storage_params_by_sat_id'].values():
+        storage_opt = d_params['storage_option']
+        d_min = d_params['data_storage_Gbit']['d_min'][storage_opt]
+        d_max = d_params['data_storage_Gbit']['d_max'][storage_opt]
+
+        metrics_params['sats_dmin_Gb'].append(d_min)
+        metrics_params['sats_dmax_Gb'].append(d_max)
+
     metrics_params['timestep_s'] = scenario_params['timestep_s']
 
     return metrics_params
 
-def calc_activity_scheduling_results ( gp_runner_inst,obs_winds,dlnk_winds_flat,rs_routes_by_obs,sched_routes, energy_usage):
+def calc_activity_scheduling_results ( gp_runner_inst,obs_winds,dlnk_winds_flat,rs_routes_by_obs,sched_routes, energy_usage,data_usage):
     mc = MetricsCalcs(get_metrics_params(gp_runner_inst.params))
 
     # gp_met = GPMetrics(gp_runner_inst.params)
@@ -119,7 +130,8 @@ def calc_activity_scheduling_results ( gp_runner_inst,obs_winds,dlnk_winds_flat,
     sats_tlm_update_hist = gp_netsim.get_all_sats_tlm_update_hist()
     aoi_sat_tlm_stats = mc.assess_aoi_sat_ttc_option(sats_cmd_update_hist,ttc_option='tlm',aoi_x_axis_units=time_units,verbose = True)
 
-    resource_margin_stats = mc.assess_energy_resource_margin(energy_usage,verbose = True)
+    energy_margin_stats = mc.assess_energy_resource_margin(energy_usage,verbose = True)
+    data_margin_stats = mc.assess_data_resource_margin(data_usage,verbose = True)
 
 
     plot_outputs = {}

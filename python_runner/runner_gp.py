@@ -553,7 +553,7 @@ class GlobalPlannerRunner:
         total_plan_and_sched_runtime = pas_b - pas_a
 
         #  note that these calculations may be off when running the constellation simulation. don't rely on these for the constellation simulation.  they could be off because there might be duplicate/copy observation windows
-        metrics_plot_inputs = output_helper.calc_activity_scheduling_results (self,obs_winds,dlnk_winds_flat,sel_routes_by_obs,scheduled_routes, energy_usage)
+        metrics_plot_inputs = output_helper.calc_activity_scheduling_results (self,obs_winds,dlnk_winds_flat,sel_routes_by_obs,scheduled_routes, energy_usage,data_usage)
 
         print_verbose('total_plan_and_sched_runtime (warning: may include (un)pickling time and RS plot output)',verbose)
         print_verbose("%.2f seconds"%(total_plan_and_sched_runtime),verbose)
@@ -621,6 +621,7 @@ class PipelineRunner:
             orbit_prop_inputs['sat_params']['power_params'], all_sat_ids1 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['power_params'])
             orbit_prop_inputs['sat_params']['data_storage_params'], all_sat_ids2 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['data_storage_params'])
             orbit_prop_inputs['sat_params']['initial_state'], all_sat_ids3 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['initial_state'])
+            orbit_prop_inputs['sat_params']['data_storage_params_by_sat_id'], all_sat_ids2 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['data_storage_params'],output_format='dict')
 
             #  grab the list for satellite ID order.  if it's "default", we will create it and save it for future use here
             sat_id_order=orbit_prop_inputs['sat_params']['sat_id_order']

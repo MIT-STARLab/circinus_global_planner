@@ -275,6 +275,9 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
         # deal with the fact that some activities have pretty much the same center time, and we need to merge those into a single timepoint in T_s rather than multiple. This is necessary because we need to be able to sum together the effects of all links that are overlapping in time, so that we can account for their combined effect in constraints. E.g., the sum of data volume sent out from a satellite over two outgoing, concurrent crosslinks <= available dv before their mutual center time. Note that this is not strictly necessary for when we constrain each satellite to only allow a single activity at a time, but it's good to build this in now so that the underlying model is safer and less able to bug out.
         for sat_indx,time_link_objs_list in all_link_times_link_objs_by_sat_indx.items():
+            if len(time_link_objs_list) == 0:
+                continue
+
             # grab the first time in the list
             # curr_time = time_link_objs_list[0][0]
             curr_time = time_link_objs_list[0][0]
@@ -445,6 +448,7 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
 
         except IndexError:
             raise RuntimeWarning('sat_indx out of range. Are you sure all of your input files are consistent? (including pickles)')        
+
         #  subscript for each activity a
         model.act_windids = pe.Set(initialize= all_acts_windids)
         #  subscript for each obs o
