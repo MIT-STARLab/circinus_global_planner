@@ -93,21 +93,21 @@ class GPActivitySchedulingCoupled(GPActivityScheduling):
                 if wind.duration.total_seconds() < self.act_timing_helper.get_act_min_duration(wind):
                     continue
 
-                if gp_gen.wind_in_planning_window(self,act,plan_wind_opt='whole'):
+                if gp_gen.wind_in_planning_window(self,wind,plan_wind_opt='whole'):
                     obs_winds_filtered[sat_indx]. append ( wind)
 
             for wind in dlnk_winds_flat[sat_indx]:
                 if wind.duration.total_seconds() < self.act_timing_helper.get_act_min_duration(wind):
                     continue
 
-                if gp_gen.wind_in_planning_window(self,act,plan_wind_opt='whole'):
+                if gp_gen.wind_in_planning_window(self,wind,plan_wind_opt='whole'):
                     dlink_winds_flat_filtered[sat_indx]. append ( wind)
 
             for wind in xlnk_winds_flat[sat_indx]:
                 if wind.duration.total_seconds() < self.act_timing_helper.get_act_min_duration(wind):
                     continue
 
-                if gp_gen.wind_in_planning_window(self,act,plan_wind_opt='whole'):
+                if gp_gen.wind_in_planning_window(self,wind,plan_wind_opt='whole'):
                     xlink_winds_flat_filtered[sat_indx]. append ( wind)
 
         return obs_winds_filtered, dlink_winds_flat_filtered, xlink_winds_flat_filtered
