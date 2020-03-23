@@ -22,6 +22,8 @@ import multiprocessing as mp
 # add this main tester so that if we're running the gp remotely (e.g. in circinus sim), we don't try to reinclude a bunch of modules that are already present at the remote
 if __name__ == "__main__":
     sys.path.append ('..')
+sys.path.insert(0, "../circinus_sim")  # allows .sim_agents to be found here, as well as other equivelent modules
+sys.path.insert(0, "../circinus_tools")  # allows .sim_agents to be found here, as well as other equivelent modules
 from circinus_tools  import time_tools as tt
 from circinus_tools  import io_tools
 from circinus_tools.scheduling.routing_objects import DataMultiRoute
