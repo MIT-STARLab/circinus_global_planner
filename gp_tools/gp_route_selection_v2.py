@@ -363,7 +363,7 @@ class GPDataRouteSelection():
 
         self.final_route_records = None
 
-        self.act_timing_helper = ActivityTimingHelper(sat_params['activity_params'],orbit_params['sat_ids_by_orbit_name'],sat_params['sat_id_order'],gp_params['orbit_prop_params']['version'])
+        self.act_timing_helper = ActivityTimingHelper(sat_params['activity_params'],orbit_params['sat_ids_by_orbit_name'],sat_params['sat_id_order'],None) 
 
         # specifies how much data volume from a given obs is allowed to be selected for routing to other satellites. Want this to be greater than one so that routes account for more than just the exact amount of the obs dv, so that there's more choice in routes to ground 
         self.routable_obs_dv_multiplier = 8
@@ -831,7 +831,9 @@ class GPDataRouteSelection():
             if curr_dr in existing_routes_set:
                 # ensure type correctness, and that it has sufficient data volume
                 assert(type(curr_dr)==DataMultiRoute)
-                assert(curr_dr.data_vol >= self.min_obs_dv_dlnk_req - self.dv_epsilon)
+                # WG: only do the assert below if it is a GP made DMR, ignore if made by LP
+                if not curr_dr.ID.creator_agent_ID[0] == 'S':
+                    assert(curr_dr.data_vol >= self.min_obs_dv_dlnk_req - self.dv_epsilon)
                 dmr = curr_dr
             #  create a new data multi-route encapsulating the data route. use the existing route's ID -  it won't need it anymore.
             else:    

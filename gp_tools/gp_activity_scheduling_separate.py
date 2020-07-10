@@ -7,16 +7,17 @@ from  datetime import timedelta
 from copy import  deepcopy
 from math import ceil
 from collections import OrderedDict,Counter
+import time
 
 from pyomo import environ  as pe
 
 import numpy as np
-
-from circinus_tools  import time_tools as tt
+from circinus_tools  import time_tools as tt 
 from circinus_tools  import  constants as const
 from circinus_tools.scheduling.custom_window import   ObsWindow,  DlnkWindow, XlnkWindow,  EclipseWindow
 from circinus_tools.scheduling.schedule_objects import Dancecard
 from circinus_tools.scheduling.routing_objects import DataMultiRoute
+
 from .gp_activity_scheduling_super import  GPActivityScheduling
 from . import gp_general_tools as gp_gen
 
@@ -619,7 +620,7 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         )
 
         print_verbose('make energy, data constraints',verbose)
-
+        a = time.time()
 
         #  energy constraints [6]
         # todo: maybe this ought to be moved to the super class, but i don't anticipate this code changing much any time soon, so i'll punt that.
@@ -694,7 +695,11 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                         + discharge_factor * base_delta_e
                     )
 
+        b = time.time()
 
+        print('Time to make energy constraints: %f sec' % (b - a))
+        
+        a = time.time()
         #  data storage constraints [7]
         # note that these constraints are overly conservative, because the data storage intervals calculated for each route are based on the original start and end times of activities, not on the start and end times adjusted for the activity's utilization. Unfortunately that's a difficulty of how we discretized the decision making here...
         model.c7  = pe.ConstraintList()
@@ -718,6 +723,9 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
                         model.c7.add( model.var_sats_dstore[sat_indx,tp_indx] == 0)
 
 
+        b = time.time()
+
+        print('Time to make data constraints: %f sec' % (b - a))
 
         #  observation latency score factor constraints [8]
         model.c8  = pe.ConstraintList()

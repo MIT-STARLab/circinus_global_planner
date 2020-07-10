@@ -22,8 +22,18 @@ import multiprocessing as mp
 # add this main tester so that if we're running the gp remotely (e.g. in circinus sim), we don't try to reinclude a bunch of modules that are already present at the remote
 if __name__ == "__main__":
     sys.path.append ('..')
-sys.path.insert(0, "../circinus_sim")  # allows .sim_agents to be found here, as well as other equivelent modules
-sys.path.insert(0, "../circinus_tools")  # allows .sim_agents to be found here, as well as other equivelent modules
+
+try: # First try will work if subrepo circinus_tools is populated, or if prior module imported from elsewhere (so this covers all the rest of the imports in this module as well)
+    from circinus_tools import io_tools
+except ImportError:
+    print("Importing circinus_tools from parent repo...")
+    try:
+        sys.path.insert(0, "../../")
+        from circinus_tools import io_tools
+    except ImportError:
+        print("Neither local nor parent-level circinus_tools found.")
+
+# Covered by above try/catch.
 from circinus_tools  import time_tools as tt
 from circinus_tools  import io_tools
 from circinus_tools.scheduling.routing_objects import DataMultiRoute
@@ -98,7 +108,7 @@ class GlobalPlannerRunner:
         if self.gp_inst_planning_params['planning_end_dlnk_dt'] > self.scenario_params['end_utc_dt']:
             raise RuntimeError("GP instance dlnk end time (%s) is greater than scenario end time (%s)"%(self.gp_inst_planning_params['planning_end_dlnk_dt'],self.scenario_params['end_utc']))
 
-        self.act_timing_helper = ActivityTimingHelper(self.sat_params['activity_params'],self.sat_orbit_params['sat_ids_by_orbit_name'],self.sat_params['sat_id_order'],gp_params['orbit_prop_params']['version'])
+        self.act_timing_helper = ActivityTimingHelper(self.sat_params['activity_params'],self.sat_orbit_params['sat_ids_by_orbit_name'],self.sat_params['sat_id_order'],None) 
 
 
     def run_activity_scheduling( self, routes_by_obs,existing_route_data,ecl_winds,verbose=False):
@@ -113,10 +123,12 @@ class GlobalPlannerRunner:
         existing_routes = existing_route_data.get('existing_routes',[])
         utilization_by_existing_route_id = existing_route_data.get('utilization_by_existing_route_id',{})
 
-        print_verbose('make activity scheduling model',verbose)
+        print('make activity scheduling model') # always print this to mark gp progress
+        #print_verbose('make activity scheduling model',verbose)
         gp_as.make_model (routes_flat, existing_routes, utilization_by_existing_route_id, ecl_winds,verbose = verbose)
         stats =gp_as.get_stats (verbose = verbose)
-        print_verbose('solve activity scheduling',verbose)
+        print('solve activity scheduling') # always print this to mark gp progress
+        #print_verbose('solve activity scheduling',verbose)
         t_a = time.time()
         gp_as.solve ()
         t_b = time.time()
@@ -173,7 +185,8 @@ class GlobalPlannerRunner:
     def run_route_selection_v2_step1( self,obs_winds,dlnk_winds_flat,xlnk_winds,existing_route_data,latest_dr_uid,verbose=False):
         # todo: it would be nice at some point to incorporate the use of existing routes into here.  but that's definitely for future work.
 
-        print_verbose ('nominal route selection v2 step 1',verbose)
+        print('nominal route selection v2 step 1') # always print this to mark GP progress
+        #print_verbose ('nominal route selection v2 step 1',verbose)
 
         obs_indx =0
         # dict of all routes, with obs as key
@@ -330,6 +343,7 @@ class GlobalPlannerRunner:
 
         gp_rs = gprsv2.GPDataRouteSelection ( self.params)
 
+        print('route selection v2 step 2')
         t_a = time.time()
         selected_rts_by_obs = gp_rs.run_step2(routes_by_obs_filt,overlap_cnt_by_route,existing_routes_set)
         t_b = time.time()
@@ -369,7 +383,7 @@ class GlobalPlannerRunner:
             #  otherwise run route selection step 1
             else:
                 print_verbose('Run route selection step 1',verbose)
-                routes_by_obs,all_stats,route_times_s, obs_indx, latest_dr_uid  =  self.run_route_selection_v2_step1(obs_winds,dlnk_winds_flat,xlnk_winds,existing_route_data,latest_dr_uid,verbose=self.rs_v2_params['verbose_step1'])
+                routes_by_obs,all_stats,route_times_s, obs_indx, latest_dr_uid  =  self.run_route_selection_v2_step1(obs_winds,dlnk_winds_flat,xlnk_winds,existing_route_data,latest_dr_uid,verbose=verbose and self.rs_v2_params['verbose_step1'])
                 # routes_by_obs,all_stats,route_times_s, obs_indx, weights_tups  =  self.run_test_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds)
 
             #  pickle before step 2 because step 2 doesn't take that long
@@ -437,12 +451,7 @@ class GlobalPlannerRunner:
 
         return sel_routes_by_obs,ecl_winds,latest_dr_uid,window_uid,pas_a
 
-    def run( self, existing_route_data, verbose=False):
-
-        print_verbose('planning_start_dt: %s'%(self.gp_inst_planning_params['planning_start_dt']),verbose)
-        print_verbose('planning_end_obs_dt: %s'%(self.gp_inst_planning_params['planning_end_obs_dt']),verbose)
-        print_verbose('planning_end_xlnk_dt: %s'%(self.gp_inst_planning_params['planning_end_xlnk_dt']),verbose)
-        print_verbose('planning_end_dlnk_dt: %s'%(self.gp_inst_planning_params['planning_end_dlnk_dt']),verbose)
+    def run( self, existing_route_data, relevant_activity_windows, verbose=False):
 
         #################################
         #  parse inputs, if desired
@@ -450,23 +459,16 @@ class GlobalPlannerRunner:
 
         load_windows = (not self.other_params['rs_s1_pickle_input'] and not self.other_params['rs_s2_pickle_input']) or self.gp_inst_as_params['plot_activity_scheduling_results'] or self.rs_general_params['plot_route_selection_results']
 
+        # TODO: move this to run once at sim start and change GP to only load windows relevant to planning horizon
         if load_windows:
-            print_verbose('Load files',verbose)
-
-            # parse the inputs into activity windows
-            window_uid = 0
-            print_verbose('Load obs',verbose)
-            obs_winds, window_uid =self.io_proc.import_obs_winds(window_uid)
-            print_verbose('Load dlnks',verbose)
-            dlnk_winds, dlnk_winds_flat, window_uid =self.io_proc.import_dlnk_winds(window_uid)
-            print_verbose('Load xlnks',verbose)
-            xlnk_winds, xlnk_winds_flat, window_uid =self.io_proc.import_xlnk_winds(window_uid)
-            # note: this import is currently done independently from circinus constellation sim. If we ever need to share knowledge about ecl winds between the two, will need to make ecl winds an input from const sim
-            print_verbose('Load ecl',verbose)
-            ecl_winds, window_uid =self.io_proc.import_eclipse_winds(window_uid)
-
-            # with open('temp.pkl','wb') as f:
-            #     pickle.dump( {'params': self.params},f)
+            # unpack relevant activity windows (occur during time horizon, even partially)
+            obs_winds = relevant_activity_windows['obs_winds']
+            dlnk_winds = relevant_activity_windows['dlnk_winds']
+            dlnk_winds_flat = relevant_activity_windows['dlnk_winds_flat']
+            xlnk_winds = relevant_activity_windows['xlnk_winds']
+            xlnk_winds_flat = relevant_activity_windows['xlnk_winds_flat']
+            ecl_winds = relevant_activity_windows['ecl_winds']
+            window_uid = relevant_activity_windows['next_window_uid']
 
             # important to check this because window unique IDs are used as hashes in dictionaries in the scheduling code
             print_verbose('Validate windows',verbose)
@@ -555,7 +557,7 @@ class GlobalPlannerRunner:
         total_plan_and_sched_runtime = pas_b - pas_a
 
         #  note that these calculations may be off when running the constellation simulation. don't rely on these for the constellation simulation.  they could be off because there might be duplicate/copy observation windows
-        metrics_plot_inputs = output_helper.calc_activity_scheduling_results (self,obs_winds,dlnk_winds_flat,sel_routes_by_obs,scheduled_routes, energy_usage,data_usage)
+        metrics_plot_inputs = output_helper.calc_activity_scheduling_results (self,obs_winds,dlnk_winds_flat,sel_routes_by_obs,scheduled_routes, energy_usage,data_usage,verbose)
 
         print_verbose('total_plan_and_sched_runtime (warning: may include (un)pickling time and RS plot output)',verbose)
         print_verbose("%.2f seconds"%(total_plan_and_sched_runtime),verbose)
@@ -612,67 +614,53 @@ class PipelineRunner:
         if data['rs_s1_pickle'] and data['rs_s2_pickle']:
             raise Exception('Should only specify 1 input pickle for route selection')
 
-        if orbit_prop_inputs['version'] == "0.8":
-            # do some useful transformations while preserving the structure of the inputs ( important for avoiding namespace clashes)
-            orbit_prop_inputs['scenario_params']['start_utc_dt'] = tt.iso_string_to_dt ( orbit_prop_inputs['scenario_params']['start_utc'])
-            orbit_prop_inputs['scenario_params']['end_utc_dt'] = tt.iso_string_to_dt ( orbit_prop_inputs['scenario_params']['end_utc'])
-            orbit_prop_inputs['sat_params']['num_sats'] = orbit_prop_inputs['sat_params']['num_satellites']
-            orbit_prop_inputs['gs_params']['num_gs'] = orbit_prop_inputs['gs_params']['num_stations']
-            orbit_prop_inputs['sat_params']['pl_data_rate'] = orbit_prop_inputs['sat_params']['payload_data_rate_Mbps']
-            # orbit_prop_inputs['sat_orbit_params'], dummy = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_orbit_params'],force_duplicate =  True)
-            orbit_prop_inputs['sat_params']['power_params'], all_sat_ids1 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['power_params'])
-            orbit_prop_inputs['sat_params']['data_storage_params'], all_sat_ids2 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['data_storage_params'])
-            orbit_prop_inputs['sat_params']['initial_state'], all_sat_ids3 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['initial_state'])
-            orbit_prop_inputs['sat_params']['data_storage_params_by_sat_id'], all_sat_ids2 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['data_storage_params'],output_format='dict')
+        # do some useful transformations while preserving the structure of the inputs ( important for avoiding namespace clashes)
 
-            #  grab the list for satellite ID order.  if it's "default", we will create it and save it for future use here
-            sat_id_order=orbit_prop_inputs['sat_params']['sat_id_order']
-            #  make the satellite ID order. if the input ID order is default, then will assume that the order is the same as all of the IDs found in the power parameters
-            sat_id_order = io_tools.make_and_validate_sat_id_order(sat_id_order,orbit_prop_inputs['sat_params']['sat_id_prefix'],orbit_prop_inputs['sat_params']['num_sats'],all_sat_ids1)
-            io_tools.validate_ids(validator=sat_id_order,validatee=all_sat_ids1)
-            io_tools.validate_ids(validator=sat_id_order,validatee=all_sat_ids2)
-            io_tools.validate_ids(validator=sat_id_order,validatee=all_sat_ids3)
-            orbit_prop_inputs['sat_params']['sat_id_order'] = sat_id_order
+        orbit_prop_inputs['scenario_params']['start_utc_dt'] = tt.iso_string_to_dt ( orbit_prop_inputs['scenario_params']['start_utc'])
+        orbit_prop_inputs['scenario_params']['end_utc_dt'] = tt.iso_string_to_dt ( orbit_prop_inputs['scenario_params']['end_utc'])
+        orbit_prop_inputs['sat_params']['num_sats'] = orbit_prop_inputs['sat_params']['num_satellites']
+        orbit_prop_inputs['gs_params']['num_gs'] = orbit_prop_inputs['gs_params']['num_stations']
+        orbit_prop_inputs['sat_params']['pl_data_rate'] = orbit_prop_inputs['sat_params']['payload_data_rate_Mbps']
+        orbit_prop_inputs['sat_params']['power_params'], all_sat_ids1 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['power_params'])
+        orbit_prop_inputs['sat_params']['data_storage_params'], all_sat_ids2 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['data_storage_params'])
+        orbit_prop_inputs['sat_params']['initial_state'], all_sat_ids3 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['initial_state'])
+        orbit_prop_inputs['sat_params']['data_storage_params_by_sat_id'], all_sat_ids2 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['data_storage_params'],output_format='dict')
 
-            gs_id_order = io_tools.make_and_validate_gs_id_order(orbit_prop_inputs['gs_params'])
-            orbit_prop_inputs['gs_params']['gs_id_order'] = gs_id_order
+        #  grab the list for satellite ID order.  if it's "default", we will create it and save it for future use here
+        sat_id_order=orbit_prop_inputs['sat_params']['sat_id_order']
+        #  make the satellite ID order. if the input ID order is default, then will assume that the order is the same as all of the IDs found in the power parameters
+        sat_id_order = io_tools.make_and_validate_sat_id_order(sat_id_order,orbit_prop_inputs['sat_params']['sat_id_prefix'],orbit_prop_inputs['sat_params']['num_sats'],all_sat_ids1)
+        io_tools.validate_ids(validator=sat_id_order,validatee=all_sat_ids1)
+        io_tools.validate_ids(validator=sat_id_order,validatee=all_sat_ids2)
+        io_tools.validate_ids(validator=sat_id_order,validatee=all_sat_ids3)
+        orbit_prop_inputs['sat_params']['sat_id_order'] = sat_id_order
 
-            orbit_prop_inputs['sat_params']['power_params_sorted'] = io_tools.sort_input_params_by_sat_IDs(orbit_prop_inputs['sat_params']['power_params'],sat_id_order)
-            orbit_prop_inputs['sat_params']['power_params_by_sat_id'], all_sat_ids1 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['power_params'],output_format='dict')
-            orbit_prop_inputs['sat_params']['data_storage_params_sorted'] = io_tools.sort_input_params_by_sat_IDs(orbit_prop_inputs['sat_params']['data_storage_params'],sat_id_order)
-            orbit_prop_inputs['sat_params']['sats_state_sorted'] = io_tools.sort_input_params_by_sat_IDs(orbit_prop_inputs['sat_params']['initial_state'],sat_id_order)
+        gs_id_order = io_tools.make_and_validate_gs_id_order(orbit_prop_inputs['gs_params'])
+        orbit_prop_inputs['gs_params']['gs_id_order'] = gs_id_order
+
+        orbit_prop_inputs['sat_params']['power_params_sorted'] = io_tools.sort_input_params_by_sat_IDs(orbit_prop_inputs['sat_params']['power_params'],sat_id_order)
+        orbit_prop_inputs['sat_params']['power_params_by_sat_id'], all_sat_ids1 = io_tools.unpack_sat_entry_list( orbit_prop_inputs['sat_params']['power_params'],output_format='dict')
+        orbit_prop_inputs['sat_params']['data_storage_params_sorted'] = io_tools.sort_input_params_by_sat_IDs(orbit_prop_inputs['sat_params']['data_storage_params'],sat_id_order)
+        orbit_prop_inputs['sat_params']['sats_state_sorted'] = io_tools.sort_input_params_by_sat_IDs(orbit_prop_inputs['sat_params']['initial_state'],sat_id_order)
+
+
+        gp_instance_params['planning_params']['planning_start_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_start'])
+        gp_instance_params['planning_params']['planning_fixed_end_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_fixed_end'])
+        gp_instance_params['planning_params']['planning_end_obs_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_end_obs'])
+        gp_instance_params['planning_params']['planning_end_xlnk_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_end_xlnk'])
+        gp_instance_params['planning_params']['planning_end_dlnk_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_end_dlnk'])
+
+        dlnk_end = gp_instance_params['planning_params']['planning_end_dlnk_dt']
+        obs_end = gp_instance_params['planning_params']['planning_end_obs_dt']
+        xlnk_end = gp_instance_params['planning_params']['planning_end_xlnk_dt']
+        if not (dlnk_end >= obs_end and dlnk_end >= xlnk_end):
+            raise RuntimeWarning('Planning window end for dlnk (%s) should be set equal or later than end for observations, crosslinks (%s)'%(dlnk_end,obs_xlnk_end))
+
+        if gp_instance_params["sats_state"] is None:
+            gp_instance_params["sats_state_sorted"] = orbit_prop_inputs['sat_params']['sats_state_sorted']
         else:
-            raise NotImplementedError
+            gp_instance_params["sats_state_sorted"] = io_tools.sort_input_params_by_sat_IDs(gp_instance_params["sats_state"],sat_id_order)
 
-        #  check that it's the right version
-        if not gp_general_params['version'] == "0.8":
-            raise NotImplementedError
-
-        #  check that it's the right version
-        if gp_instance_params['version'] == "0.7":
-
-            gp_instance_params['planning_params']['planning_start_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_start'])
-            gp_instance_params['planning_params']['planning_fixed_end_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_fixed_end'])
-            gp_instance_params['planning_params']['planning_end_obs_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_end_obs'])
-            gp_instance_params['planning_params']['planning_end_xlnk_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_end_xlnk'])
-            gp_instance_params['planning_params']['planning_end_dlnk_dt'] = tt.iso_string_to_dt ( gp_instance_params['planning_params']['planning_end_dlnk'])
-
-            dlnk_end = gp_instance_params['planning_params']['planning_end_dlnk_dt']
-            obs_end = gp_instance_params['planning_params']['planning_end_obs_dt']
-            xlnk_end = gp_instance_params['planning_params']['planning_end_xlnk_dt']
-            if not (dlnk_end >= obs_end and dlnk_end >= xlnk_end):
-                raise RuntimeWarning('Planning window end for dlnk (%s) should be set equal or later than end for observations, crosslinks (%s)'%(dlnk_end,obs_xlnk_end))
-
-            if gp_instance_params["sats_state"] is None:
-                gp_instance_params["sats_state_sorted"] = orbit_prop_inputs['sat_params']['sats_state_sorted']
-            else:
-                gp_instance_params["sats_state_sorted"] = io_tools.sort_input_params_by_sat_IDs(gp_instance_params["sats_state"],sat_id_order)
-        else:
-            raise NotImplementedError
-
-        #  check that it's the right version
-        if not data_rates_inputs['version'] == "0.3":
-            raise NotImplementedError
 
         gp_params['orbit_prop_params'] = orbit_prop_params
         gp_params['orbit_link_params'] = orbit_link_params
@@ -684,7 +672,11 @@ class PipelineRunner:
 
         # get data related to existing routes, if they were provided
         existing_route_data = data.get('existing_route_data',{})
-        scheduled_routes,all_updated_routes,viz_outputs,latest_dr_uid = gp_runner.run (existing_route_data,verbose)
+
+        # get relevant activity windows for the time horizon
+        relevant_activity_windows = data['relevant_activity_windows']
+
+        scheduled_routes,all_updated_routes,viz_outputs,latest_dr_uid = gp_runner.run (existing_route_data,relevant_activity_windows,verbose)
 
         output = {}
         output['version'] = OUTPUT_JSON_VER
@@ -703,9 +695,6 @@ def remote_multiproc_run(self,mp_queue,verbose=False):
 
     pr = PipelineRunner()
     print_verbose('runner_gp: remote_multiproc_run()',verbose)
-    # sys.stdout = open(str(os.getpid()) + ".out", "w")
-    # sys.stderr = open(str(os.getpid()) + "_error.out", "w")
-    # print('stdout initialized')
     inputs = mp_queue.get()
     output = pr.run(inputs,verbose)
     mp_queue.put(output)
@@ -758,8 +747,6 @@ if __name__ == "__main__":
 
     args = ap.parse_args()
 
-    # print(args)
-
     pr = PipelineRunner()
 
     if sys.platform == 'win32':
@@ -773,7 +760,6 @@ if __name__ == "__main__":
         args.rs_s2_pickle = args.rs_s2_pickle.replace('/','\\')
         args.as_pickle = args.as_pickle.replace('/','\\')
 
-    # with open(os.path.join(REPO_BASE,'crux/config/examples/orbit_prop_inputs_ex.json'),'r') as f:
     with open(os.path.join(REPO_BASE, args.prop_inputs_file),'r') as f:
         orbit_prop_inputs = json.load(f)
 
@@ -797,12 +783,10 @@ if __name__ == "__main__":
         args.as_pickle = os.path.join(REPO_BASE,args.as_pickle)
 
     data = {
-        # "orbit_prop_data": orbit_prop_data,
         "orbit_prop_inputs": orbit_prop_inputs,
         "orbit_link_inputs": orbit_link_inputs,
         "gp_general_params_inputs": gp_general_params_inputs,
         "gp_instance_params_inputs": gp_instance_params_inputs,
-        # "viz_params": viz_params,
         "data_rates_inputs": data_rates_inputs,
         "rs_s1_pickle": os.path.join(REPO_BASE,args.rs_s1_pickle) if args.rs_s1_pickle != '' else None,
         "rs_s2_pickle": os.path.join(REPO_BASE,args.rs_s2_pickle) if args.rs_s2_pickle != '' else None,
@@ -818,6 +802,8 @@ if __name__ == "__main__":
         # todo: can't currently jsonify routing objects
         del output['scheduled_routes']
         del output['all_updated_routes']
-        json.dump(output ,f)
+        json.dump(output, f, indent=4, separators=(',', ': '))
+
 
     print('run time: %f'%(b-a))
+

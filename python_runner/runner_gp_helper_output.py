@@ -58,9 +58,8 @@ def get_metrics_params(gp_runner_inst_params):
     metrics_params['sats_dmin_Gb'] = []
     metrics_params['sats_dmax_Gb'] = []        
     for d_params in sat_params['data_storage_params_by_sat_id'].values():
-        storage_opt = d_params['storage_option']
-        d_min = d_params['data_storage_Gbit']['d_min'][storage_opt]
-        d_max = d_params['data_storage_Gbit']['d_max'][storage_opt]
+        d_min = d_params['d_min'] 
+        d_max = d_params['d_max'] 
 
         metrics_params['sats_dmin_Gb'].append(d_min)
         metrics_params['sats_dmax_Gb'].append(d_max)
@@ -69,7 +68,7 @@ def get_metrics_params(gp_runner_inst_params):
 
     return metrics_params
 
-def calc_activity_scheduling_results ( gp_runner_inst,obs_winds,dlnk_winds_flat,rs_routes_by_obs,sched_routes, energy_usage,data_usage):
+def calc_activity_scheduling_results ( gp_runner_inst,obs_winds,dlnk_winds_flat,rs_routes_by_obs,sched_routes, energy_usage,data_usage,verbose = False):
     mc = MetricsCalcs(get_metrics_params(gp_runner_inst.params))
 
     # gp_met = GPMetrics(gp_runner_inst.params)
@@ -88,50 +87,51 @@ def calc_activity_scheduling_results ( gp_runner_inst,obs_winds,dlnk_winds_flat,
     total_throughput_DV_rs_routes = sum(sum(rt.data_vol for rt in rts) for obs, rts in rs_routes_by_obs_filt.items())
     total_collectible_DV_rs_routes = sum(min(obs.data_vol,sum(rt.data_vol for rt in rts)) for obs, rts in rs_routes_by_obs_filt.items())
 
-    print('------------------------------')
-    print('calc_activity_scheduling_results()')
-    print('in scheduling window:')
-    print('num_collectible_obs_winds')
-    print(num_collectible_obs_winds)
-    if len(rs_routes_by_obs_filt.keys()) == 0:
-        print('no RS routes found')
-    else:
-        print('len(rs_output_routes)')
-        print(len(rs_output_routes))
-    print('len(sched_routes_filt)')
-    print(len(sched_routes_filt))
-    print('total_collectible_DV_all_obs_winds')
-    print(total_collectible_DV_all_obs_winds)
-    print('total_dlnkable_DV_all_dlnk_winds')
-    print(total_dlnkable_DV_all_dlnk_winds)
-    if len(rs_routes_by_obs_filt.keys()) > 0:
-        print('total_throughput_DV_rs_routes')
-        print(total_throughput_DV_rs_routes)
-        print('total_collectible_DV_rs_routes')
-        print(total_collectible_DV_rs_routes)
-    print('weights')
-    print(gp_runner_inst.as_params['obj_weights'])
+    if verbose:
+        print('------------------------------')
+        print('calc_activity_scheduling_results()')
+        print('in scheduling window:')
+        print('num_collectible_obs_winds')
+        print(num_collectible_obs_winds)
+        if len(rs_routes_by_obs_filt.keys()) == 0:
+            print('no RS routes found')
+        else:
+            print('len(rs_output_routes)')
+            print(len(rs_output_routes))
+        print('len(sched_routes_filt)')
+        print(len(sched_routes_filt))
+        print('total_collectible_DV_all_obs_winds')
+        print(total_collectible_DV_all_obs_winds)
+        print('total_dlnkable_DV_all_dlnk_winds')
+        print(total_dlnkable_DV_all_dlnk_winds)
+        if len(rs_routes_by_obs_filt.keys()) > 0:
+            print('total_throughput_DV_rs_routes')
+            print(total_throughput_DV_rs_routes)
+            print('total_collectible_DV_rs_routes')
+            print(total_collectible_DV_rs_routes)
+        print('weights')
+        print(gp_runner_inst.as_params['obj_weights'])
 
 
     time_units = gp_runner_inst.params['gp_general_params']['plot_params']['time_units']
 
     # dv_stats = gp_met.assess_dv_all_routes (sched_routes_filt,verbose = True)
-    dv_obs_stats = mc.assess_dv_by_obs (rs_output_routes,sched_routes_filt,verbose = True)
+    dv_obs_stats = mc.assess_dv_by_obs (rs_output_routes,sched_routes_filt,verbose =verbose)
     # lat_stats = mc.assess_latency_all_routes (sched_routes_filt,verbose = True)
-    lat_obs_stats = mc.assess_latency_by_obs (rs_output_routes,sched_routes_filt,verbose = True)
-    aoi_targ_stats = mc.assess_aoi_by_obs_target(rs_output_routes,sched_routes_filt,aoi_x_axis_units=time_units,verbose = True)
+    lat_obs_stats = mc.assess_latency_by_obs (rs_output_routes,sched_routes_filt,verbose = verbose)
+    aoi_targ_stats = mc.assess_aoi_by_obs_target(rs_output_routes,sched_routes_filt,aoi_x_axis_units=time_units,verbose = verbose)
 
     gp_netsim = GPNetSim ( gp_runner_inst.params, gp_runner_inst.io_proc)
-    gp_netsim.sim_tlm_cmd_routing(sched_routes_filt, verbose =  False)
+    gp_netsim.sim_tlm_cmd_routing(sched_routes_filt, verbose = verbose)
     #  this is indexed by sat index
     sats_cmd_update_hist = gp_netsim.get_all_sats_cmd_update_hist()
-    aoi_sat_cmd_stats = mc.assess_aoi_sat_ttc_option(sats_cmd_update_hist,ttc_option='cmd',aoi_x_axis_units=time_units,verbose = True)
+    aoi_sat_cmd_stats = mc.assess_aoi_sat_ttc_option(sats_cmd_update_hist,ttc_option='cmd',aoi_x_axis_units=time_units,verbose = verbose)
     #  this is  indexed by ground station index
     sats_tlm_update_hist = gp_netsim.get_all_sats_tlm_update_hist()
-    aoi_sat_tlm_stats = mc.assess_aoi_sat_ttc_option(sats_cmd_update_hist,ttc_option='tlm',aoi_x_axis_units=time_units,verbose = True)
+    aoi_sat_tlm_stats = mc.assess_aoi_sat_ttc_option(sats_cmd_update_hist,ttc_option='tlm',aoi_x_axis_units=time_units,verbose = verbose)
 
-    energy_margin_stats = mc.assess_energy_resource_margin(energy_usage,verbose = True)
-    data_margin_stats = mc.assess_data_resource_margin(data_usage,verbose = True)
+    energy_margin_stats = mc.assess_energy_resource_margin(energy_usage,verbose = verbose)
+    data_margin_stats = mc.assess_data_resource_margin(data_usage,verbose = verbose)
 
 
     plot_outputs = {}

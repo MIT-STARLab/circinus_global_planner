@@ -78,12 +78,13 @@ class GPActivityScheduling(AgentScheduling):
 
         self.power_params = sat_params['power_params_sorted']
         self.data_storage_params = sat_params['data_storage_params_sorted']
+
         self.sats_state = gp_params['gp_instance_params']['sats_state_sorted']
         # self.sat_activity_params = sat_params['activity_params']
 
 
-        self.sats_dmin_Mb = [1000*ds_params['data_storage_Gbit']['d_min'][ds_params['storage_option']] for ds_params in self.data_storage_params]
-        self.sats_dmax_Mb = [1000*ds_params['data_storage_Gbit']['d_max'][ds_params['storage_option']] for ds_params in self.data_storage_params]
+        self.sats_dmin_Mb = [1000*ds_params['d_min'] for ds_params in self.data_storage_params]
+        self.sats_dmax_Mb = [1000*ds_params['d_max'] for ds_params in self.data_storage_params]
 
         self.energy_unit = "Wh"  # watt hours
 
@@ -108,7 +109,7 @@ class GPActivityScheduling(AgentScheduling):
             self.sats_batt_charge_eff.append (charge_eff)
             self.sats_batt_discharge_eff.append (discharge_eff)
 
-        self.act_timing_helper = ActivityTimingHelper(sat_params['activity_params'],orbit_params['sat_ids_by_orbit_name'],sat_params['sat_id_order'],gp_params['orbit_prop_params']['version'])
+        self.act_timing_helper = ActivityTimingHelper(sat_params['activity_params'],orbit_params['sat_ids_by_orbit_name'],sat_params['sat_id_order'],None) 
 
         # this is now less useful than I thought
         self.standard_activities = [ObsWindow,DlnkWindow,XlnkWindow]

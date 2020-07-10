@@ -56,8 +56,8 @@ class GPMetrics():
         self.aoi_plot_t_units=plot_params['time_units']
 
         self.power_params = sat_params['power_params_sorted']
-        self.sats_emin_Wh = [p_params['battery_storage_Wh']['e_min'][p_params['battery_option']] for p_params in self.power_params]
-        self.sats_emax_Wh = [p_params['battery_storage_Wh']['e_max'][p_params['battery_option']] for p_params in self.power_params]
+        self.sats_emin_Wh = [p_params['battery_storage_Wh']['e_min'] for p_params in self.power_params]
+        self.sats_emax_Wh = [p_params['battery_storage_Wh']['e_max'] for p_params in self.power_params]
 
         # the amount by which the minimum data volume is allowed to be lower than self.min_obs_dv_dlnk_req
         self.min_obs_dv_dlnk_req_slop = self.min_obs_dv_dlnk_req*0.01

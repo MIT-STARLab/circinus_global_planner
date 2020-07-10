@@ -9,8 +9,8 @@ from matplotlib.pyplot import savefig
 from matplotlib.patches import Rectangle, Circle
 import numpy as np
 
-from circinus_tools.scheduling.routing_objects import DataRoute
-from circinus_tools.plotting import plot_tools as pltl
+from circinus_tools.scheduling.routing_objects import DataRoute # pylint: disable=import-error
+from circinus_tools.plotting import plot_tools as pltl  # pylint: disable=import-error
 
 class GPPlotting():
 
@@ -64,10 +64,10 @@ class GPPlotting():
 
         self.power_params = sat_params['power_params_sorted']
         self.data_storage_params = sat_params['data_storage_params_sorted']
-        self.sats_emin_Wh = [p_params['battery_storage_Wh']['e_min'][p_params['battery_option']] for p_params in self.power_params]
-        self.sats_emax_Wh = [p_params['battery_storage_Wh']['e_max'][p_params['battery_option']] for p_params in self.power_params]
-        self.sats_dmin_Gb = [ds_params['data_storage_Gbit']['d_min'][ds_params['storage_option']] for ds_params in self.data_storage_params]
-        self.sats_dmax_Gb = [ds_params['data_storage_Gbit']['d_max'][ds_params['storage_option']] for ds_params in self.data_storage_params]
+        self.sats_emin_Wh = [p_params['battery_storage_Wh']['e_min'] for p_params in self.power_params]
+        self.sats_emax_Wh = [p_params['battery_storage_Wh']['e_max'] for p_params in self.power_params]
+        self.sats_dmin_Gb = [ds_params['d_min'] for ds_params in self.data_storage_params]
+        self.sats_dmax_Gb = [ds_params['d_max'] for ds_params in self.data_storage_params]
 
     def get_label_getters(self):
         def xlnk_label_getter(xlnk,sat_indx):
