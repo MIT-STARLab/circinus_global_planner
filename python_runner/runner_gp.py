@@ -348,6 +348,7 @@ class GlobalPlannerRunner:
         selected_rts_by_obs = gp_rs.run_step2(routes_by_obs_filt,overlap_cnt_by_route,existing_routes_set)
         t_b = time.time()
         time_elapsed = t_b-t_a
+        verbose = True 
         print_verbose('RS step2 time_elapsed %f'%(time_elapsed),verbose)
 
         print_verbose('Assess route overlap post RS step 2',verbose)
@@ -503,12 +504,14 @@ class GlobalPlannerRunner:
 
         pas_a_new = None
         if run_rs:
+            print("run_rs is  True")
             sel_routes_by_obs,ecl_winds,latest_dr_uid,window_uid,pas_a_new = self.run_route_selection(obs_winds,dlnk_winds_flat,xlnk_winds,ecl_winds,existing_route_data,window_uid,latest_dr_uid,verbose)
 
         # debug_tools.debug_breakpt()
 
 
         if pas_a_new:
+            print("pas_a_new  is  True")
             pas_a = pas_a_new
 
         #################################
@@ -519,6 +522,7 @@ class GlobalPlannerRunner:
             return [],[]
 
         if self.other_params['as_pickle_input']:
+            print("doing pickle_helper.unpickle_actsc_stuff")
             sel_routes_by_obs,ecl_winds,scheduled_routes,energy_usage,data_usage, window_uid,latest_dr_uid = pickle_helper.unpickle_actsc_stuff(self)
             all_updated_routes = None
         else:
@@ -529,6 +533,7 @@ class GlobalPlannerRunner:
                 return any([len(rts) >0 for rts in sel_routes_by_obs.values()])
 
             if not run_coupled_rs_as and found_routes():
+                print("not run_coupled_rs_as and found_routes")
                 #  to protect against the weird case where we didn't find any routes ( shouldn't happen, unless we're at the very end of the simulation, or you're trying to break things)
                 # if self.as_params['validate_unique_wind_objects']:  
                 #     other_helper.validate_unique_window_objects(self,sel_routes_by_obs,existing_route_data)
@@ -537,6 +542,7 @@ class GlobalPlannerRunner:
 
             # run coupled route selection/act sched solver (slow, optimal)
             elif run_coupled_rs_as:
+                print("run_coupled_rs_as is True")
                 scheduled_routes,energy_usage,data_usage = self.run_activity_scheduling_coupled(obs_winds,dlnk_winds_flat,xlnk_winds_flat,ecl_winds,verbose)
 
                 #  this is not used at all in the coupled activity scheduling solution, because it currently can't be used in the constellation simulation ( not implemented)
@@ -545,6 +551,7 @@ class GlobalPlannerRunner:
                 # we didn't run RS, so there are no "selected routes", just scheduled
                 sel_routes_by_obs = {}
             else:
+                print("not run_coupled_rs_as and not found_routes")
                 scheduled_routes,all_updated_routes,energy_usage,data_usage = ([],[],None,None)
                 print_verbose('No routes were found in route selection; not running activity selection',verbose)
 
@@ -675,7 +682,7 @@ class PipelineRunner:
 
         # get relevant activity windows for the time horizon
         relevant_activity_windows = data['relevant_activity_windows']
-
+        
         scheduled_routes,all_updated_routes,viz_outputs,latest_dr_uid = gp_runner.run (existing_route_data,relevant_activity_windows,verbose)
 
         output = {}

@@ -1,7 +1,7 @@
 # contains model and Solver for global planner activity scheduling capability
 # 
 # @author Kit Kennedy
-#
+# PI
 
 from  datetime import timedelta
 from copy import  deepcopy
@@ -439,11 +439,11 @@ class GPActivitySchedulingSeparate(GPActivityScheduling):
         model.obs_windids = pe.Set(initialize= all_obs_windids)
         model.lnk_windids = pe.Set(initialize= all_lnk_windids)
 
-        if self.solver_name == 'gurobi' or self.solver_name == 'cplex':
+        if self.solver_name in {'gurobi','cplex','cbc','glpk'}:
             int_feas_tol = self.solver_params['integer_feasibility_tolerance']
-        elif self.solver_name == 'glpk':
-            # raise an error, because it could be misleading if someone changes the int feas tol in the inputs...
-            raise NotImplementedError('glpk runs, but I have not yet figured out setting integer_feasibility_tolerance')
+#        elif self.solver_name == 'glpk':
+#            # raise an error, because it could be misleading if someone changes the int feas tol in the inputs...
+#            raise NotImplementedError('glpk runs, but I have not yet figured out setting integer_feasibility_tolerance')
         else:
             raise NotImplementedError
 
